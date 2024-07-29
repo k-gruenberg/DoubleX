@@ -58,11 +58,11 @@ def get_extended_ast(input_file, json_path, remove_json=True):
     """
 
     try:
-        produce_ast = subprocess.run(['node', os.path.join(SRC_PATH, 'parser.js'),
+        produce_ast = subprocess.run(['node', os.path.join(SRC_PATH, f"parser_{os.environ['PARSER']}.js"),
                                       input_file, json_path],
                                      stdout=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError:
-        logging.critical('Esprima parsing error for %s', input_file)
+        logging.critical(f"{os.environ['PARSER']} parsing error for %s", input_file)
         return None
 
     if produce_ast.returncode == 0:

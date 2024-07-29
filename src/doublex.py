@@ -23,7 +23,6 @@ import argparse
 
 from vulnerability_detection import analyze_extension
 
-
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
 
@@ -61,9 +60,23 @@ def main():
     - 'empoweb': APIs from the EmPoWeb paper; to use ONLY on the EmPoWeb ground-truth dataset;
     - path: APIs listed in the corresponding json file; a template can be found in src/suspicious_apis/README.md.''')
 
+    group1 = parser.add_mutually_exclusive_group(required=True)
+    group1.add_argument('--esprima', action='store_true',
+                        help="""Use the Esprima parser for AST generation (old) (what DoubleX originally did).""")
+    group1.add_argument('--espree', action='store_true',
+                        help="""Use the Espree parser for AST generation (new) (recommended).""")
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
+
+    if args.esprima:
+        os.environ['PARSER'] = "esprima"
+    elif args.espree:
+        os.environ['PARSER'] = "espree"
+    else:
+        print("No parser specified.")
+        return
 
     cs = args.cs
     bp = args.bp

@@ -434,7 +434,7 @@ def link_all_messages(pdg1, pdg2, where1, where2, benchmarks, chrome, graph=None
 
 def produce_extension_pdg(cs_path, bp_path, benchmarks):
     """
-    Builds the PDG of an extension, meaning 1) produce the PDG of the content script and the PDG
+    Builds the PDG (Program Dependence Graph) of an extension, meaning 1) produce the PDG of the content script and the PDG
     of the background page, and 2) link them by leveraging the passing messaging APIs.
 
     :param cs_path: str, path of the content script;
@@ -501,7 +501,7 @@ def fetch_extension_pdg(cs_pdg_path, bp_pdg_path, benchmarks):
 
 def build_extension_pdg(cs_path, bp_path, benchmarks, pdg, chrome, messages_dict):
     """
-    Builds the PDG of an extension, meaning links the content script to the background page
+    Builds the PDG (Program Dependence Graph) of an extension, meaning links the content script to the background page
     by leveraging the passing messaging APIs.
 
     :param cs_path: str, path of the (PDG of the) content script;

@@ -18,6 +18,7 @@ install nodejs
 install npm
 cd src
 npm install esprima # (tested with 4.0.1)
+npm install espree
 npm install escodegen # (tested with 1.14.2 and 2.0.0)
 npm -g install js-beautify
 ```
