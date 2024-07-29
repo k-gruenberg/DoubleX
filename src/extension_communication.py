@@ -22,6 +22,7 @@ import logging
 import timeit
 import json
 import graphviz
+import os
 
 import pdg_js.node as _node
 from pdg_js.value_filters import display_values
@@ -29,7 +30,7 @@ import pdg_js.utility_df as utility_df
 
 import get_pdg
 from get_pdg import get_node_computed_value_e, get_node_value_e
-# import display_extension
+import display_extension
 import browser_api
 import chrome_api
 import messages
@@ -536,8 +537,9 @@ def build_extension_pdg(cs_path, bp_path, benchmarks, pdg, chrome, messages_dict
         benchmarks['crashes'].append('linking-messages-timeout')
 
     # Displays Extension Dependence Graph (EDG)
-    # display_extension.draw_extensions(pdg_cs, pdg_bp, graph, save_path=None)
-    # display_extension.draw_ast(pdg_bp, attributes=True, save_path=None)  # BP's AST
+    if os.environ.get('DISPLAY_EDG') == "yes":
+        display_extension.draw_extensions(pdg_cs, pdg_bp, graph, save_path=None)
+        # display_extension.draw_ast(pdg_bp, attributes=True, save_path=None)  # BP's AST
 
     return pdg_cs, pdg_bp
 

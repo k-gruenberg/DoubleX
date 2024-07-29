@@ -123,7 +123,7 @@ def get_data_flow(input_file, benchmarks, store_pdgs=None, check_var=False, beau
 
     if extended_ast is not None:
         benchmarks['got AST'] = timeit.default_timer() - start
-        start = utility_df.micro_benchmark('Successfully got Esprima AST in',
+        start = utility_df.micro_benchmark(f"Successfully got {os.environ['PARSER']} AST in",
                                            timeit.default_timer() - start)
         ast = extended_ast.get_ast()
         if beautiful_print:

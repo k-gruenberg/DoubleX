@@ -66,6 +66,9 @@ def main():
     group1.add_argument('--espree', action='store_true',
                         help="""Use the Espree parser for AST generation (new) (recommended).""")
 
+    parser.add_argument("--display-edg", dest='display_edg', action='store_true',
+                        help="Display the EDG (Extension Dependence Graph).")
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
@@ -77,6 +80,9 @@ def main():
     else:
         print("No parser specified.")
         return
+
+    if args.display_edg:
+        os.environ['DISPLAY_EDG'] = "yes"
 
     cs = args.cs
     bp = args.bp
