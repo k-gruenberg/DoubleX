@@ -43,7 +43,8 @@ function js2ast(js, json_path) {
             loc: true,
             tokens: true,
             tolerant: true,
-            comment: true
+            comment: true,
+            ecmaVersion: "latest" // (!!!) VERY IMPORTANT TO SET; DEFAULT=5 (!!!)
         });
     } catch(e) {
         console.error(js, e);
