@@ -66,6 +66,15 @@ def main():
     group1.add_argument('--espree', action='store_true',
                         help="""Use the Espree parser for AST generation (new) (recommended).""")
 
+    group2 = parser.add_mutually_exclusive_group(required=True)
+    group2.add_argument('--src-type-script', action='store_true',
+                        help="""Sets the sourceType option to "script" for the (Esprima/Espree) parser.""")
+    group2.add_argument('--src-type-module', action='store_true',
+                        help="""Sets the sourceType option to "module" for the (Esprima/Espree) parser.
+                        This is what the original DoubleX by Aurore Fass used.""")
+    group2.add_argument('--src-type-commonjs', action='store_true',
+                        help="""Sets the sourceType option to "commonjs" for the (Espree) parser.""")
+
     parser.add_argument("--display-edg", dest='display_edg', action='store_true',
                         help="Display the EDG (Extension Dependence Graph).")
 
@@ -79,6 +88,19 @@ def main():
         os.environ['PARSER'] = "espree"
     else:
         print("No parser specified.")
+        return
+
+    if args.src_type_script:
+        os.environ['SOURCE_TYPE'] = "script"
+    elif args.src_type_module:
+        os.environ['SOURCE_TYPE'] = "module"
+    elif args.src_type_commonjs:
+        if args.esprima:
+            print("Esprima only supports 'script' and 'module' source types.")
+            return
+        os.environ['SOURCE_TYPE'] = "commonjs"
+    else:
+        print("No sourceType specified.")
         return
 
     if args.display_edg:

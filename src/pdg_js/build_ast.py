@@ -59,7 +59,7 @@ def get_extended_ast(input_file, json_path, remove_json=True):
 
     try:
         produce_ast = subprocess.run(['node', os.path.join(SRC_PATH, f"parser_{os.environ['PARSER']}.js"),
-                                      input_file, json_path],
+                                      input_file, json_path, os.environ['SOURCE_TYPE']],
                                      stdout=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError:
         logging.critical(f"{os.environ['PARSER']} parsing error for %s", input_file)

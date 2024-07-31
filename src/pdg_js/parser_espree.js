@@ -31,11 +31,12 @@ var process = require("process");
 /**
  * Extraction of the AST of an input JS file using Espree.
  *
- * @param js
- * @param json_path
+ * @param js input file (.js)
+ * @param json_path output file (.json)
+ * @param source_type either "script", "module", or "commonjs"; please use the value os.environ['SOURCE_TYPE'] (Python)
  * @returns {*}
  */
-function js2ast(js, json_path) {
+function js2ast(js, json_path, source_type) {
     var text = fs.readFileSync(js).toString('utf-8');
     try {
         var ast = espree.parse(text, {
@@ -44,7 +45,10 @@ function js2ast(js, json_path) {
             tokens: true,
             tolerant: true,
             comment: true,
-            ecmaVersion: "latest" // (!!!) VERY IMPORTANT TO SET; DEFAULT=5 (!!!)
+            ecmaVersion: "latest", // (!!!) VERY IMPORTANT TO SET; DEFAULT=5 (!!!)
+            sourceType: source_type
+            // Some extensions can only be parsed WITH sourceType: "module", while others can only be parsed WITHOUT it!
+            // => cf. https://github.com/eslint/espree/tree/main/packages/espree - Section "Options"
         });
     } catch(e) {
         console.error(js, e);
@@ -63,4 +67,4 @@ function js2ast(js, json_path) {
     return ast;
 }
 
-js2ast(process.argv[2], process.argv[3]);
+js2ast(process.argv[2], process.argv[3], process.argv[4]);

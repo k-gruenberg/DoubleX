@@ -31,20 +31,34 @@ var process = require("process");
 /**
  * Extraction of the AST of an input JS file using Esprima.
  *
- * @param js
- * @param json_path
+ * @param js input file (.js)
+ * @param json_path output file (.json)
+ * @param source_type "script" or "module", no(!) "commonjs"; please use the value os.environ['SOURCE_TYPE'] (Python)
  * @returns {*}
  */
-function js2ast(js, json_path) {
+function js2ast(js, json_path, source_type) {
     var text = fs.readFileSync(js).toString('utf-8');
     try {
-        var ast = esprima.parseModule(text, {
-            range: true,
-            loc: true,
-            tokens: true,
-            tolerant: true,
-            comment: true
-        });
+        if (source_type === "script") {
+            var ast = esprima.parseScript(text, {
+                range: true,
+                loc: true,
+                tokens: true,
+                tolerant: true,
+                comment: true
+            });
+        } else if (source_type === "module") {
+            var ast = esprima.parseModule(text, { // <=== THIS IS WHAT THE ORIGINAL DOUBLEX USED!
+                range: true,
+                loc: true,
+                tokens: true,
+                tolerant: true,
+                comment: true
+            });
+        } else {
+            console.error("Esprima only supports 'script' and 'module' source types.");
+            process.exit(1);
+        }
     } catch(e) {
         console.error(js, e);
         process.exit(1);
@@ -62,4 +76,4 @@ function js2ast(js, json_path) {
     return ast;
 }
 
-js2ast(process.argv[2], process.argv[3]);
+js2ast(process.argv[2], process.argv[3], process.argv[4]);
