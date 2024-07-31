@@ -20,8 +20,11 @@
 
 import os
 import argparse
+import datetime
+from pathlib import Path
 
 from vulnerability_detection import analyze_extension
+from unpack_extension import unpack_extension
 
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
@@ -33,6 +36,10 @@ def main():
                                      formatter_class=argparse.RawTextHelpFormatter,
                                      description="Static analysis of a browser extension to detect "
                                                  "suspicious data flows")
+
+    parser.add_argument("--crx", dest='crx', metavar="path", type=str, action='append', nargs='+',
+                        help="Path(s) of the .CRX file(s) to unpack and analyze. "
+                             "If used, the -cs and -bp arguments will be ignored. ")
 
     parser.add_argument("-cs", "--content-script", dest='cs', metavar="path", type=str,
                         help="path of the content script. "
@@ -106,15 +113,45 @@ def main():
     if args.display_edg:
         os.environ['DISPLAY_EDG'] = "yes"
 
-    cs = args.cs
-    bp = args.bp
-    if cs is None:
-        cs = os.path.join(os.path.dirname(SRC_PATH), 'empty', 'contentscript.js')
-    if bp is None:
-        bp = os.path.join(os.path.dirname(SRC_PATH), 'empty', 'background.js')
+    if args.crx is None:  # No --crx argument supplied: Use -cs and -bp arguments:
+        print("Analyzing a single, unpacked extension...")
+        cs = args.cs
+        bp = args.bp
+        if cs is None:
+            cs = os.path.join(os.path.dirname(SRC_PATH), 'empty', 'contentscript.js')
+        if bp is None:
+            bp = os.path.join(os.path.dirname(SRC_PATH), 'empty', 'background.js')
 
-    analyze_extension(cs, bp, json_analysis=args.analysis, chrome=not args.not_chrome,
-                      war=args.war, json_apis=args.apis, manifest_path=args.manifest)
+        analyze_extension(cs, bp, json_analysis=args.analysis, chrome=not args.not_chrome,
+                          war=args.war, json_apis=args.apis, manifest_path=args.manifest)
+
+    else:  # Ignore -cs and -bp arguments when --crx argument is supplied:
+        # Flatten the --crx / args.crx argument:
+        #     => example: "--crx a b --crx x y" becomes: [['a', 'b'], ['x', 'y']]
+        crxs = [c for cs in args.crx for c in cs]
+        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Analyzing {len(crxs)} packed extensions...")
+
+        # Use the folder in which the first .CRX file is situated in, create a subfolder called "unpacked" and use that:
+        dest1 = os.path.join(Path(crxs[0]).parent.absolute(), "unpacked")
+        Path(dest1).mkdir(parents=False, exist_ok=True)
+        print(f"Unpacking into folder: {dest1}")
+
+        for crx in crxs:
+            # Unpack .CRX file into a temp directory:
+            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacking '{crx}' ...")
+            dest2 = unpack_extension(extension_crx=crx, dest=dest1)
+            if dest2 is None:
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacking failed: '{crx}'")
+            else:
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacked '{crx}' into '{dest2}'")
+
+                cs = os.path.join(dest2, "content_scripts.js")
+                bp = os.path.join(dest2, "background.js")
+
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Analyzing '{crx}' ...")
+                analyze_extension(cs, bp, json_analysis=args.analysis, chrome=not args.not_chrome,
+                                  war=args.war, json_apis=args.apis, manifest_path=args.manifest)
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Done analyzing '{crx}'")
 
 
 if __name__ == "__main__":

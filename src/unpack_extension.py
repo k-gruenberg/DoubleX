@@ -244,6 +244,7 @@ def unpack_extension(extension_crx, dest):
 
     if "theme" in manifest:
         # Just quick exit to remove the themes
+        print(f"Not unpacking theme: '{extension_crx}'")
         return
 
     manifest_version = manifest.get("manifest_version", -1)
@@ -277,6 +278,8 @@ def unpack_extension(extension_crx, dest):
         fh.write(wars.encode())
 
     logging.info('Extracted the components of %s in %s', extension_crx, dest)
+
+    return dest
 
 
 def extract_all(crx_path):
