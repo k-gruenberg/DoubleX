@@ -88,6 +88,9 @@ def main():
     parser.add_argument("--display-edg", dest='display_edg', action='store_true',
                         help="Display the EDG (Extension Dependence Graph).")
 
+    parser.add_argument("--print-pdgs", dest='print_pdgs', action='store_true',
+                        help="Print the PDGs (Program Dependence Graphs) of CS and BP to console.")
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
@@ -115,6 +118,9 @@ def main():
 
     if args.display_edg:
         os.environ['DISPLAY_EDG'] = "yes"
+
+    if args.print_pdgs:
+        os.environ['PRINT_PDGS'] = "yes"
 
     if args.crx is None:  # No --crx argument supplied: Use -cs and -bp arguments:
         print("Analyzing a single, unpacked extension...")
