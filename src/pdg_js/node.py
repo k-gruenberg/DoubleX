@@ -94,6 +94,19 @@ class Node:
         self.statement_dep_parents = []
         self.statement_dep_children = []  # Between Statement and their non-Statement descendants
 
+    # ADDED BY ME:
+    def __str__(self):
+        str_repr = ""
+        if self.name == "Identifier":
+            str_repr = f"[{self.id}] [{self.name}:\"{self.attributes['name']}\"] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})\n"
+        elif self.name == "Literal":
+            str_repr = f"[{self.id}] [{self.name}:\"{self.attributes['raw']}\"] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})\n"
+        else:
+            str_repr = f"[{self.id}] [{self.name}] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})\n"
+        for child in self.children:
+            str_repr += "\n".join(["\t" + line for line in child.__str__().splitlines()]) + "\n"
+        return str_repr
+
     def is_leaf(self):
         return not self.children
 
