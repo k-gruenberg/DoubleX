@@ -1,3 +1,6 @@
+#import logging
+#logging.basicConfig(level=logging.DEBUG)  # has to be executed before any other piece of code has the chance to (!!!)
+
 # Copyright (C) 2021 Aurore Fass
 #
 # This program is free software: you can redistribute it and/or modify
