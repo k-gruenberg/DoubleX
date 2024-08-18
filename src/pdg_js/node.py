@@ -97,12 +97,26 @@ class Node:
     # ADDED BY ME:
     def __str__(self):
         str_repr = ""
+
         if self.name == "Identifier":
-            str_repr = f"[{self.id}] [{self.name}:\"{self.attributes['name']}\"] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})\n"
+            str_repr = f"[{self.id}] [{self.name}:\"{self.attributes['name']}\"] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
         elif self.name == "Literal":
-            str_repr = f"[{self.id}] [{self.name}:\"{self.attributes['raw']}\"] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})\n"
+            str_repr = f"[{self.id}] [{self.name}:\"{self.attributes['raw']}\"] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
         else:
-            str_repr = f"[{self.id}] [{self.name}] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})\n"
+            str_repr = f"[{self.id}] [{self.name}] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
+
+        # cf. display_extension.py:
+        if isinstance(self, Statement):
+            for child_cf_dep in self.control_dep_children:
+                str_repr += f" --{child_cf_dep.label}--> [{child_cf_dep.extremity.id}]"
+
+        # cf. display_extension.py:
+        if isinstance(self, Identifier):
+            for child_data_dep in self.data_dep_children:
+                str_repr += f" --{child_data_dep.label}--> [{child_data_dep.extremity.id}]"
+
+        str_repr += "\n"
+
         for child in self.children:
             str_repr += "\n".join(["\t" + line for line in child.__str__().splitlines()]) + "\n"
         return str_repr
