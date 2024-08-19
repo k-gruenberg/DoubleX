@@ -26,7 +26,15 @@ import argparse
 import datetime
 from pathlib import Path
 
-from vulnerability_detection import analyze_extension
+# Original DoubleX extension analysis:
+from vulnerability_detection import analyze_extension as doublex_analyze_extension
+
+# My extension analysis to find vulnerabilities of the types considered by Young Min Kim and Byoungyoung Lee
+# in their 2023 paper "Extending a Hand to Attackers: Browser Privilege Escalation Attacks via Extensions";
+# unlike the vulnerabilities considered by DoubleX, these require a stronger assumption, namely that of a renderer
+# attacker, i.e., an attacker that has gained full read-/write-access to a browser's renderer process:
+from kim_and_lee_vulnerability_detection import analyze_extension as kim_and_lee_analyze_extension
+
 from unpack_extension import unpack_extension
 
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
@@ -91,6 +99,12 @@ def main():
     parser.add_argument("--print-pdgs", dest='print_pdgs', action='store_true',
                         help="Print the PDGs (Program Dependence Graphs) of CS and BP to console.")
 
+    parser.add_argument("--renderer-attacker", dest='renderer_attacker', action='store_true',
+                        help="Instead of running the regular DoubleX, analyze the given extension for vulnerabilities "
+                             "exploitable by a renderer attacker (those considered by Young Min Kim and Byoungyoung "
+                             "Lee in their 2023 paper 'Extending a Hand to Attackers: Browser Privilege Escalation "
+                             "Attacks via Extensions').")
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
@@ -121,6 +135,12 @@ def main():
 
     if args.print_pdgs:
         os.environ['PRINT_PDGS'] = "yes"
+
+    # Whether to use the original DoubleX extension analysis,
+    #   or whether to look for vulnerabilities exploitable by a renderer attacker:
+    analyze_extension = doublex_analyze_extension
+    if args.renderer_attacker:
+        analyze_extension = kim_and_lee_analyze_extension
 
     if args.crx is None:  # No --crx argument supplied: Use -cs and -bp arguments:
         print("Analyzing a single, unpacked extension...")
