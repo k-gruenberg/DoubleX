@@ -35,6 +35,7 @@
 
 import logging
 import random
+import itertools
 
 from . import utility_df
 
@@ -93,6 +94,38 @@ class Node:
         self.children = []
         self.statement_dep_parents = []
         self.statement_dep_children = []  # Between Statement and their non-Statement descendants
+        self.is_wildcard = False  # <== ADDED BY ME
+
+    # ADDED BY ME:
+    @classmethod
+    def identifier(cls, name):
+        n = cls("Identifier")
+        n.attributes['name'] = name
+        return n
+
+    # ADDED BY ME:
+    @classmethod
+    def literal(cls, raw):
+        n = cls("Literal")
+        n.attributes['raw'] = raw
+        return n
+
+    @classmethod
+    def wildcard(cls):
+        """
+        When used as a pattern supplied to the matches() function, the wildcard will match *anything*!
+        """
+        n = cls("*")
+        n.is_wildcard = True
+        return n
+
+    # ADDED BY ME:
+    def child(self, c):
+        """
+        Appends the given Node as a child and then returns itself again.
+        """
+        self.children.append(c)
+        return self
 
     # ADDED BY ME:
     def __str__(self):
@@ -120,6 +153,76 @@ class Node:
         for child in self.children:
             str_repr += "\n".join(["\t" + line for line in child.__str__().splitlines()]) + "\n"
         return str_repr
+
+    # ADDED BY ME:
+    def get_all(self, node_name):
+        """
+        Returns all nodes of a given type/name, e.g. all "VariableDeclaration" nodes.
+        """
+        result = []
+        if self.name == node_name:
+            result.append(self)
+        for child in self.children:
+            result.extend(child.get_all(node_name))
+        return result
+
+    # ADDED BY ME:
+    def has_child(self, child_name):
+        for child in self.children:
+            if child.name == child_name:
+                return True
+        return False
+
+    # ADDED BY ME:
+    def get_child(self, child_name):
+        for child in self.children:
+            if child.name == child_name:
+                return child
+        return None
+
+    # ADDED BY ME:
+    def get_only_child(self):
+        assert len(self.children) == 1
+        return self.children[0]
+
+    # ADDED BY ME:
+    def matches(self, pattern, match_identifier_names, match_literals, allow_additional_children):
+        """
+        Returns if this AST subtree matches another given AST tree (pattern), only comparing:
+        * name of root
+        * number of children (only if allow_additional_children == False)
+        * names of children
+        * "name" attributes of "Identifier" nodes (only if match_identifier_names == True)
+        * "raw" attributes of "Literal" nodes (only if match_literals == True)
+        """
+        if pattern.is_wildcard:
+            return True
+        elif self.name != pattern.name:
+            return False
+        elif match_identifier_names and self.name == "Identifier" and self.attributes['name'] != pattern.attributes['name']:
+            return False
+        elif match_literals and self.name == "Literal" and self.attributes['raw'] != pattern.attributes['raw']:
+            return False
+        elif not allow_additional_children and len(self.children) != len(pattern.children):
+            return False
+        elif allow_additional_children and len(self.children) < len(pattern.children):  # pattern cannot be matched
+            return False
+        elif not allow_additional_children and sorted([c.name for c in self.children]) != sorted([c.name for c in pattern.children]):
+            return False
+        elif allow_additional_children and not set(c.name for c in pattern.children if not c.is_wildcard).issubset(set(c.name for c in self.children)):
+            return False
+        elif not allow_additional_children:
+            # Iterate through all possible child permutations and try to find a match:
+            return any(all(self.children[i].matches(permutation[i], match_identifier_names, match_literals, allow_additional_children)
+                           for i in range(len(self.children)))
+                           for permutation in itertools.permutations(pattern.children))
+        else:  # allow_additional_children == True:
+            # Fill pattern up with wildcards:
+            pattern_children_plus_wildcards = pattern.children + [Node.wildcard()] * (len(self.children) - len(pattern.children))
+            # Same as above:
+            return any(all(self.children[i].matches(permutation[i], match_identifier_names, match_literals, allow_additional_children)
+                           for i in range(len(self.children)))
+                           for permutation in itertools.permutations(pattern_children_plus_wildcards))
 
     def is_leaf(self):
         return not self.children
@@ -180,6 +283,18 @@ class Node:
             line_begin = self.attributes['loc']['start']['line']
             line_end = self.attributes['loc']['end']['line']
             return str(line_begin) + ' - ' + str(line_end)
+        except KeyError:
+            return None
+
+    # ADDED BY ME: # (cf. Esprima documentation PDF, Section 3.1 Token Location)
+    def get_location(self):
+        """ Gets the exact location (line *and* column number) where a given node is defined. """
+        try:
+            start_line = self.attributes['loc']['start']['line']
+            start_column = self.attributes['loc']['start']['column']
+            end_line = self.attributes['loc']['end']['line']
+            end_column = self.attributes['loc']['end']['column']
+            return f"{start_line}:{start_column} - {end_line}:{end_column}"
         except KeyError:
             return None
 
