@@ -36,6 +36,7 @@
 import logging
 import random
 import itertools
+import os
 
 from . import utility_df
 
@@ -224,6 +225,24 @@ class Node:
             return any(all(self.children[i].matches(permutation[i], match_identifier_names, match_literals, allow_additional_children)
                            for i in range(len(self.children)))
                            for permutation in itertools.permutations(pattern_children_plus_wildcards))
+
+    # ADDED BY ME:
+    def find_pattern(self, pattern, match_identifier_names, match_literals, allow_additional_children):
+        """
+        Returns all subtrees of this PDG matching the given pattern `pattern`.
+        Cf. `Node.matches()` function.
+        """
+        result = []
+        all_match_candidates = self.get_all(pattern.name)
+        for match_candidate in all_match_candidates:
+            if match_candidate.matches(pattern,
+                                       match_identifier_names=match_identifier_names,
+                                       match_literals=match_literals,
+                                       allow_additional_children=allow_additional_children):
+                if os.environ.get('PRINT_PDGS') == "yes":
+                    print(f"Pattern Match:\n{match_candidate}")
+                result.append(match_candidate)
+        return result
 
     def is_leaf(self):
         return not self.children
