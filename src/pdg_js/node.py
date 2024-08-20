@@ -287,6 +287,26 @@ class Node:
         except KeyError:
             return None
 
+    # ADDED BY ME:
+    def get_line_number_as_int(self):
+        """ Gets the line number where a given node is defined (as an integer). """
+        try:
+            return self.attributes['loc']['start']['line']
+        except KeyError:
+            return None
+
+    # ADDED BY ME:
+    def get_whole_line_of_code_as_string(self):
+        try:
+            line_no = self.attributes['loc']['start']['line'] - 1  # counting from 1 vs. counting from 0 (here)
+            filename = self.get_file()
+            with open(filename, 'r') as f:
+                for i, line in enumerate(f):
+                    if i == line_no:
+                        return line.rstrip()
+        except Exception as e:
+            return f"<error: {e}>"
+
     # ADDED BY ME: # (cf. Esprima documentation PDF, Section 3.1 Token Location)
     def get_location(self):
         """ Gets the exact location (line *and* column number) where a given node is defined. """
