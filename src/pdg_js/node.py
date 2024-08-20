@@ -110,6 +110,7 @@ class Node:
         n.attributes['raw'] = raw
         return n
 
+    # ADDED BY ME:
     @classmethod
     def wildcard(cls):
         """
