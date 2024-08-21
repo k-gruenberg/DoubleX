@@ -105,6 +105,13 @@ def main():
                              "Lee in their 2023 paper 'Extending a Hand to Attackers: Browser Privilege Escalation "
                              "Attacks via Extensions').")
 
+    parser.add_argument("--return-multiple-flow-variants", dest='return_multiple_flow_variants', action='store_true',
+                        help="When this flag is set and there exist multiple data flows between the same source and "
+                             "the same sink, *all* of those will be returned in analysis_renderer_attacker.json. "
+                             "This will result in a more elaborate but also verbose listing of vulnerabilities. "
+                             "Use this flag when trying to fix vulnerabilities / when wanting to report a complete "
+                             "list of attack vectors.")
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
@@ -135,6 +142,9 @@ def main():
 
     if args.print_pdgs:
         os.environ['PRINT_PDGS'] = "yes"
+
+    if args.return_multiple_flow_variants:
+        os.environ['RETURN_MULTIPLE_FLOW_VARIANTS'] = "yes"
 
     # Whether to use the original DoubleX extension analysis,
     #   or whether to look for vulnerabilities exploitable by a renderer attacker:
