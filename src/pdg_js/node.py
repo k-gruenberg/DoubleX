@@ -142,13 +142,13 @@ class Node:
 
         # cf. display_extension.py:
         if isinstance(self, Statement):
-            for child_cf_dep in self.control_dep_children:
-                str_repr += f" --{child_cf_dep.label}--> [{child_cf_dep.extremity.id}]"
+            for cf_dep in self.control_dep_children:
+                str_repr += f" --{cf_dep.label}--> [{cf_dep.extremity.id}]"
 
         # cf. display_extension.py:
         if isinstance(self, Identifier):
-            for child_data_dep in self.data_dep_children:
-                str_repr += f" --{child_data_dep.label}--> [{child_data_dep.extremity.id}]"
+            for data_dep in self.data_dep_children:
+                str_repr += f" --{data_dep.label}--> [{data_dep.extremity.id}]"
 
         str_repr += "\n"
 
