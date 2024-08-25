@@ -4,8 +4,7 @@ import os
 import json
 
 import get_pdg
-from kim_and_lee_vulnerability_detection import analyze_extension
-
+from kim_and_lee_vulnerability_detection import analyze_extension, add_missing_data_flow_edges
 
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
@@ -14,7 +13,7 @@ def main():
     os.environ['PARSER'] = "espree"
     os.environ['SOURCE_TYPE'] = "module"
 
-    def generate():
+    def generate_pdg():
         js_code = text_left.get("1.0", tk.END)
 
         tmp_file = tempfile.NamedTemporaryFile()
@@ -24,6 +23,8 @@ def main():
         res_dict = dict()
         benchmarks = res_dict['benchmarks'] = dict()
         pdg = get_pdg.get_pdg(file_path=tmp_file.name, res_dict=benchmarks)
+        no_added_df_edges_cs = add_missing_data_flow_edges(pdg)
+        print(f"{no_added_df_edges_cs} missing data flows edges added to PDG")
 
         # Set content of the right text area:
         text_right.config(state=tk.NORMAL)
@@ -92,7 +93,7 @@ def main():
     text_right.grid(row=0, column=2, columnspan=2, padx=5, pady=5, sticky="nsew")
     text_right.config(state=tk.DISABLED)
 
-    generate_button = tk.Button(frame, text="Generate PDG", command=generate)
+    generate_button = tk.Button(frame, text="Generate PDG", command=generate_pdg)
     generate_button.grid(row=1, column=0, columnspan=1, pady=10)
 
     generate_button = tk.Button(frame, text="Analyze as BP", command=analyze_as_bp)
