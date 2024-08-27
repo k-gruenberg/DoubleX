@@ -83,12 +83,12 @@ class Node:
 
     id = random.randint(0, 2*32)  # To limit id collision between 2 ASTs from separate processes
 
-    def __init__(self, name, parent=None):
+    def __init__(self, name, parent=None, attributes=None):
         self.name = name
         self.id = Node.id
         Node.id += 1
         self.filename = ''
-        self.attributes = {}
+        self.attributes = {} if attributes is None else attributes
         self.body = None
         self.body_list = False
         self.parent = parent
@@ -96,6 +96,42 @@ class Node:
         self.statement_dep_parents = []
         self.statement_dep_children = []  # Between Statement and their non-Statement descendants
         self.is_wildcard = False  # <== ADDED BY ME
+
+    # ADDED BY ME:
+    def __eq__(self, other):
+        return self.id == other.id
+
+    # ADDED BY ME: # Otherwise, there's a "TypeError: unhashable type: 'Identifier'" in set_provenance_dd().....
+    def __hash__(self):
+        return hash(self.id)
+
+    # ADDED BY ME:
+    def equivalent(self, other):
+        """
+        Unlike == / __eq__, which checks the equality of the node ID, i.e., whether we're talking about the exact same
+        subtree, this function tests for structural equivalence, e.g. to detect when an Expression is compared to itself
+        as in "if (x + y == x + y) { ... }".
+
+        For Identifiers, names are compared.
+        For Literals, raw literal values are compared.
+        For BinaryExpressions ('instanceof' | 'in' | '+' | '-' | '*' | '/' | '%' | '**' | '|' | '^' | '&' | '=='
+                               | '!=' | '===' | '!==' | '<' | '>' | '<=' | '<<' | '>>' | '>>>'),
+            LogicalExpressions ('||' | '&&'),
+            UnaryExpressions ('+' | '-' | '~' | '!' | 'delete' | 'void' | 'typeof'),
+            AssignmentExpressions ('=' | '*=' | '**=' | '/=' | '%=' | '+=' | '-=' | '<<=' | '>>=' | '>>>=' | '&='
+                                   | '^=' | '|=') and
+            UpdateExpressions ('++' | '--'), operators are compared.
+        Otherwise, number of children, order of children and child names are compared for equality.
+
+        This method is equivalent to using the matches() method with all match_* arguments set to True
+        and all allow_* arguments set to False!
+        """
+        return self.matches(other,
+                            match_identifier_names=True,
+                            match_literals=True,
+                            match_operators=True,
+                            allow_additional_children=False,
+                            allow_different_child_order=False)
 
     # ADDED BY ME:
     @classmethod
@@ -126,17 +162,84 @@ class Node:
         """
         Appends the given Node as a child and then returns itself again.
         """
+        # Safety check first:
+        if self.name in ["BinaryExpression", "LogicalExpression", "AssignmentExpression"] and len(self.children) >= 2:
+            raise TypeError(f"calling Node.child(): a(n) {self.name} cannot have more than 2 children; use nested Nodes instead!")
+        elif self.name in ["UnaryExpression", "UpdateExpression"] and len(self.children) >= 1:
+            raise TypeError(f"calling Node.child(): a(n) {self.name} cannot have more than 1 child!")
+        elif self.name in ["IfStatement"] and len(self.children) >= 3:
+            raise TypeError(f"calling Node.child(): a(n) {self.name} cannot have more than 3 children!")
+
         self.children.append(c)
         return self
+
+    # ADDED BY ME:
+    def get_sibling(self, idx):
+        sibling = self.parent.children[idx]
+        # Safety check, when the programmer calls get_sibling(), he likely wants a *different* Node:
+        assert sibling.id != self.id
+        return sibling
+
+    # ADDED BY ME:
+    def is_sibling_of(self, other):
+        return self.parent is not None and self.parent == other.parent
+
+    # ADDED BY ME:
+    def grandparent(self):
+        if self.parent is None:  # No parent...
+            return None  # ...no grandparent.
+        return self.parent.parent  # (might be None)
+
+    # ADDED BY ME:
+    def get_parents(self):
+        """
+        Return the parent, grandparent, great-grandparent, etc. of this Node (in that order)
+        until the root node is reached.
+        """
+        if self.parent is None:
+            return []
+        else:
+            return [self.parent] + self.parent.get_parents()
+
+    # ADDED BY ME:
+    def get_parent(self, allowed_parent_names):
+        """
+        Returns `self.parent` but only if `self.parent.name in allowed_parent_names`, otherwise this function raises
+        a LookupError.
+
+        Use this function when getting the parent of a Node and already knowing what types it could possibly belong to,
+        i.e., already knowing that it's either a "FunctionExpression" or "ArrowFunctionExpression":
+        ```
+        node.get_parent(["FunctionExpression", "ArrowFunctionExpression"])
+        ```
+        In case your design is mistaken/your assumptions were wrong, you will easily catch such an error then.
+
+        If you don't know anything about the parent yet, simply access the attribute directly: `self.parent`
+        """
+        if self.parent.name in allowed_parent_names:
+            return self.parent
+        else:
+            raise LookupError(f"parent of [{self.id}] has name '{self.parent.name}' but none of: {allowed_parent_names}")
 
     # ADDED BY ME:
     def __str__(self):
         str_repr = ""
 
-        if self.name == "Identifier":
-            str_repr = f"[{self.id}] [{self.name}:\"{self.attributes['name']}\"] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
-        elif self.name == "Literal":
-            str_repr = f"[{self.id}] [{self.name}:\"{self.attributes['raw']}\"] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
+        attributes_of_interest = {
+            "Identifier": 'name',
+            "Literal": 'raw',
+            "BinaryExpression": 'operator',      # 'instanceof' | 'in' | '+' | '-' | '*' | '/' | '%' | '**' |
+                                                 # '|' | '^' | '&' | '==' | '!=' | '===' | '!==' |
+                                                 # '<' | '>' | '<=' | '<<' | '>>' | '>>>'
+            "LogicalExpression": 'operator',     # || or &&
+            "AssignmentExpression": 'operator',  # '=' | '*=' | '**=' | '/=' | '%=' | '+=' | '-=' |
+                                                 # '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|='
+            "UnaryExpression": 'operator',       # '+' | '-' | '~' | '!' | 'delete' | 'void' | 'typeof'
+            "UpdateExpression": 'operator'       # '++' or '--'
+        }
+
+        if self.name in attributes_of_interest.keys():
+            str_repr = f"[{self.id}] [{self.name}:\"{self.attributes[attributes_of_interest[self.name]]}\"] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
         else:
             str_repr = f"[{self.id}] [{self.name}] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
 
@@ -157,6 +260,31 @@ class Node:
         return str_repr
 
     # ADDED BY ME:
+    def contains_literal(self):
+        """
+        Does this subtree contain any Literal (Node)?
+        """
+        return self.get_literal() is not None
+
+    # ADDED BY ME:
+    def get_literal(self):
+        """
+        Returns the Literal contained inside this subtree.
+        When there is no Literal to be found, `None` is returned.
+        When there are multiple Literals, the first one encountered is returned.
+        """
+        if self.name == "Literal":
+            return self.attributes['raw']
+        elif len(self.children) == 0:
+            return None
+        else:
+            for child in self.children:
+                child_literal = child.get_literal()
+                if child_literal is not None:
+                    return child_literal  # return the first Literal found
+            return None  # no child contains any Literal
+
+    # ADDED BY ME:
     def get_all(self, node_name):
         """
         Returns all nodes of a given type/name, e.g. all "VariableDeclaration" nodes.
@@ -167,6 +295,23 @@ class Node:
         for child in self.children:
             result.extend(child.get_all(node_name))
         return result
+
+    # ADDED BY ME:
+    def get_all_if_statements_inside(self):
+        """
+        Returns all if-statements ("IfStatement" nodes) inside this piece of code as a list.
+
+        Note that else-if branches are modelled as nested IfStatements (IfStatements inside the else-branches of other
+        IfStatements) and will therefore be returned as well!
+        """
+        return self.get_all("IfStatement")
+
+    # ADDED BY ME:
+    def get_all_return_statements_inside(self):
+        """
+        Returns all return-statements ("ReturnStatement" nodes) inside this piece of code as a list.
+        """
+        return self.get_all("ReturnStatement")
 
     # ADDED BY ME:
     def has_child(self, child_name):
@@ -188,7 +333,13 @@ class Node:
         return self.children[0]
 
     # ADDED BY ME:
-    def matches(self, pattern, match_identifier_names, match_literals, allow_additional_children):
+    def is_nth_child_of_parent(self, n):
+        sibling_ids = [sibling.id for sibling in self.parent.children]
+        return self.id == sibling_ids[n]
+
+    # ADDED BY ME:
+    def matches(self, pattern, match_identifier_names, match_literals, match_operators, allow_additional_children,
+                allow_different_child_order):
         """
         Returns if this AST subtree matches another given AST tree (pattern), only comparing:
         * name of root
@@ -198,36 +349,70 @@ class Node:
         * "raw" attributes of "Literal" nodes (only if match_literals == True)
         """
         if pattern.is_wildcard:
-            return True
+            return True  # Note that the calls to all() below may also return True as all([]) is True!
         elif self.name != pattern.name:
             return False
         elif match_identifier_names and self.name == "Identifier" and self.attributes['name'] != pattern.attributes['name']:
             return False
         elif match_literals and self.name == "Literal" and self.attributes['raw'] != pattern.attributes['raw']:
             return False
+        elif match_operators and self.name in ["UpdateExpression", "UnaryExpression", "BinaryExpression",
+                                               "LogicalExpression", "AssignmentExpression"]\
+                and self.attributes['operator'] != pattern.attributes['operator']:
+            return False
         elif not allow_additional_children and len(self.children) != len(pattern.children):
             return False
         elif allow_additional_children and len(self.children) < len(pattern.children):  # pattern cannot be matched
             return False
-        elif not allow_additional_children and sorted([c.name for c in self.children]) != sorted([c.name for c in pattern.children]):
+        elif not allow_additional_children and allow_different_child_order and sorted([c.name for c in self.children]) != sorted([c.name for c in pattern.children]):
+            return False
+        elif not allow_additional_children and not allow_different_child_order and [c.name for c in self.children] != [c.name for c in pattern.children]:
             return False
         elif allow_additional_children and not set(c.name for c in pattern.children if not c.is_wildcard).issubset(set(c.name for c in self.children)):
             return False
         elif not allow_additional_children:
+            if allow_different_child_order:  # If allow_different_child_order=True (and allow_additional_children=False)...
+                permutations = itertools.permutations(pattern.children)  # ...allow all permutations of the children in the pattern (but not additional children).
+            else:  # If allow_different_child_order=False (and allow_additional_children=False)...
+                permutations = [pattern.children]  # ...allow only 1 permutation of children, namely the one in the pattern!
+
             # Iterate through all possible child permutations and try to find a match:
-            return any(all(self.children[i].matches(permutation[i], match_identifier_names, match_literals, allow_additional_children)
+            return any(all(self.children[i].matches(permutation[i], match_identifier_names, match_literals, match_operators, allow_additional_children, allow_different_child_order)
                            for i in range(len(self.children)))
-                           for permutation in itertools.permutations(pattern.children))
+                           for permutation in permutations)
         else:  # allow_additional_children == True:
             # Fill pattern up with wildcards:
             pattern_children_plus_wildcards = pattern.children + [Node.wildcard()] * (len(self.children) - len(pattern.children))
+
+            permutations = itertools.permutations(pattern_children_plus_wildcards)
+
             # Same as above:
-            return any(all(self.children[i].matches(permutation[i], match_identifier_names, match_literals, allow_additional_children)
+            return any(all(self.children[i].matches(permutation[i], match_identifier_names, match_literals, match_operators, allow_additional_children, allow_different_child_order)
                            for i in range(len(self.children)))
-                           for permutation in itertools.permutations(pattern_children_plus_wildcards))
+                           for permutation in permutations
+                           if allow_different_child_order or all([[el for el in permutation if not el.is_wildcard][i] == pattern.children[i] for i in range(len(pattern.children))]))
+            # The last line skips permutations that changed the order of the non-wildcard nodes if allow_different_child_order=False.
+
+        # Note:
+        #
+        # >>> all([])
+        # True
+        # >>> any([])
+        # False
+        # >>> [i for i in range(0)]
+        # []
+        # >>> [perm for perm in itertools.permutations([])]
+        # [()]
+        #
+        # => Therefore:
+        # >>> any(all(42 for i in range(0)) for perm in [()])
+        # True
+        # => For any two Nodes w/o any children and the same name (as well as the same Identifier name for Identifiers/
+        #    the same raw Literal value for Literals), matches() will return True!
 
     # ADDED BY ME:
-    def find_pattern(self, pattern, match_identifier_names, match_literals, allow_additional_children):
+    def find_pattern(self, pattern, match_identifier_names, match_literals, match_operators, allow_additional_children,
+                     allow_different_child_order):
         """
         Returns all subtrees of this PDG matching the given pattern `pattern`.
         Cf. `Node.matches()` function.
@@ -238,11 +423,232 @@ class Node:
             if match_candidate.matches(pattern,
                                        match_identifier_names=match_identifier_names,
                                        match_literals=match_literals,
-                                       allow_additional_children=allow_additional_children):
+                                       match_operators=match_operators,
+                                       allow_additional_children=allow_additional_children,
+                                       allow_different_child_order=allow_different_child_order):
                 if os.environ.get('PRINT_PDGS') == "yes":
                     print(f"Pattern Match:\n{match_candidate}")
                 result.append(match_candidate)
         return result
+
+    # ADDED BY ME:
+    def get_statement(self):
+        """
+        If this Node isn't a Statement itself already, this function returns the Statement that this Node is a part of,
+        by going up the PDG parent-by-parent until a Statement is found.
+
+        This function is useful when dealing with control flow.
+
+        Returns `None` when this Node isn't part of any Statement but that case should not actually occur!
+        """
+        if isinstance(self, Statement):
+            return self
+        elif self.parent is not None:
+            return self.parent.get_statement()
+        else:
+            return None
+
+    # ADDED BY ME:
+    def get_next_higher_up_statement(self):
+        """
+        This function returns the Statement that this Node is a part of,
+        by going up the PDG parent-by-parent until a Statement is found.
+
+        If this Node is a Statement *itself* does not matter here.
+        If you need a function that returns the node itself when it's a Statement already, use get_statement() instead.
+
+        Returns `None` when this Node doesn't have any higher up Statement above it, this may occur when you call this
+        function on the root node of the tree!
+        """
+        if self.parent is not None:
+            return self.parent.get_statement()
+        else:
+            return None
+
+    # ADDED BY ME:
+    def get_innermost_surrounding_if_statement(self):
+        """
+        Returns the innermost if-statement surrounding this piece of code,
+        or `None` if there is no if-statement surrounding this piece of code.
+
+        Note that else-if branches are modelled as nested IfStatements (IfStatements inside the else-branches of other
+        IfStatements) and will therefore be considered as well!
+        """
+        if self.name == "IfStatement":
+            return self
+        elif self.parent is not None:
+            return self.parent.get_surrounding_if_statement()
+        else:
+            return None
+
+    # ADDED BY ME:
+    def get_all_surrounding_if_statements(self):
+        """
+        Returns all if-statement surrounding this piece of code, from innermost to outermost, as a list.
+        Returns the empty list `[]` if there is no if-statement surrounding this piece of code.
+
+        Note that else-if branches are modelled as nested IfStatements (IfStatements inside the else-branches of other
+        IfStatements) and will therefore be considered as well!
+        """
+        result = []
+        current = self
+
+        while True:
+            if current.name == "IfStatement":
+                result.append(current)
+            if current.parent is None:
+                break
+            else:
+                current = current.parent
+
+        return result
+
+    # ADDED BY ME:
+    def is_return_statement(self):
+        """
+        Returns True iff this very Statement is a ReturnStatement itself.
+        To check if this node is simply *inside* a ReturnStatement, use is_inside_return_statement() instead!
+        """
+        return self.name == "ReturnStatement"
+
+    # ADDED BY ME:
+    def is_inside_return_statement(self):
+        """
+        Returns True iff this node is either a ReturnStatement itself or is inside of one inside the AST, by
+        traversing parent to parent until there is no parent anymore.
+        """
+        if self.name == "ReturnStatement":
+            return True
+        elif self.parent is not None:
+            return self.parent.is_inside_return_statement()
+        else:
+            return False
+
+    # ##### On if statements: #####
+    #
+    # * If statements can have 2 children (no else branch) or 3 children (else branch):
+    #
+    #   if (sender.url == "https://admin.com/") {    [1] [IfStatement] (2 children) --True--> [3]
+    #       sendResponse(cookies);                       [2] [BinaryExpression] (2 children)
+    #   }                                                [3] [BlockStatement] (1 child) --e--> [3.1]
+    #
+    #   if (sender.url == "https://admin.com/") {    [1] [IfStatement] (3 children) --True--> [3] --False--> [4]
+    #       sendResponse(cookies);                       [2] [BinaryExpression] (2 children)
+    #   } else {                                         [3] [BlockStatement] (1 child) --e--> [3.1]
+    #       sendResponse("error");                       [4] [BlockStatement] (1 child) --e--> [4.1]
+    #   }
+    #
+    # * Else-if branches are modelled as nested if statements, i.e., with another IfStatement in the else branch:
+    #
+    #   if (sender.url == "https://admin.com/") {           [1] [IfStatement] (3 children) --True--> [3] --False--> [4]
+    #       sendResponse(cookies);                              [2] [BinaryExpression] (2 children)
+    #   } else if (sender.url == "https://admin.com/") {        [3] [BlockStatement] (1 child) --e--> [3.1]
+    #       sendResponse(cookies);                              [4] [IfStatement] (2 children) --True--> [6]
+    #   }                                                           [5] [BinaryExpression] (2 children)
+    #                                                               [6] [BlockStatement] (1 child) --e--> [6.1]
+    #
+    #   if (sender.url == "https://admin.com/") {           [1] [IfStatement] (3 children) --True--> [3] --False--> [4]
+    #       sendResponse(cookies);                              [2] [BinaryExpression] (2 children)
+    #   } else if (sender.url == "https://admin.com/") {        [3] [BlockStatement] (1 child) --e--> [3.1]
+    #       sendResponse(cookies);                              [4] [IfStatement] (3 children) --True--> [6] --False--> [7]
+    #   } else {                                                    [5] [BinaryExpression] (2 children)
+    #       sendResponse("error");                                  [6] [BlockStatement] (1 child) --e--> [6.1]
+    #   }                                                           [7] [BlockStatement] (1 child) --e--> [7.1]
+
+    # ADDED BY ME:
+    def is_if_statement(self):
+        """
+        Returns True iff this node is an "IfStatement" node.
+
+        Note that else-if branches are modelled as nested IfStatements (IfStatements inside the else-branches of other
+        IfStatements); therefore this function will *also* returned true when called on an IfStatement representing an
+        else-if branch!
+
+        All IfStatements have either 2 or 3 children (3 only when there's an else and/or else-if branch).
+        """
+        return self.name == "IfStatement"
+
+    # ADDED BY ME:
+    def if_statement_has_else_branch(self):
+        """
+        Returns True iff this IfStatement has an else branch.
+        Raises an exception when this node isn't an "IfStatement" node; use is_if_statement() to check that beforehand.
+
+        Else-if branches are *not* counted as else branches! Use if_statement_has_else_if_branch() for that instead.
+        """
+        return self.if_statement_get_else_branch() is not None
+
+    # ADDED BY ME:
+    def if_statement_get_else_branch(self):
+        """
+        Returns the else branch of this IfStatement (will always be of type "BlockStatement").
+        Returns `None` when this IfStatement has no else branch.
+        Raises an exception when this node isn't an "IfStatement" node; use is_if_statement() to check that beforehand.
+
+        If you just want to know whether there *is* an else branch or not, you may also use if_statement_has_else_branch().
+        """
+        if not self.is_if_statement():
+            raise TypeError("called if_statement_get_else_branch() on a Node that's not an IfStatement")
+        elif len(self.children) == 2:  # if (...) { ... }
+            return None  # There is no else branch, return `None`.
+        elif len(self.children) == 3 and self.children[2].name == "BlockStatement":  # if (...) { ... } else { ... }
+            return self.children[2]  # Return the else branch.
+        elif len(self.children) == 3 and self.children[2].name == "IfStatement":  # if (...) { ... } else if ...
+            return self.children[2].if_statement_get_else_branch()  # Recursion
+        else:
+            raise Exception(f"error in if_statement_get_else_branch(): if statement has unknown format:\n{self}")
+
+    # ADDED BY ME:
+    def if_statement_has_else_if_branch(self):
+        if not self.is_if_statement():
+            raise TypeError("called if_statement_has_else_if_branch() on a Node that's not an IfStatement")
+        elif len(self.children) == 2:  # if (...) { ... }
+            return False  # There is no else or else-if branch, return False.
+        elif len(self.children) == 3 and self.children[2].name == "BlockStatement":  # if (...) { ... } else { ... }
+            return False  # There's only an else branch, return False.
+        elif len(self.children) == 3 and self.children[2].name == "IfStatement":  # if (...) { ... } else if ...
+            return True  # There's an else-if branch (represented by another IfStatement Node), return True.
+        else:
+            raise Exception(f"error in if_statement_has_else_if_branch(): if statement has unknown format:\n{self}")
+
+    # ADDED BY ME:
+    def occurs_in_code_before(self, other_node):
+        assert self.get_file() == other_node.get_file()
+
+        self_start_line = int(self.attributes['loc']['start']['line'])
+        self_start_column = int(self.attributes['loc']['start']['column'])
+
+        other_start_line = int(other_node.attributes['loc']['start']['line'])
+        other_start_column = int(other_node.attributes['loc']['start']['column'])
+
+        return self_start_line < other_start_line or\
+                (self_start_line == other_start_line and self_start_column < other_start_column)
+
+    # ADDED BY ME:
+    def occurs_in_code_after(self, other_node):
+        assert self.get_file() == other_node.get_file()
+
+        self_start_line = int(self.attributes['loc']['start']['line'])
+        self_start_column = int(self.attributes['loc']['start']['column'])
+
+        other_start_line = int(other_node.attributes['loc']['start']['line'])
+        other_start_column = int(other_node.attributes['loc']['start']['column'])
+
+        return self_start_line > other_start_line or \
+            (self_start_line == other_start_line and self_start_column > other_start_column)
+
+    # ADDED BY ME:
+    def lies_within(self, other_node):
+        """
+        Whether this node is a child, grand-child, great-grandchild, etc. of `other_node`.
+        Returns False when self == other_node!
+        """
+        parent = self.parent
+        while parent is not None:
+            if parent.id == other_node.id:
+                return True
+            parent = parent.parent
+        return False
 
     def is_leaf(self):
         return not self.children
@@ -467,7 +873,7 @@ class Value:
                     self.provenance_children_set.add(child)
                     self.provenance_children.append(child)
         else:
-            if extremity not in self.provenance_children_set:
+            if extremity not in self.provenance_children_set:  # NOTE BY ME: TypeError: unhashable type: 'Identifier'
                 self.provenance_children_set.add(extremity)
                 self.provenance_children.append(extremity)
         if self.provenance_parents:

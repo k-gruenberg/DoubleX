@@ -105,12 +105,31 @@ def main():
                              "Lee in their 2023 paper 'Extending a Hand to Attackers: Browser Privilege Escalation "
                              "Attacks via Extensions').")
 
-    parser.add_argument("--return-multiple-flow-variants", dest='return_multiple_flow_variants', action='store_true',
+    parser.add_argument("--return-multiple-flow-variants", dest='return_multiple_flow_variants',
+                        action='store_true',
                         help="When this flag is set and there exist multiple data flows between the same source and "
                              "the same sink, *all* of those will be returned in analysis_renderer_attacker.json. "
                              "This will result in a more elaborate but also verbose listing of vulnerabilities. "
                              "Use this flag when trying to fix vulnerabilities / when wanting to report a complete "
                              "list of attack vectors.")
+
+    parser.add_argument("--return-safe-flows-verified", dest='return_safe_flows_verified',
+                        action='store_true',
+                        help="Return data flows even when they should be safe because the URL/origin of each message"
+                             "sender is correctly verified (Kim+Lee Sec. Req. 3.1 Extension Message Authentication).")
+
+    # ToDo:
+    parser.add_argument("--return-safe-flows-sanitized", dest='return_safe_flows_sanitized',
+                        action='store_true',
+                        help="Return UXSS data flows even when they should be safe because of correct sanitization.")
+
+    # ToDo: implement:
+    parser.add_argument("--csv-out", metavar="path", type=str,
+                        help="Path of the .CSV output file. "
+                             "Only has an effect in combination with the --crx parameter. "
+                             "CSV file will contain list of all extensions analyzed and number of vulnerabilities"
+                             "found, by type."
+                             "No .CSV file will be created when the --csv-out argument is supplied.")
 
     # TODO: control verbosity of logging?
 
@@ -145,6 +164,12 @@ def main():
 
     if args.return_multiple_flow_variants:
         os.environ['RETURN_MULTIPLE_FLOW_VARIANTS'] = "yes"
+
+    if args.return_safe_flows_verified:
+        os.environ['RETURN_SAFE_FLOWS_VERIFIED'] = "yes"
+
+    if args.return_safe_flows_sanitized:
+        os.environ['RETURN_SAFE_FLOWS_SANITIZED'] = "yes"
 
     # Whether to use the original DoubleX extension analysis,
     #   or whether to look for vulnerabilities exploitable by a renderer attacker:
