@@ -73,6 +73,7 @@ def get_javascript_loc(directory):
     except:
         return -1  # signifies an error
 
+
 def main():
     """ Parsing command line parameters. """
 
