@@ -57,6 +57,22 @@ def get_directory_size(start_path):
     return total_size
 
 
+def get_javascript_loc(directory):
+    r"""
+    Given the path to the directory of an unpacked extension,
+    determines the total no. of JavaScript lines of code (LoC) using the following shell command:
+
+    find . -name "*.js" -exec sh -c "js-beautify {} | wc -l" \; | awk '{s+=$1} END {print s}'
+
+    Returns -1 on error.
+    """
+    cmd = """find """ + directory +\
+        r""" -name "*.js" -exec sh -c "js-beautify {} | wc -l" \; | awk '{s+=$1} END {print s}'"""
+    try:
+        return int(os.popen(cmd).read())
+    except:
+        return -1  # signifies an error
+
 def main():
     """ Parsing command line parameters. """
 
@@ -226,7 +242,7 @@ def main():
                 print(f"Error: '{args.csv_out}' file already exists, please supply another file as --csv-out.")
                 exit(1)
             csv_out = open(args.csv_out, "w")
-            csv_out.write("Extension,extension size (packed),extension size (unpacked),"
+            csv_out.write("Extension,extension size (packed),extension size (unpacked),JS LoC,"
                           "CS injected into,crashes,analysis time in seconds,total dangers,"
                           "BP exfiltration dangers,BP infiltration dangers,"
                           "CS exfiltration dangers,CS infiltration dangers,files and line numbers\n")
@@ -241,6 +257,7 @@ def main():
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacking '{crx}' ...")
             dest2 = unpack_extension(extension_crx=crx, dest=dest1)
             extension_size_unpacked = f"{get_directory_size(dest2):_}"
+            js_loc = f"{get_javascript_loc(dest2):_}"
             if dest2 is None:
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacking failed: '{crx}'")
             else:
@@ -271,13 +288,12 @@ def main():
                     total_no_of_dangers = sum(len(x) for x in [bp_exfiltration_dangers, bp_infiltration_dangers,
                                                                cs_exfiltration_dangers, cs_infiltration_dangers])
                     files_and_line_numbers = "" # ToDo: write once more types of vuln. are supported!
-                    csv_out.write(f"{crx},{extension_size_packed},{extension_size_unpacked},"
+                    csv_out.write(f"{crx},{extension_size_packed},{extension_size_unpacked},{js_loc},"
                                   f"{content_script_injected_into},{crashes},"
                                   f"{analysis_time},{total_no_of_dangers},"
                                   f"{len(bp_exfiltration_dangers)},{len(bp_infiltration_dangers)},"
                                   f"{len(cs_exfiltration_dangers)},{len(cs_infiltration_dangers)},"
                                   f"{files_and_line_numbers}\n")
-                    # ToDo: also output: LoC (beautified)
                     csv_out.flush()
 
         if args.csv_out != "":
