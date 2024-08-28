@@ -234,6 +234,25 @@ class TestNodeClass(unittest.TestCase):
         self.assertFalse(pdg_order1.matches(pdg_order2, allow_different_child_order=False, **args))
         self.assertFalse(pdg_order2.matches(pdg_order1, allow_different_child_order=False, **args))
 
+    def test_string_literal_strip_quotation_marks(self):
+        literal1 = Node("Literal", attributes={"raw": "'Hello World'"})
+        literal2 = Node("Literal", attributes={"raw": "\"Hello World\""})
+        literal3 = Node("Literal", attributes={"raw": "`Hello World`"})
+        # ToDo: remove this case everywhere! It generates a TemplateLiteral and not a Literal!
+        self.assertEqual(literal1.string_literal_strip_quotation_marks(), "Hello World")
+        self.assertEqual(literal2.string_literal_strip_quotation_marks(), "Hello World")
+        self.assertEqual(literal3.string_literal_strip_quotation_marks(), "Hello World")
+
+    def test_string_literal_matches_full_regex(self):
+        string_literal = Node("Literal", attributes={"raw": "'https://www.admin.com'"})
+        self.assertTrue(string_literal.string_literal_matches_full_regex("https:\/\/.+"))
+        self.assertFalse(string_literal.string_literal_matches_full_regex("'https:\/\/.+"))
+
+    def test_string_literal_contains_regex(self):
+        string_literal = Node("Literal", attributes={"raw": "'Hello World'"})
+        self.assertTrue(string_literal.string_literal_contains_regex("Hello"))
+        self.assertFalse(string_literal.string_literal_contains_regex("'Hello"))
+
     def test_any_literal_inside_matches_full_regex(self):
         pdg = Node("Literal", attributes={"raw": "3.14"})
         self.assertTrue(pdg.any_literal_inside_matches_full_regex("\d\\.\d\d"))

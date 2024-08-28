@@ -164,7 +164,12 @@ def main():
                              "found, by type."
                              "No .CSV file will be created when the --csv-out argument is supplied.")
 
-    # ToDo: add option --consider-http-as-safe
+    parser.add_argument("--consider-http-as-safe", dest='consider_http_as_safe',
+                        action='store_true',
+                        help="Disables the default behavior of considering HTTP URL sender checks unsafe (they would "
+                             "be exploitable by a renderer + network attacker).") # ToDo: is renderer even necessary?!
+
+    # ToDo: --include-31-violations-without-privileged-api-access (cf. Cisco WebEx extension)
 
     # TODO: control verbosity of logging?
 
@@ -205,6 +210,9 @@ def main():
 
     if args.return_safe_flows_sanitized:
         os.environ['RETURN_SAFE_FLOWS_SANITIZED'] = "yes"
+
+    if args.consider_http_as_safe:
+        os.environ['CONSIDER_HTTP_AS_SAFE'] = "yes"
 
     # Whether to use the original DoubleX extension analysis,
     #   or whether to look for vulnerabilities exploitable by a renderer attacker:

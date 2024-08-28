@@ -110,6 +110,9 @@ def get_data_flow(input_file, benchmarks, store_pdgs=None, check_var=False, beau
         - or None if problems to build the PDG.
         - or list of unknown variables if check_var is True.
     """
+    print(f"get_data_flow(input_file={input_file}, benchmarks={benchmarks}, store_pdgs={store_pdgs}, "
+          f"check_var={check_var}, beautiful_print={beautiful_print}, save_path_ast={save_path_ast}, "
+          f"save_path_cfg={save_path_cfg}, save_path_pdg={save_path_pdg}, check_json={check_json})")
 
     start = timeit.default_timer()
     #utility_df.limit_memory(20*10**9)  # Limiting the memory usage to 20GB

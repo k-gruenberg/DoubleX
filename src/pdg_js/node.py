@@ -700,6 +700,40 @@ class Node:
     # re.fullmatch(pattern, string, flags=0) => If the whole string matches the regex pattern
 
     # ADDED BY ME:
+    def string_literal_strip_quotation_marks(self):
+        """
+        When this is a String Literal, returns the literal string w/o quotation marks.
+        Note that JavaScript has 3 different valid quotation marks: "", '' and ``
+        """
+        assert self.name == "Literal"
+        raw = self.attributes['raw']
+        if raw[0] == raw[-1] and raw[0] in ["\"", "'", "`"]:  # literal is a (correct) string literal
+            string_inside_quotes = raw[1:-1]  # remove the quotation marks
+            return string_inside_quotes
+        else:
+            raise TypeError("string_literal_strip_quotation_marks called on a non-string literal!")
+
+    # ADDED BY ME:
+    def string_literal_matches_full_regex(self, regex):
+        assert self.name == "Literal"
+        raw = self.attributes['raw']
+        if raw[0] == raw[-1] and raw[0] in ["\"", "'", "`"]:  # literal is a (correct) string literal
+            string_inside_quotes = raw[1:-1]  # remove the quotation marks
+            if re.fullmatch(regex, string_inside_quotes):
+                return True
+        return False
+
+    # ADDED BY ME:
+    def string_literal_contains_regex(self, regex):
+        assert self.name == "Literal"
+        raw = self.attributes['raw']
+        if raw[0] == raw[-1] and raw[0] in ["\"", "'", "`"]:  # literal is a (correct) string literal
+            string_inside_quotes = raw[1:-1]  # remove the quotation marks
+            if re.search(regex, string_inside_quotes):
+                return True
+        return False
+
+    # ADDED BY ME:
     def any_literal_inside_matches_full_regex(self, regex):
         """
         Does any literal inside this subtree match the given regular expression?
