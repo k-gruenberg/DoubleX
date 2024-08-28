@@ -707,7 +707,7 @@ class Node:
         """
         assert self.name == "Literal"
         raw = self.attributes['raw']
-        if raw[0] == raw[-1] and raw[0] in ["\"", "'", "`"]:  # literal is a (correct) string literal
+        if raw[0] == raw[-1] and raw[0] in ["\"", "'"]:  # literal is a (correct) string literal
             string_inside_quotes = raw[1:-1]  # remove the quotation marks
             return string_inside_quotes
         else:
@@ -717,7 +717,7 @@ class Node:
     def string_literal_matches_full_regex(self, regex):
         assert self.name == "Literal"
         raw = self.attributes['raw']
-        if raw[0] == raw[-1] and raw[0] in ["\"", "'", "`"]:  # literal is a (correct) string literal
+        if raw[0] == raw[-1] and raw[0] in ["\"", "'"]:  # literal is a (correct) string literal
             string_inside_quotes = raw[1:-1]  # remove the quotation marks
             if re.fullmatch(regex, string_inside_quotes):
                 return True
@@ -727,7 +727,7 @@ class Node:
     def string_literal_contains_regex(self, regex):
         assert self.name == "Literal"
         raw = self.attributes['raw']
-        if raw[0] == raw[-1] and raw[0] in ["\"", "'", "`"]:  # literal is a (correct) string literal
+        if raw[0] == raw[-1] and raw[0] in ["\"", "'"]:  # literal is a (correct) string literal
             string_inside_quotes = raw[1:-1]  # remove the quotation marks
             if re.search(regex, string_inside_quotes):
                 return True
@@ -776,7 +776,7 @@ class Node:
         # const string3 = `Yet another string primitive`;
         for literal in self.get_all_literals():
             raw = literal.attributes['raw']
-            if raw[0] == raw[-1] and raw[0] in ["\"", "'", "`"]:  # literal is a (correct) string literal
+            if raw[0] == raw[-1] and raw[0] in ["\"", "'"]:  # literal is a (correct) string literal
                 string_inside_quotes = raw[1:-1]  # remove the quotation marks
                 if re.fullmatch(regex, string_inside_quotes):
                     return True
@@ -796,9 +796,10 @@ class Node:
         # const string1 = "A string primitive";
         # const string2 = 'Also a string primitive';
         # const string3 = `Yet another string primitive`;
+        #     => not considered by us here; Espree generates a TemplateLiteral Node and not a Literal Node for those!
         for literal in self.get_all_literals():
             raw = literal.attributes['raw']
-            if raw[0] == raw[-1] and raw[0] in ["\"", "'", "`"]:  # literal is a (correct) string literal
+            if raw[0] == raw[-1] and raw[0] in ["\"", "'"]:  # literal is a (correct) string literal
                 string_inside_quotes = raw[1:-1]  # remove the quotation marks
                 if re.search(regex, string_inside_quotes):
                     return True

@@ -237,11 +237,10 @@ class TestNodeClass(unittest.TestCase):
     def test_string_literal_strip_quotation_marks(self):
         literal1 = Node("Literal", attributes={"raw": "'Hello World'"})
         literal2 = Node("Literal", attributes={"raw": "\"Hello World\""})
-        literal3 = Node("Literal", attributes={"raw": "`Hello World`"})
-        # ToDo: remove this case everywhere! It generates a TemplateLiteral and not a Literal!
         self.assertEqual(literal1.string_literal_strip_quotation_marks(), "Hello World")
         self.assertEqual(literal2.string_literal_strip_quotation_marks(), "Hello World")
-        self.assertEqual(literal3.string_literal_strip_quotation_marks(), "Hello World")
+        # Note that while `strings` enclosed in backticks are possible in JavaScript, they generate a "TemplateLiteral"
+        #     Node instead of a "Literal" Node as they are vastly more complex. We shall not consider those!
 
     def test_string_literal_matches_full_regex(self):
         string_literal = Node("Literal", attributes={"raw": "'https://www.admin.com'"})
