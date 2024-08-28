@@ -41,6 +41,22 @@ from unpack_extension import unpack_extension
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
 
+def get_directory_size(start_path):
+    """
+    Determines the size of a directory.
+    Source: https://stackoverflow.com/questions/1392413/calculating-a-directorys-size-using-python
+    """
+    total_size = 0
+    for dir_path, _dir_names, filenames in os.walk(start_path):
+        for f in filenames:
+            fp = os.path.join(dir_path, f)
+            # skip if it is symbolic link
+            if not os.path.islink(fp):
+                total_size += os.path.getsize(fp)
+
+    return total_size
+
+
 def main():
     """ Parsing command line parameters. """
 
@@ -210,14 +226,21 @@ def main():
                 print(f"Error: '{args.csv_out}' file already exists, please supply another file as --csv-out.")
                 exit(1)
             csv_out = open(args.csv_out, "w")
-            csv_out.write("Extension,CS injected into,crashes,analysis time in seconds,total dangers,BP exfiltration dangers,BP infiltration dangers,"
+            csv_out.write("Extension,extension size (packed),extension size (unpacked),"
+                          "CS injected into,crashes,analysis time in seconds,total dangers,"
+                          "BP exfiltration dangers,BP infiltration dangers,"
                           "CS exfiltration dangers,CS infiltration dangers,files and line numbers\n")
             csv_out.flush()
 
         for crx in crxs:
+            try:
+                extension_size_packed = f"{os.path.getsize(crx):_}"
+            except OSError:
+                extension_size_packed = "?"
             # Unpack .CRX file into a temp directory:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacking '{crx}' ...")
             dest2 = unpack_extension(extension_crx=crx, dest=dest1)
+            extension_size_unpacked = f"{get_directory_size(dest2):_}"
             if dest2 is None:
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacking failed: '{crx}'")
             else:
@@ -248,11 +271,13 @@ def main():
                     total_no_of_dangers = sum(len(x) for x in [bp_exfiltration_dangers, bp_infiltration_dangers,
                                                                cs_exfiltration_dangers, cs_infiltration_dangers])
                     files_and_line_numbers = "" # ToDo: write once more types of vuln. are supported!
-                    csv_out.write(f"{crx},{content_script_injected_into},{crashes},"
+                    csv_out.write(f"{crx},{extension_size_packed},{extension_size_unpacked},"
+                                  f"{content_script_injected_into},{crashes},"
                                   f"{analysis_time},{total_no_of_dangers},"
                                   f"{len(bp_exfiltration_dangers)},{len(bp_infiltration_dangers)},"
                                   f"{len(cs_exfiltration_dangers)},{len(cs_infiltration_dangers)},"
                                   f"{files_and_line_numbers}\n")
+                    # ToDo: also output: LoC (beautified)
                     csv_out.flush()
 
         if args.csv_out != "":
