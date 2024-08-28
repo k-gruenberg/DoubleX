@@ -153,7 +153,6 @@ class Node:
         last_len_self_data_dep_parents = 1
         last_len_other_data_dep_parents = 1
         while current_depth < max_depth:
-            print(current_depth)
             for parent1 in self_data_dep_parents.copy():
                 self_data_dep_parents.update(grandparent.extremity for grandparent in parent1.data_dep_parents)
                 # Note: update() appends multiple elements to a set
@@ -331,6 +330,10 @@ class Node:
         for child in self.children:
             result.extend(child.get_all(node_name))
         return result
+
+    # ADDED BY ME:
+    def get_all_identifiers(self):
+        return self.get_all("Identifier")
 
     # ADDED BY ME:
     def get_all_if_statements_inside(self):
