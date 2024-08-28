@@ -43,7 +43,8 @@ def main():
         manifest_path = os.path.join(os.path.dirname(SRC_PATH), 'empty', 'manifest.json')
 
         res_dict = analyze_extension(cs, bp.name, json_analysis=None, chrome=True,
-                                     war=False, json_apis="all", manifest_path=manifest_path, return_result=True)
+                                     war=False, json_apis="all", manifest_path=manifest_path, return_result=True,
+                                     store_result_as_json_file=False)
         result = json.dumps(res_dict, indent=4, sort_keys=False, skipkeys=True)
 
         # Set content of the right text area:
@@ -63,7 +64,8 @@ def main():
         manifest_path = os.path.join(os.path.dirname(SRC_PATH), 'empty', 'manifest.json')
 
         res_dict = analyze_extension(cs.name, bp, json_analysis=None, chrome=True,
-                                     war=False, json_apis="all", manifest_path=manifest_path, return_result=True)
+                                     war=False, json_apis="all", manifest_path=manifest_path, return_result=True,
+                                     store_result_as_json_file=False)
         result = json.dumps(res_dict, indent=4, sort_keys=False, skipkeys=True)
 
         # Set content of the right text area:

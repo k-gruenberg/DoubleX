@@ -123,10 +123,9 @@ def main():
                         action='store_true',
                         help="Return UXSS data flows even when they should be safe because of correct sanitization.")
 
-    # ToDo: implement:
-    parser.add_argument("--csv-out", metavar="path", type=str,
+    parser.add_argument("--csv-out", metavar="path", type=str, default="",
                         help="Path of the .CSV output file. "
-                             "Only has an effect in combination with the --crx parameter. "
+                             "Only has an effect in combination with the --crx and --renderer-attacker parameters. "
                              "CSV file will contain list of all extensions analyzed and number of vulnerabilities"
                              "found, by type."
                              "No .CSV file will be created when the --csv-out argument is supplied.")
@@ -200,6 +199,20 @@ def main():
         Path(dest1).mkdir(parents=False, exist_ok=True)
         print(f"Unpacking into folder: {dest1}")
 
+        # If user activated output of vulnerabilities found into a CSV file by supplying the --csv-out argument:
+        if args.csv_out != "":
+            if not args.renderer_attacker:
+                print(f"Error: the --csv-out argument may only be supplied in combination with the --renderer-attacker "
+                      f"argument.")
+                exit(1)
+            elif os.path.exists(args.csv_out):
+                print(f"Error: '{args.csv_out}' file already exists, please supply another file as --csv-out.")
+                exit(1)
+            csv_out = open(args.csv_out, "w")
+            csv_out.write("Extension,total dangers,BP exfiltration dangers,BP infiltration dangers,"
+                          "CS exfiltration dangers,CS infiltration dangers,files and line numbers\n")
+            csv_out.flush()
+
         for crx in crxs:
             # Unpack .CRX file into a temp directory:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacking '{crx}' ...")
@@ -213,9 +226,27 @@ def main():
                 bp = os.path.join(dest2, "background.js")
 
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Analyzing '{crx}' ...")
-                analyze_extension(cs, bp, json_analysis=args.analysis, chrome=not args.not_chrome,
+                analysis_result = analyze_extension(cs, bp, json_analysis=args.analysis, chrome=not args.not_chrome,
                                   war=args.war, json_apis=args.apis, manifest_path=args.manifest)
+                # Note that analysis_result will be None if analyze_extension = doublex_analyze_extension!
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Done analyzing '{crx}'")
+
+                if args.csv_out != "":
+                    bp_exfiltration_dangers = analysis_result['bp']['exfiltration_dangers']
+                    bp_infiltration_dangers = analysis_result['bp']['infiltration_dangers']
+                    cs_exfiltration_dangers = analysis_result['cs']['exfiltration_dangers']
+                    cs_infiltration_dangers = analysis_result['cs']['infiltration_dangers']
+                    total_no_of_dangers = sum(len(x) for x in [bp_exfiltration_dangers, bp_infiltration_dangers,
+                                                               cs_exfiltration_dangers, cs_infiltration_dangers])
+                    files_and_line_numbers = "" # ToDo: write once more types of vuln. are supported!
+                    csv_out.write(f"{crx},{total_no_of_dangers},"
+                                  f"{len(bp_exfiltration_dangers)},{len(bp_infiltration_dangers)},"
+                                  f"{len(cs_exfiltration_dangers)},{len(cs_infiltration_dangers)},"
+                                  f"{files_and_line_numbers}\n")
+                    csv_out.flush()
+
+        if args.csv_out != "":
+            csv_out.close()
 
 
 if __name__ == "__main__":
