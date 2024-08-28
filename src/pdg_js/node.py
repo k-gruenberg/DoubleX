@@ -37,6 +37,7 @@ import logging
 import random
 import itertools
 import os
+import re
 
 from . import utility_df
 
@@ -334,6 +335,10 @@ class Node:
     # ADDED BY ME:
     def get_all_identifiers(self):
         return self.get_all("Identifier")
+
+    # ADDED BY ME:
+    def get_all_literals(self):
+        return self.get_all("Literal")
 
     # ADDED BY ME:
     def get_all_if_statements_inside(self):
@@ -687,6 +692,82 @@ class Node:
             if parent.id == other_node.id:
                 return True
             parent = parent.parent
+        return False
+
+    # Python regex recap (cf. https://docs.python.org/3/library/re.html):
+    # re.search(pattern, string, flags=0) => Scan through str looking for the first loc where the regex produces a match
+    # re.match(pattern, string, flags=0) => If zero or more characters at the beginning of string match the regex
+    # re.fullmatch(pattern, string, flags=0) => If the whole string matches the regex pattern
+
+    # ADDED BY ME:
+    def any_literal_inside_matches_full_regex(self, regex):
+        """
+        Does any literal inside this subtree match the given regular expression?
+        The entire raw literal has to match the given regular expression!
+        Beware that literals may be string, integer or float literals!
+        For string literals, you will need to include the quotation marks to match.
+        If you want to match entire string literals but don't care about the type of quotation marks used,
+        consider using any_string_literal_inside_matches_full_regex() instead.
+        """
+        for literal in self.get_all_literals():
+            if re.fullmatch(regex, literal.attributes['raw']):
+                return True
+        return False
+
+    # ADDED BY ME:
+    def any_literal_inside_contains_regex(self, regex):
+        """
+        Does any literal inside this subtree match the given regular expression?
+        Beware that literals may be string, integer or float literals!
+        Unlike any_literal_inside_matches_full_regex(), the match found does *not* have to be the *full* literal!
+        """
+        for literal in self.get_all_literals():
+            if re.search(regex, literal.attributes['raw']):
+                return True
+        return False
+
+    # ADDED BY ME:
+    def any_string_literal_inside_matches_full_regex(self, regex):
+        """
+        Tries to find a string literal matching the given regular expression, ignoring the leading and trailing
+        quotation mark. Integer and float literals are ignored.
+        Ignoring the quotations marks, the entire(!) string has to match the given regex (cf. re.fullmatch()).
+
+        If you want to include the quotation marks in your regex or if you want to match integer/float literals,
+        use any_literal_inside_matches_full_regex() instead.
+        """
+        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String:
+        # const string1 = "A string primitive";
+        # const string2 = 'Also a string primitive';
+        # const string3 = `Yet another string primitive`;
+        for literal in self.get_all_literals():
+            raw = literal.attributes['raw']
+            if raw[0] == raw[-1] and raw[0] in ["\"", "'", "`"]:  # literal is a (correct) string literal
+                string_inside_quotes = raw[1:-1]  # remove the quotation marks
+                if re.fullmatch(regex, string_inside_quotes):
+                    return True
+        return False
+
+    # ADDED BY ME:
+    def any_string_literal_inside_contains_regex(self, regex):
+        """
+        Tries to find a string literal matching the given regular expression, ignoring the leading and trailing
+        quotation mark. Integer and float literals are ignored.
+        Unlike any_string_literal_inside_matches_full_regex(), the match found does *not* have to be the *full* literal!
+
+        If you want to include the quotation marks in your regex or if you want to match integer/float literals,
+        use any_literal_inside_contains_regex() instead.
+        """
+        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String:
+        # const string1 = "A string primitive";
+        # const string2 = 'Also a string primitive';
+        # const string3 = `Yet another string primitive`;
+        for literal in self.get_all_literals():
+            raw = literal.attributes['raw']
+            if raw[0] == raw[-1] and raw[0] in ["\"", "'", "`"]:  # literal is a (correct) string literal
+                string_inside_quotes = raw[1:-1]  # remove the quotation marks
+                if re.search(regex, string_inside_quotes):
+                    return True
         return False
 
     def is_leaf(self):

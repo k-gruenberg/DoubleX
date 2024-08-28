@@ -234,6 +234,34 @@ class TestNodeClass(unittest.TestCase):
         self.assertFalse(pdg_order1.matches(pdg_order2, allow_different_child_order=False, **args))
         self.assertFalse(pdg_order2.matches(pdg_order1, allow_different_child_order=False, **args))
 
+    def test_any_literal_inside_matches_full_regex(self):
+        pdg = Node("Literal", attributes={"raw": "3.14"})
+        self.assertTrue(pdg.any_literal_inside_matches_full_regex("\d\\.\d\d"))
+        self.assertFalse(pdg.any_literal_inside_matches_full_regex("\d\\.\d"))
+
+    def test_any_literal_inside_contains_regex(self):
+        pdg = Node("Literal", attributes={"raw": "1"})
+        self.assertTrue(pdg.any_literal_inside_contains_regex("\d"))
+        self.assertFalse(pdg.any_literal_inside_contains_regex("\D"))
+
+        pdg = Node("Literal", attributes={"raw": "3.14"})
+        self.assertTrue(pdg.any_literal_inside_contains_regex("^\d\\.\d\d$"))
+        self.assertFalse(pdg.any_literal_inside_contains_regex("^\d\\.\d$"))
+
+        pdg = Node("Literal", attributes={"raw": "'https://www.admin.com'"})
+        self.assertTrue(pdg.any_literal_inside_contains_regex("https:\\/\\/"))
+        self.assertFalse(pdg.any_literal_inside_contains_regex("^https:\\/\\/$"))
+
+    def test_any_string_literal_inside_matches_full_regex(self):
+        pdg = Node("Literal", attributes={"raw": "'https://www.admin.com'"})
+        self.assertTrue(pdg.any_string_literal_inside_matches_full_regex("https:\/\/.+"))
+        self.assertFalse(pdg.any_string_literal_inside_matches_full_regex("'https:\/\/.+"))
+
+    def test_any_string_literal_inside_contains_regex(self):
+        pdg = Node("Literal", attributes={"raw": "'Hello World'"})
+        self.assertTrue(pdg.any_string_literal_inside_contains_regex("Hello"))
+        self.assertFalse(pdg.any_string_literal_inside_contains_regex("'Hello"))
+
 
 if __name__ == '__main__':
     unittest.main()
