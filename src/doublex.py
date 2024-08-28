@@ -164,6 +164,8 @@ def main():
                              "found, by type."
                              "No .CSV file will be created when the --csv-out argument is supplied.")
 
+    # ToDo: add option --consider-http-as-safe
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
