@@ -134,6 +134,42 @@ class Node:
                             allow_different_child_order=False)
 
     # ADDED BY ME:
+    def is_data_flow_equivalent_identifier(self, other, max_depth=1_000_000_000): # ToDo
+        """
+        Sometimes, we may want to check equality/equivalence between two different Identifiers beyond just their raw
+        variable names. This function returns True if both `self` and `other` have a common data flow parent.
+
+        By default, max_depth=1_000_000_000, but you may set it to a lower value.
+        You might want to use max_depth=1 for example if you only want to compare direct data flow parents, i.e.,
+        no data flow grandparents.
+        When setting max_depth=0, this function will simply return whether `self.id == other.id`.
+        """
+        if not isinstance(self, Identifier) or not isinstance(other, Identifier):
+            raise TypeError("is_data_flow_equivalent_identifier(): both self and other need to be Identifiers!")
+
+        self_data_dep_parents = {self}
+        other_data_dep_parents = {other}
+        current_depth = 0
+        last_len_self_data_dep_parents = 1
+        last_len_other_data_dep_parents = 1
+        while current_depth < max_depth:
+            print(current_depth)
+            for parent1 in self_data_dep_parents.copy():
+                self_data_dep_parents.update(grandparent.extremity for grandparent in parent1.data_dep_parents)
+                # Note: update() appends multiple elements to a set
+            for parent2 in other_data_dep_parents.copy():
+                other_data_dep_parents.update(grandparent.extremity for grandparent in parent2.data_dep_parents)
+            current_depth += 1
+            if len(self_data_dep_parents) == last_len_self_data_dep_parents\
+                    and len(other_data_dep_parents) == last_len_other_data_dep_parents:
+                break  # stop as soon a as fixed point has been reached :)
+            else:
+                last_len_self_data_dep_parents = len(self_data_dep_parents)
+                last_len_other_data_dep_parents = len(other_data_dep_parents)
+
+        return len(set.intersection(self_data_dep_parents, other_data_dep_parents)) > 0
+
+    # ADDED BY ME:
     @classmethod
     def identifier(cls, name):
         n = cls("Identifier")
