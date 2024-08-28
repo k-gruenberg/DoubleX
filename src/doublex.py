@@ -210,7 +210,7 @@ def main():
                 print(f"Error: '{args.csv_out}' file already exists, please supply another file as --csv-out.")
                 exit(1)
             csv_out = open(args.csv_out, "w")
-            csv_out.write("Extension,analysis time in seconds,total dangers,BP exfiltration dangers,BP infiltration dangers,"
+            csv_out.write("Extension,CS injected into,crashes,analysis time in seconds,total dangers,BP exfiltration dangers,BP infiltration dangers,"
                           "CS exfiltration dangers,CS infiltration dangers,files and line numbers\n")
             csv_out.flush()
 
@@ -237,6 +237,10 @@ def main():
                       f"{analysis_time} seconds")
 
                 if args.csv_out != "":
+                    content_script_injected_into = " | ".join(analysis_result['content_script_injected_into'])\
+                        if 'content_script_injected_into' in analysis_result else ""
+                    crashes = " | ".join(analysis_result['benchmarks']['crashes'])\
+                        if 'benchmarks' in analysis_result and 'crashes' in analysis_result['benchmarks'] else ""
                     bp_exfiltration_dangers = analysis_result['bp']['exfiltration_dangers']
                     bp_infiltration_dangers = analysis_result['bp']['infiltration_dangers']
                     cs_exfiltration_dangers = analysis_result['cs']['exfiltration_dangers']
@@ -244,7 +248,8 @@ def main():
                     total_no_of_dangers = sum(len(x) for x in [bp_exfiltration_dangers, bp_infiltration_dangers,
                                                                cs_exfiltration_dangers, cs_infiltration_dangers])
                     files_and_line_numbers = "" # ToDo: write once more types of vuln. are supported!
-                    csv_out.write(f"{crx},{analysis_time},{total_no_of_dangers},"
+                    csv_out.write(f"{crx},{content_script_injected_into},{crashes},"
+                                  f"{analysis_time},{total_no_of_dangers},"
                                   f"{len(bp_exfiltration_dangers)},{len(bp_infiltration_dangers)},"
                                   f"{len(cs_exfiltration_dangers)},{len(cs_infiltration_dangers)},"
                                   f"{files_and_line_numbers}\n")
