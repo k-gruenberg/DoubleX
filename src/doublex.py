@@ -25,6 +25,7 @@ import os
 import argparse
 import datetime
 from pathlib import Path
+import time
 
 # Original DoubleX extension analysis:
 from vulnerability_detection import analyze_extension as doublex_analyze_extension
@@ -209,7 +210,7 @@ def main():
                 print(f"Error: '{args.csv_out}' file already exists, please supply another file as --csv-out.")
                 exit(1)
             csv_out = open(args.csv_out, "w")
-            csv_out.write("Extension,total dangers,BP exfiltration dangers,BP infiltration dangers,"
+            csv_out.write("Extension,analysis time in seconds,total dangers,BP exfiltration dangers,BP infiltration dangers,"
                           "CS exfiltration dangers,CS infiltration dangers,files and line numbers\n")
             csv_out.flush()
 
@@ -226,10 +227,14 @@ def main():
                 bp = os.path.join(dest2, "background.js")
 
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Analyzing '{crx}' ...")
+                analysis_start = time.time()
                 analysis_result = analyze_extension(cs, bp, json_analysis=args.analysis, chrome=not args.not_chrome,
                                   war=args.war, json_apis=args.apis, manifest_path=args.manifest)
                 # Note that analysis_result will be None if analyze_extension = doublex_analyze_extension!
-                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Done analyzing '{crx}'")
+                analysis_end = time.time()
+                analysis_time = analysis_end - analysis_start  # gives the elapsed time in seconds(!)
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Done analyzing '{crx}' after "
+                      f"{analysis_time} seconds")
 
                 if args.csv_out != "":
                     bp_exfiltration_dangers = analysis_result['bp']['exfiltration_dangers']
@@ -239,7 +244,7 @@ def main():
                     total_no_of_dangers = sum(len(x) for x in [bp_exfiltration_dangers, bp_infiltration_dangers,
                                                                cs_exfiltration_dangers, cs_infiltration_dangers])
                     files_and_line_numbers = "" # ToDo: write once more types of vuln. are supported!
-                    csv_out.write(f"{crx},{total_no_of_dangers},"
+                    csv_out.write(f"{crx},{analysis_time},{total_no_of_dangers},"
                                   f"{len(bp_exfiltration_dangers)},{len(bp_infiltration_dangers)},"
                                   f"{len(cs_exfiltration_dangers)},{len(cs_infiltration_dangers)},"
                                   f"{files_and_line_numbers}\n")
