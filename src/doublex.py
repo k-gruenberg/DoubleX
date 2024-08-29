@@ -20,12 +20,12 @@
 """
     To call DoubleX from the command-line.
 """
-
 import os
 import argparse
 import datetime
 from pathlib import Path
 import time
+import json
 
 # Original DoubleX extension analysis:
 from vulnerability_detection import analyze_extension as doublex_analyze_extension
@@ -268,12 +268,12 @@ def main():
                 print(f"Error: '{args.csv_out}' file already exists, please supply another file as --csv-out.")
                 exit(1)
             csv_out = open(args.csv_out, "w")
-            csv_out.write("Extension,extension size (packed),extension size (unpacked),JS LoC,"
+            csv_out.write("Extension,name,browser action default title,version,description,permissions,"
+                          "extension size (packed),extension size (unpacked),JS LoC,"
                           "CS injected into,crashes,analysis time in seconds,total dangers,"
                           "BP exfiltration dangers,BP infiltration dangers,BP 3.1 violations w/o API danger,"
                           "CS exfiltration dangers,CS infiltration dangers,files and line numbers\n")
             csv_out.flush()
-            # ToDo: add name/browser action default title, version, description, permissions columns
 
         if args.sort_crxs_by_size_ascending:
             print(f"Sorting {len(crxs)} .CRX files by file size...")
@@ -309,6 +309,18 @@ def main():
                       f"{analysis_time} seconds")
 
                 if args.csv_out != "":
+                    manifest_path = os.path.join(dest2, 'manifest.json')  # dest2 == os.path.dirname(cs)
+                    manifest = json.load(open(manifest_path))
+                    ext_name = manifest['name'].replace(",", "")\
+                        if 'name' in manifest else ""
+                    ext_browser_action_default_title = manifest['browser_action']['default_title'].replace(",", "")\
+                        if 'browser_action' in manifest and 'default_title' in manifest['browser_action'] else ""
+                    ext_version = manifest['version'].replace(",", "")\
+                        if 'version' in manifest else ""
+                    ext_description = manifest['description'][:100].replace(",", "")\
+                        if 'description' in manifest else ""
+                    ext_permissions = " | ".join(manifest['permissions'])\
+                        if 'permissions' in manifest else ""
                     content_script_injected_into = " | ".join(analysis_result['content_script_injected_into'])\
                         if 'content_script_injected_into' in analysis_result else ""
                     crashes = " | ".join(analysis_result['benchmarks']['crashes'])\
@@ -323,7 +335,9 @@ def main():
                     total_no_of_dangers = sum(len(x) for x in [bp_exfiltration_dangers, bp_infiltration_dangers,
                                                                cs_exfiltration_dangers, cs_infiltration_dangers])
                     files_and_line_numbers = "" # ToDo: write once more types of vuln. are supported!
-                    csv_out.write(f"{crx},{extension_size_packed},{extension_size_unpacked},{js_loc},"
+                    csv_out.write(f"{crx},{ext_name},{ext_browser_action_default_title},{ext_version},"
+                                  f"{ext_description},{ext_permissions},"
+                                  f"{extension_size_packed},{extension_size_unpacked},{js_loc},"
                                   f"{content_script_injected_into},{crashes},"
                                   f"{analysis_time},{total_no_of_dangers},"
                                   f"{len(bp_exfiltration_dangers)},{len(bp_infiltration_dangers)},"
