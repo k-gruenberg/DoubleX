@@ -42,8 +42,8 @@ class TestNodeClass2(unittest.TestCase):
         # 	[2] [ExpressionStatement] (1 child)
         # 		[3] [AssignmentExpression:"="] (2 children)
         # 			[4] [Identifier:"x"] (0 children) --data--> [9] --data--> [12]
-        # 			[5] [Identifier:"y"] (0 children)
-        # 	[6] [IfStatement] (2 children) --True--> [60]
+        # 			[5] [Identifier:"y"] (0 children) --data--> [4]
+        # 	[6] [IfStatement] (2 children) --True--> [14]
         # 		[7] [LogicalExpression:"||"] (2 children)
         # 			[8] [BinaryExpression:"=="] (2 children)
         # 				[9] [Identifier:"x"] (0 children)

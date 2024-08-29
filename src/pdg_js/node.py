@@ -145,7 +145,7 @@ class Node:
         no data flow grandparents.
         When setting max_depth=0, this function will simply return whether `self.id == other.id`.
         """
-        if not isinstance(self, Identifier) or not isinstance(other, Identifier):
+        if self.name != "Identifier" or other.name != "Identifier":
             raise TypeError("is_data_flow_equivalent_identifier(): both self and other need to be Identifiers!")
 
         self_data_dep_parents = {self}
@@ -280,12 +280,12 @@ class Node:
             str_repr = f"[{self.id}] [{self.name}] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
 
         # cf. display_extension.py:
-        if isinstance(self, Statement):
+        if self.name in STATEMENTS:
             for cf_dep in self.control_dep_children:
                 str_repr += f" --{cf_dep.label}--> [{cf_dep.extremity.id}]"
 
         # cf. display_extension.py:
-        if isinstance(self, Identifier):
+        if self.name == "Identifier":
             for data_dep in self.data_dep_children:
                 str_repr += f" --{data_dep.label}--> [{data_dep.extremity.id}]"
 
@@ -485,7 +485,7 @@ class Node:
 
         Returns `None` when this Node isn't part of any Statement but that case should not actually occur!
         """
-        if isinstance(self, Statement):
+        if self.name in STATEMENTS:
             return self
         elif self.parent is not None:
             return self.parent.get_statement()
