@@ -509,11 +509,23 @@ class Node:
 
     # ADDED BY ME:
     def member_expression_to_string(self):
+        """
+        Turns a PDG MemberExpression back into a string.
+        For something simple as the PDG representing "foo.bar.baz", "foo.bar.baz" is returned,
+            corresponding to the source code.
+        For more complex MemberExpressions, a simplified, standardized string form is returned, e.g.,
+            a PDG representing this code: "foo.bar(x,y(z),w).baz.boo" becomes "foo.bar().baz.boo".
+        Any literal will become "<literal>", e.g. "'foo'.length" will become "<literal>.length"
+        """
         if self.name != "MemberExpression":
             raise TypeError("member_expression_to_string() may only be called on a MemberExpression")
 
         if self.lhs().name == "ThisExpression":
             return "this." + self.rhs().attributes['name']
+
+        elif self.lhs().name == "Literal":  # e.g.: "foo".length
+            return "<literal>." + self.rhs().attributes['name']
+            # Note how "<literal>" is *NOT* a valid JavaScript identifier! (see https://mothereff.in/js-variables)
 
         elif self.lhs().name == "Identifier":
             return self.lhs().attributes['name'] + "." + self.rhs().attributes['name']

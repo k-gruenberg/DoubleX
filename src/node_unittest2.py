@@ -114,6 +114,12 @@ class TestNodeClass2(unittest.TestCase):
         member_expression = pdg.get_all("MemberExpression")[0]
         self.assertEqual(member_expression.member_expression_to_string(), "this().bar")
 
+        # Test handling of Literals:
+
+        pdg = generate_pdg("'foo'.length")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "<literal>.length")
+
     def test_call_expression_get_full_function_name(self):
         pdg = generate_pdg("foo(x)")
         call_expression = pdg.get_all("CallExpression")[0]
