@@ -270,11 +270,10 @@ def main():
             csv_out = open(args.csv_out, "w")
             csv_out.write("Extension,extension size (packed),extension size (unpacked),JS LoC,"
                           "CS injected into,crashes,analysis time in seconds,total dangers,"
-                          "BP exfiltration dangers,BP infiltration dangers,"
+                          "BP exfiltration dangers,BP infiltration dangers,BP 3.1 violations w/o API danger,"
                           "CS exfiltration dangers,CS infiltration dangers,files and line numbers\n")
             csv_out.flush()
             # ToDo: add name/browser action default title, version, description, permissions columns
-            # ToDo: add column "BP 3.1 violations w/o danger" for 31_violations_without_sensitive_api_access
 
         if args.sort_crxs_by_size_ascending:
             print(f"Sorting {len(crxs)} .CRX files by file size...")
@@ -316,6 +315,9 @@ def main():
                         if 'benchmarks' in analysis_result and 'crashes' in analysis_result['benchmarks'] else ""
                     bp_exfiltration_dangers = analysis_result['bp']['exfiltration_dangers']
                     bp_infiltration_dangers = analysis_result['bp']['infiltration_dangers']
+                    bp_31_violations_wo_api_danger =\
+                        len(analysis_result['bp']['31_violations_without_sensitive_api_access'])\
+                        if '31_violations_without_sensitive_api_access' in analysis_result['bp'] else "N/A"
                     cs_exfiltration_dangers = analysis_result['cs']['exfiltration_dangers']
                     cs_infiltration_dangers = analysis_result['cs']['infiltration_dangers']
                     total_no_of_dangers = sum(len(x) for x in [bp_exfiltration_dangers, bp_infiltration_dangers,
@@ -325,6 +327,7 @@ def main():
                                   f"{content_script_injected_into},{crashes},"
                                   f"{analysis_time},{total_no_of_dangers},"
                                   f"{len(bp_exfiltration_dangers)},{len(bp_infiltration_dangers)},"
+                                  f"{bp_31_violations_wo_api_danger},"
                                   f"{len(cs_exfiltration_dangers)},{len(cs_infiltration_dangers)},"
                                   f"{files_and_line_numbers}\n")
                     csv_out.flush()
