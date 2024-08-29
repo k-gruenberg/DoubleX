@@ -10,8 +10,8 @@ SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
 
 # ToDo: remember code snippet from last time?!
-# ToDo: syntax highlighting for the LHS
-# ToDo: better display large PDGs on the RHS (no word-wrap)
+# ToDo: syntax highlighting for the LHS (use Espree tokenizer! (cf. Esprima documentation on Tokenization))
+# ToDo: better display large PDGs on the RHS (no word-wrap) => add Node.max_depth() method to determine indentation amt
 # ToDo: double click on the LHS creates highlighting on the RHS and vice-versa
 # ToDo: allow dropping in .js / .json / .crx files
 # ToDo: add a 3rd extension list column on the very left (with option to sort by and display different criteria),
