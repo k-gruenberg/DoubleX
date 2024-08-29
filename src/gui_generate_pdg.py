@@ -9,6 +9,16 @@ from kim_and_lee_vulnerability_detection import analyze_extension, add_missing_d
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
 
+# ToDo: remember code snippet from last time?!
+# ToDo: syntax highlighting for the LHS
+# ToDo: better display large PDGs on the RHS (no word-wrap)
+# ToDo: double click on the LHS creates highlighting on the RHS and vice-versa
+# ToDo: allow dropping in .js / .json / .crx files
+# ToDo: add a 3rd extension list column on the very left (with option to sort by and display different criteria),
+#       add an extension content list above the current 2nd column => add "Analyze all..." button, make multi-threaded
+# ToDo: afterwards: rename this file simply to "gui.py"
+
+
 def main():
     os.environ['PARSER'] = "espree"
     os.environ['SOURCE_TYPE'] = "module"
