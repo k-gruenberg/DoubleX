@@ -12,6 +12,7 @@ SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 def main():
     os.environ['PARSER'] = "espree"
     os.environ['SOURCE_TYPE'] = "module"
+    os.environ['INCLUDE_31_VIOLATIONS_WITHOUT_PRIVILEGED_API_ACCESS'] = "yes"
 
     def generate_pdg():
         js_code = text_left.get("1.0", tk.END)

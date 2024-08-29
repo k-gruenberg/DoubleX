@@ -38,6 +38,7 @@ import random
 import itertools
 import os
 import re
+from typing import Set, Tuple
 
 from . import utility_df
 
@@ -107,6 +108,28 @@ class Node:
         return hash(self.id)
 
     # ADDED BY ME:
+    def lhs(self):
+        """
+        Returns the left of the 2 children of this Node (i.e., the LHS child).
+        Raises an Exception when this Node has != 2 children!
+        """
+        if len(self.children) == 2:
+            return self.children[0]
+        else:
+            raise TypeError(f"calling Node.lhs() on a Node with {len(self.children)} != 2 children")
+
+    # ADDED BY ME:
+    def rhs(self):
+        """
+        Returns the right of the 2 children of this Node (i.e., the RHS child).
+        Raises an Exception when this Node has != 2 children!
+        """
+        if len(self.children) == 2:
+            return self.children[1]
+        else:
+            raise TypeError(f"calling Node.rhs() on a Node with {len(self.children)} != 2 children")
+
+    # ADDED BY ME:
     def equivalent(self, other):
         """
         Unlike == / __eq__, which checks the equality of the node ID, i.e., whether we're talking about the exact same
@@ -135,7 +158,32 @@ class Node:
                             allow_different_child_order=False)
 
     # ADDED BY ME:
-    def is_data_flow_equivalent_identifier(self, other, max_depth=1_000_000_000): # ToDo
+    def get_data_flow_parents(self, max_depth=1_000_000_000):
+        """
+        Returns all nodes [p] such that there exist nodes [x1], [x2], ..., [xn] such that:
+        [p] --data--> [x1] --data--> [x2] --data--> ... --data--> [xn] --data--> [self]
+        where `max_depth` specifies the maximum number of --data--> edges to follow.
+        """
+        if self.name != "Identifier":
+            raise TypeError("get_data_flow_parents() may only be called on Identifiers")
+
+        self_data_dep_parents = {self}
+        current_depth = 0
+        last_len_self_data_dep_parents = 1
+        while current_depth < max_depth:
+            for parent1 in self_data_dep_parents.copy():
+                self_data_dep_parents.update(grandparent.extremity for grandparent in parent1.data_dep_parents)
+                # Note: update() appends multiple elements to a set
+            current_depth += 1
+            if len(self_data_dep_parents) == last_len_self_data_dep_parents:
+                break  # stop as soon a as fixed point has been reached :)
+            else:
+                last_len_self_data_dep_parents = len(self_data_dep_parents)
+
+        return self_data_dep_parents
+
+    # ADDED BY ME:
+    def is_data_flow_equivalent_identifier(self, other, max_depth=1_000_000_000):
         """
         Sometimes, we may want to check equality/equivalence between two different Identifiers beyond just their raw
         variable names. This function returns True if both `self` and `other` have a common data flow parent.
@@ -148,24 +196,8 @@ class Node:
         if self.name != "Identifier" or other.name != "Identifier":
             raise TypeError("is_data_flow_equivalent_identifier(): both self and other need to be Identifiers!")
 
-        self_data_dep_parents = {self}
-        other_data_dep_parents = {other}
-        current_depth = 0
-        last_len_self_data_dep_parents = 1
-        last_len_other_data_dep_parents = 1
-        while current_depth < max_depth:
-            for parent1 in self_data_dep_parents.copy():
-                self_data_dep_parents.update(grandparent.extremity for grandparent in parent1.data_dep_parents)
-                # Note: update() appends multiple elements to a set
-            for parent2 in other_data_dep_parents.copy():
-                other_data_dep_parents.update(grandparent.extremity for grandparent in parent2.data_dep_parents)
-            current_depth += 1
-            if len(self_data_dep_parents) == last_len_self_data_dep_parents\
-                    and len(other_data_dep_parents) == last_len_other_data_dep_parents:
-                break  # stop as soon a as fixed point has been reached :)
-            else:
-                last_len_self_data_dep_parents = len(self_data_dep_parents)
-                last_len_other_data_dep_parents = len(other_data_dep_parents)
+        self_data_dep_parents = self.get_data_flow_parents(max_depth=max_depth)
+        other_data_dep_parents = other.get_data_flow_parents(max_depth=max_depth)
 
         return len(set.intersection(self_data_dep_parents, other_data_dep_parents)) > 0
 
@@ -474,6 +506,103 @@ class Node:
                     print(f"Pattern Match:\n{match_candidate}")
                 result.append(match_candidate)
         return result
+
+    # ADDED BY ME:
+    def member_expression_to_string(self):
+        if self.name != "MemberExpression":
+            raise TypeError("member_expression_to_string() may only be called on a MemberExpression")
+
+        if self.lhs().name == "ThisExpression":
+            return "this." + self.rhs().attributes['name']
+
+        elif self.lhs().name == "Identifier":
+            return self.lhs().attributes['name'] + "." + self.rhs().attributes['name']
+
+        elif self.lhs().name == "MemberExpression":
+            return self.lhs().member_expression_to_string() + "." + self.rhs().attributes['name']
+
+        elif self.lhs().name == "CallExpression" and self.lhs().children[0].name == "ThisExpression":
+            return "this()." + self.rhs().attributes['name']
+
+        elif self.lhs().name == "CallExpression" and self.lhs().children[0].name == "Identifier":
+            return self.lhs().children[0].attributes['name'] + "()." + self.rhs().attributes['name']
+
+        elif self.lhs().name == "CallExpression" and self.lhs().children[0].name == "MemberExpression":
+            return self.lhs().children[0].member_expression_to_string() + "()." + self.rhs().attributes['name']
+
+        else:
+            raise TypeError(f"member_expression_to_string(): LHS of MemberExpression is neither a ThisExpression "
+                            f"nor an Identifier nor a MemberExpression: {self.lhs()}")
+
+    # ADDED BY ME:
+    def call_expression_get_full_function_name(self):
+        """
+        For...
+
+        [1] [CallExpression] (2 children)
+            [2] [MemberExpression] (2 children)
+                [3] [MemberExpression] (2 children)
+                    [4] [Identifier:"foo"] (0 children)
+                    [5] [Identifier:"bar"] (0 children)
+                [6] [Identifier:"baz"] (0 children)
+            [7] [Identifier:"x"] (0 children)
+
+        ...this functions returns "foo.bar.baz" (as a string!) for example.
+
+        Note that both "a[b](x,y,z)" and "a.b(x,y,z)" will result in the same output of "a.b" as the full function name!
+
+        Note that the returned value may also be more complex:
+        * call_expression_get_full_function_name("x().y()") ==returns==> "x().y"
+        * call_expression_get_full_function_name("x(a,b).y()") ==returns==> "x().y"
+        
+        Raises an Exception when called on a Node that isn't a CallExpression!
+        """
+        if self.name != "CallExpression":
+            raise TypeError("call_expression_get_full_function_name() may only be called on a CallExpression")
+
+        # Out of the Esprima docs:
+        #
+        # interface CallExpression {
+        #     type: 'CallExpression';
+        #     callee: Expression | Import;
+        #     arguments: ArgumentListElement[];
+        # }
+
+        callee = self.children[0]
+
+        if callee.name == "Identifier":  # "foo(...)"
+            return callee.attributes['name']  # return "foo"
+
+        elif callee.name == "ThisExpression":  # "this(...)"
+            return "this"
+
+        elif callee.name == "MemberExpression":  # "foo.bar(...)", "foo.bar.baz(...)", etc.
+            return callee.member_expression_to_string()
+
+        elif callee.name == "CallExpression":  # "x()()"
+            return callee.call_expression_get_full_function_name() + "()"
+
+        else:
+            raise TypeError(f"call_expression_get_full_function_name(): "
+                            f"Unsupported type of callee Expression used for a CallExpression: {callee}")
+
+    DEFAULT_SENSITIVE_APIS = ["chrome.cookies", "chrome.scripting", "chrome.tabs.executeScript", "indexedDB", "fetch"]
+
+    # ADDED BY ME:
+    def get_sensitive_apis_accessed(self, apis=DEFAULT_SENSITIVE_APIS) -> Set[Tuple[str, str]]:
+        """
+        Returns the set of all sensitive APIs accessed in the piece of code represented by this PDG Node.
+        The returned set consists of pairs, the 1st element being the sensitive API and the 2nd element being the way
+        it way accessed, e.g.: ("chrome.cookies", "chrome.cookies.getAll").
+        """
+        sensitive_apis_accessed = set()
+        for call_expression in self.get_all("CallExpression"):
+            full_function_name = call_expression.call_expression_get_full_function_name()
+            if "()" not in full_function_name:  # do not consider any complex function names like "x().y().z()"!
+                for api in apis:
+                    if full_function_name.startswith(api):  # such that "chrome.cookies" catches "chrome.cookies.getAll" calls for example!
+                        sensitive_apis_accessed.add((api, full_function_name))
+        return sensitive_apis_accessed
 
     # ADDED BY ME:
     def get_statement(self):

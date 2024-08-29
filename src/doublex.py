@@ -169,7 +169,14 @@ def main():
                         help="Disables the default behavior of considering HTTP URL sender checks unsafe (they would "
                              "be exploitable by a renderer + network attacker).") # ToDo: is renderer even necessary?!
 
-    # ToDo: --include-31-violations-without-privileged-api-access (cf. Cisco WebEx extension)
+    parser.add_argument("--include-31-violations-without-privileged-api-access",
+                        dest='include_31_violations_without_privileged_api_access',
+                        action='store_true',
+                        help="Include violations of Security Requirement 3.1 (Extension Message Authentication), "
+                             "even when no privileged API (like chrome.cookies, chrome.scripting or indexedDB) "
+                             "is accessed (4.1).")
+
+    # ToDo: add --sort-crxs-by-size-descending option!
 
     # TODO: control verbosity of logging?
 
@@ -213,6 +220,9 @@ def main():
 
     if args.consider_http_as_safe:
         os.environ['CONSIDER_HTTP_AS_SAFE'] = "yes"
+
+    if args.include_31_violations_without_privileged_api_access:
+        os.environ['INCLUDE_31_VIOLATIONS_WITHOUT_PRIVILEGED_API_ACCESS'] = "yes"
 
     # Whether to use the original DoubleX extension analysis,
     #   or whether to look for vulnerabilities exploitable by a renderer attacker:
@@ -258,6 +268,8 @@ def main():
                           "BP exfiltration dangers,BP infiltration dangers,"
                           "CS exfiltration dangers,CS infiltration dangers,files and line numbers\n")
             csv_out.flush()
+            # ToDo: add name/browser action default title, version, description, permissions columns
+            # ToDo: add column "BP 3.1 violations w/o danger" for 31_violations_without_sensitive_api_access
 
         for crx in crxs:
             try:
