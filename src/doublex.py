@@ -176,7 +176,12 @@ def main():
                              "even when no privileged API (like chrome.cookies, chrome.scripting or indexedDB) "
                              "is accessed (4.1).")
 
-    # ToDo: add --sort-crxs-by-size-descending option!
+    parser.add_argument("--sort-crxs-by-size-ascending",
+                        dest='sort_crxs_by_size_ascending',
+                        action='store_true',
+                        help="Sort all .CRX files given via the --crx argument by file size, ascending, before "
+                             "starting to unpack and analyze them in that order. The idea is to begin with extensions "
+                             "that are probably(!) quicker to analyze.")
 
     # TODO: control verbosity of logging?
 
@@ -270,6 +275,11 @@ def main():
             csv_out.flush()
             # ToDo: add name/browser action default title, version, description, permissions columns
             # ToDo: add column "BP 3.1 violations w/o danger" for 31_violations_without_sensitive_api_access
+
+        if args.sort_crxs_by_size_ascending:
+            print(f"Sorting {len(crxs)} .CRX files by file size...")
+            crxs.sort(key=lambda crx_file: os.path.getsize(crx_file))
+            print(f"Sorted {len(crxs)} .CRX files by file size.")
 
         for crx in crxs:
             try:
