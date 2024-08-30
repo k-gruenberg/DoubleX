@@ -167,7 +167,11 @@ def main():
     parser.add_argument("--consider-http-as-safe", dest='consider_http_as_safe',
                         action='store_true',
                         help="Disables the default behavior of considering HTTP URL sender checks unsafe (they would "
-                             "be exploitable by a renderer + network attacker).") # ToDo: is renderer even necessary?!
+                             "be exploitable by a renderer + network attacker).")
+    # Note that a pure network attacker is not sufficient as we can regard such an attacker to be equivalent to a web
+    #   attacker. Namely, a network attacker alone will not be able to forge extension messages!
+    # A network attacker *with* renderer attacker capabilities however can forge extension messages, even without
+    #   luring the user into visiting a crafted malicious site, if the BP accepts messages from HTTP origins.
 
     parser.add_argument("--include-31-violations-without-privileged-api-access",
                         dest='include_31_violations_without_privileged_api_access',
