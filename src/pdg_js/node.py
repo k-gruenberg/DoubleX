@@ -369,6 +369,20 @@ class Node:
         return self.get_all("Identifier")
 
     # ADDED BY ME:
+    def get_identifier_by_name(self, name):
+        """
+        A function mostly for testing purposes, e.g., for use in unit tests.
+        Raises a LookupError, unless the identifier with name `name` occurs exactly *once* inside this PDG!
+        """
+        result = [identifier for identifier in self.get_all("Identifier") if identifier.attributes['name'] == name]
+        if len(result) == 1:
+            return result[0]
+        elif len(result) == 0:
+            raise LookupError(f"get_identifier_by_name(): no identifier with name '{name}' found!")
+        else:
+            raise LookupError(f"get_identifier_by_name(): identifier name '{name}' is ambiguous, {len(result)} found!")
+
+    # ADDED BY ME:
     def get_all_literals(self):
         return self.get_all("Literal")
 
