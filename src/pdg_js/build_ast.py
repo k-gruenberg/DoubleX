@@ -85,7 +85,7 @@ def get_extended_ast(input_file, json_path, remove_json=True):
 
         return extended_ast
 
-    logging.critical('Esprima could not produce an AST for %s', input_file)
+    logging.critical(f"{os.environ['PARSER']} could not produce an AST for %s", input_file)
     return None
 
 

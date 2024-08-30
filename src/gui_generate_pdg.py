@@ -5,12 +5,12 @@ import json
 
 import get_pdg
 from kim_and_lee_vulnerability_detection import analyze_extension, add_missing_data_flow_edges
+from pdg_js.tokenizer_espree import tokenize
 
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
 
 # ToDo: remember code snippet from last time?!
-# ToDo: syntax highlighting for the LHS (use Espree tokenizer! (cf. Esprima documentation on Tokenization))
 # ToDo: better display large PDGs on the RHS (no word-wrap) => add Node.max_depth() method to determine indentation amt
 # ToDo: double click on the LHS creates highlighting on the RHS and vice-versa
 # ToDo: allow dropping in .js / .json / .crx files
@@ -85,6 +85,40 @@ def main():
         text_right.insert(tk.END, str(result))
         text_right.config(state=tk.DISABLED)
 
+    def syntax_highlighting(text_area):
+        # This is a simple example of text highlighting in Tkinter
+        #   (cf. https://www.tutorialspoint.com/how-to-change-the-color-of-certain-words-in-a-tkinter-text-widget):
+        # text_area.tag_config("identifier", foreground="red")
+        # text_area.tag_add("identifier", "1.6", "1.12")
+        js_code = text_left.get("1.0", tk.END)
+        tokens = tokenize(js_code=js_code)
+        # print(tokens)
+
+        text_area.tag_delete("Keyword", "String", "Numeric", "Punctuator", "Identifier")
+
+        if tokens is None:
+            print("Syntax highlighting: tokenization error.")
+        else:
+            text_area.tag_config("Keyword", foreground="red")
+            text_area.tag_config("String", foreground="green")
+            text_area.tag_config("Numeric", foreground="blue")
+            # text_area.tag_config("Punctuator", foreground="blue")  # token['value'] in ['{', '}', '(', ')', '.', ';']
+            # text_area.tag_config("Identifier", foreground="blue")
+            for token in tokens:
+                start_line = token['loc']['start']['line']
+                start_column = token['loc']['start']['column']
+                end_line = token['loc']['end']['line']
+                end_column = token['loc']['end']['column']
+                text_area.tag_add(token["type"], f"{start_line}.{start_column}", f"{end_line}.{end_column}")
+
+
+    def on_text_left_change(_event):
+        # Check if the text was actually modified
+        if text_left.edit_modified():
+            syntax_highlighting(text_left)
+            # Reset the modified flag to ensure the event is triggered again
+            text_left.edit_modified(False)
+
     root = tk.Tk()
     root.title("PDG Generator")
     root.state("zoomed")
@@ -101,6 +135,7 @@ def main():
 
     text_left = tk.Text(frame, width=40, height=10)
     text_left.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+    text_left.bind("<<Modified>>", on_text_left_change)
 
     text_right = tk.Text(frame, width=40, height=10)
     text_right.grid(row=0, column=2, columnspan=2, padx=5, pady=5, sticky="nsew")
