@@ -280,6 +280,25 @@ class TestNodeClass(unittest.TestCase):
         self.assertTrue(pdg.any_string_literal_inside_contains_regex("Hello"))
         self.assertFalse(pdg.any_string_literal_inside_contains_regex("'Hello"))
 
+    def test_get_height(self):
+        pdg = Node("Program")
+        self.assertEqual(pdg.get_height(), 1)
+
+        pdg = Node("Program")\
+                .child(
+                    Node("BlockStatement")
+                )
+        self.assertEqual(pdg.get_height(), 2)
+
+        pdg = Node("Program")\
+                .child(
+                    Node("ExpressionStatement")
+                        .child(
+                            Node("Literal", attributes={"raw": 42})
+                        )
+                )
+        self.assertEqual(pdg.get_height(), 3)
+
 
 if __name__ == '__main__':
     unittest.main()

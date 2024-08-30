@@ -231,6 +231,20 @@ class TestNodeClass2(unittest.TestCase):
         self.assertEqual(len(sensitive_apis_accessed), 1)
         self.assertEqual(list(sensitive_apis_accessed)[0], ("indexedDB", "indexedDB.open"))
 
+    def test_get_height(self):
+        code = """1 + (2 + 3)"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [1] [Program] (1 child)
+        # 	[2] [ExpressionStatement] (1 child)
+        # 		[3] [BinaryExpression:"+"] (2 children)
+        # 			[4] [Literal:"1"] (0 children)
+        # 			[5] [BinaryExpression:"+"] (2 children)
+        # 				[6] [Literal:"2"] (0 children)
+        # 				[7] [Literal:"3"] (0 children)
+        # 1  2   3   4   5
+        self.assertEqual(pdg.get_height(), 5)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -960,6 +960,14 @@ class Node:
                     return True
         return False
 
+    # ADDED BY ME:
+    def get_height(self):
+        if len(self.children) == 0:
+            return 1
+        else:
+            return 1 + max(child.get_height() for child in self.children)
+
+
     def is_leaf(self):
         return not self.children
 

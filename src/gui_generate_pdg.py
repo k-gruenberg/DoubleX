@@ -2,6 +2,7 @@ import tkinter as tk
 import tempfile
 import os
 import json
+from tkinter import WORD, CHAR, NONE
 
 import get_pdg
 from kim_and_lee_vulnerability_detection import analyze_extension, add_missing_data_flow_edges
@@ -12,7 +13,6 @@ SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
 # ToDo: syntax highlighting for comments (why doesn't Espree include comment tokens?!)
 # ToDo: remember code snippet from last time?!
-# ToDo: better display large PDGs on the RHS (no word-wrap) => add Node.max_depth() method to determine indentation amt
 # ToDo: double click on the LHS creates highlighting on the RHS and vice-versa
 # ToDo: allow dropping in .js / .json / .crx files
 # ToDo: add a 3rd extension list column on the very left (with option to sort by and display different criteria),
@@ -134,11 +134,11 @@ def main():
     frame.grid_columnconfigure(2, weight=1)
     frame.grid_columnconfigure(3, weight=1)
 
-    text_left = tk.Text(frame, width=40, height=10)
+    text_left = tk.Text(frame, width=40, height=10, wrap=NONE)
     text_left.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
     text_left.bind("<<Modified>>", on_text_left_change)
 
-    text_right = tk.Text(frame, width=40, height=10)
+    text_right = tk.Text(frame, width=40, height=10, wrap=NONE)
     text_right.grid(row=0, column=2, columnspan=2, padx=5, pady=5, sticky="nsew")
     text_right.config(state=tk.DISABLED)
 
