@@ -3,6 +3,7 @@ import tempfile
 import os
 import json
 from tkinter import WORD, CHAR, NONE
+from typing import List, Tuple
 
 import get_pdg
 from kim_and_lee_vulnerability_detection import analyze_extension, add_missing_data_flow_edges
@@ -11,6 +12,7 @@ from pdg_js.tokenizer_espree import tokenize
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
 
+# ToDo: highlight all code snippets mentioned on the RHS on the LHS! (background!)
 # ToDo: syntax highlighting for comments (why doesn't Espree include comment tokens?!)
 # ToDo: remember code snippet from last time?!
 # ToDo: double click on the LHS creates highlighting on the RHS and vice-versa
@@ -64,6 +66,7 @@ def main():
         text_right.delete("1.0", tk.END)
         text_right.insert(tk.END, str(result))
         text_right.config(state=tk.DISABLED)
+        highlight_locations(text_left, extract_locations(res_dict))
 
     def analyze_as_cs():
         js_code = text_left.get("1.0", tk.END)
@@ -85,6 +88,7 @@ def main():
         text_right.delete("1.0", tk.END)
         text_right.insert(tk.END, str(result))
         text_right.config(state=tk.DISABLED)
+        highlight_locations(text_left, extract_locations(res_dict))
 
     def syntax_highlighting(text_area):
         # This is a simple example of text highlighting in Tkinter
@@ -95,7 +99,7 @@ def main():
         tokens = tokenize(js_code=js_code)
         # print(tokens)
 
-        text_area.tag_delete("Keyword", "String", "Numeric", "Punctuator", "Identifier")
+        text_area.tag_delete("Highlight", "Keyword", "String", "Numeric", "Punctuator", "Identifier")
 
         if tokens is None:
             print("Syntax highlighting: tokenization error.")
@@ -112,6 +116,42 @@ def main():
                 end_column = token['loc']['end']['column']
                 text_area.tag_add(token["type"], f"{start_line}.{start_column}", f"{end_line}.{end_column}")
 
+    def dict_get_all_values_recursively(dict_or_list, query_key):
+        result = []
+        if isinstance(dict_or_list, dict):
+            for key, value in dict_or_list.items():
+                if key == query_key:
+                    result.append(value)
+                elif isinstance(value, dict):
+                    result.extend(dict_get_all_values_recursively(value, query_key))
+                elif isinstance(value, list):
+                    for item in value:
+                        if isinstance(item, dict) or isinstance(item, list):
+                            result.extend(dict_get_all_values_recursively(item, query_key))
+        elif isinstance(dict_or_list, list):
+            for item in dict_or_list:
+                if isinstance(item, dict) or isinstance(item, list):
+                    result.extend(dict_get_all_values_recursively(item, query_key))
+        else:
+            raise TypeError("dict_get_all_values_recursively(): 1st argument has to be either a dict or a list!")
+        return result
+
+    def extract_locations(res_dict):
+        result = []
+        for loc in dict_get_all_values_recursively(res_dict, "location"):  # e.g.: "3:17 - 3:24"
+            [start, end] = loc.split(" - ")
+            [start_line, start_column] = start.split(":")
+            [end_line, end_column] = end.split(":")
+            result.append((start_line, start_column, end_line, end_column))
+        # print(f"Locations: {result}")
+        return result
+
+    def highlight_locations(text_area, locations: List[Tuple[int, int, int, int]]):
+        text_area.tag_delete("Highlight")
+        text_area.tag_config("Highlight", background="gray")
+        for (start_line, start_column, end_line, end_column) in locations:
+            text_area.tag_add("Highlight", f"{start_line}.{start_column}", f"{end_line}.{end_column}")
+            # print(f"Highlighted location {(start_line, start_column, end_line, end_column)}")
 
     def on_text_left_change(_event):
         # Check if the text was actually modified
