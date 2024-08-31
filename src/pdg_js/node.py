@@ -304,7 +304,7 @@ class Node:
                                                  # '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|='
             "UnaryExpression": 'operator',       # '+' | '-' | '~' | '!' | 'delete' | 'void' | 'typeof'
             "UpdateExpression": 'operator',      # '++' or '--'
-            "MemberExpression": 'computed'       # (boolean)
+            "MemberExpression": 'computed'       # (boolean)  # ToDo: handle True/False cases differently in code (x.y vs. x[y])
         }
 
         if self.name in attributes_of_interest.keys():
