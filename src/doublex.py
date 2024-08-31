@@ -315,19 +315,26 @@ def main():
                 if args.csv_out != "":
                     manifest_path = os.path.join(dest2, 'manifest.json')  # dest2 == os.path.dirname(cs)
                     manifest = json.load(open(manifest_path))
-                    ext_name = manifest['name'].replace(",", "")\
+                    ext_name =\
+                        manifest['name'].replace(",", "").replace("\n", "")\
                         if 'name' in manifest else ""
-                    ext_browser_action_default_title = manifest['browser_action']['default_title'].replace(",", "")\
+                    ext_browser_action_default_title =\
+                        manifest['browser_action']['default_title'].replace(",", "").replace("\n", "")\
                         if 'browser_action' in manifest and 'default_title' in manifest['browser_action'] else ""
-                    ext_version = manifest['version'].replace(",", "")\
+                    ext_version =\
+                        manifest['version'].replace(",", "").replace("\n", "")\
                         if 'version' in manifest else ""
-                    ext_description = manifest['description'][:100].replace(",", "")\
+                    ext_description =\
+                        manifest['description'][:100].replace(",", "").replace("\n", "")\
                         if 'description' in manifest else ""
-                    ext_permissions = " | ".join(manifest['permissions'])\
+                    ext_permissions =\
+                        " | ".join(manifest['permissions'])\
                         if 'permissions' in manifest else ""
-                    content_script_injected_into = " | ".join(analysis_result['content_script_injected_into'])\
+                    content_script_injected_into =\
+                        " | ".join(analysis_result['content_script_injected_into'])\
                         if 'content_script_injected_into' in analysis_result else ""
-                    crashes = " | ".join(analysis_result['benchmarks']['crashes'])\
+                    crashes =\
+                        " | ".join(analysis_result['benchmarks']['crashes'])\
                         if 'benchmarks' in analysis_result and 'crashes' in analysis_result['benchmarks'] else ""
                     bp_exfiltration_dangers = analysis_result['bp']['exfiltration_dangers']
                     bp_infiltration_dangers = analysis_result['bp']['infiltration_dangers']
