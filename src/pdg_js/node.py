@@ -303,7 +303,8 @@ class Node:
             "AssignmentExpression": 'operator',  # '=' | '*=' | '**=' | '/=' | '%=' | '+=' | '-=' |
                                                  # '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|='
             "UnaryExpression": 'operator',       # '+' | '-' | '~' | '!' | 'delete' | 'void' | 'typeof'
-            "UpdateExpression": 'operator'       # '++' or '--'
+            "UpdateExpression": 'operator',      # '++' or '--'
+            "MemberExpression": 'computed'       # (boolean)
         }
 
         if self.name in attributes_of_interest.keys():
