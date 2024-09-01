@@ -295,7 +295,7 @@ class Node:
 
         attributes_of_interest = {
             "Identifier": 'name',
-            "Literal": 'raw',
+            "Literal": ['raw', 'value'],
             "BinaryExpression": 'operator',      # 'instanceof' | 'in' | '+' | '-' | '*' | '/' | '%' | '**' |
                                                  # '|' | '^' | '&' | '==' | '!=' | '===' | '!==' |
                                                  # '<' | '>' | '<=' | '<<' | '>>' | '>>>'
@@ -308,7 +308,10 @@ class Node:
         }
 
         if self.name in attributes_of_interest.keys():
-            str_repr = f"[{self.id}] [{self.name}:\"{self.attributes[attributes_of_interest[self.name]]}\"] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
+            if isinstance(attributes_of_interest[self.name], list):
+                str_repr = f"[{self.id}] [{self.name}::{str({attr: self.attributes[attr] for attr in attributes_of_interest[self.name]})}] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
+            else:
+                str_repr = f"[{self.id}] [{self.name}:\"{self.attributes[attributes_of_interest[self.name]]}\"] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
         else:
             str_repr = f"[{self.id}] [{self.name}] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
 
