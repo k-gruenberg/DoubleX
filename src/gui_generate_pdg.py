@@ -12,6 +12,7 @@ from pdg_js.tokenizer_espree import tokenize
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
 
+# ToDo: display current line & column underneath left text area (cf. IDE)
 # ToDo: syntax highlighting for comments (why doesn't Espree include comment tokens?!)
 # ToDo: remember code snippet from last time?!
 # ToDo: double click on the LHS creates highlighting on the RHS and vice-versa
