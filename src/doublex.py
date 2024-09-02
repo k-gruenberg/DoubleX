@@ -272,12 +272,13 @@ def main():
                 print(f"Error: '{args.csv_out}' file already exists, please supply another file as --csv-out.")
                 exit(1)
             csv_out = open(args.csv_out, "w")
-            csv_out.write("Extension,name,browser action default title,version,description,permissions,"
+            csv_out.write("Extension,name,browser action default title,version,description,"
+                          "permissions,optional permissions,host permissions,optional host permissions,"
                           "extension size (packed),extension size (unpacked),JS LoC,"
                           "CS injected into,crashes,analysis time in seconds,total dangers,"
                           "BP exfiltration dangers,BP infiltration dangers,BP 3.1 violations w/o API danger,"
                           "CS exfiltration dangers,CS infiltration dangers,files and line numbers\n")
-            csv_out.flush()
+            csv_out.flush() # ToDo: add no. of UXSS vulnerabilities!
 
         if args.sort_crxs_by_size_ascending:
             print(f"Sorting {len(crxs)} .CRX files by file size...")
@@ -330,6 +331,15 @@ def main():
                     ext_permissions =\
                         " | ".join(manifest['permissions'])\
                         if 'permissions' in manifest else ""
+                    ext_optional_permissions = \
+                        " | ".join(manifest['optional_permissions']) \
+                            if 'optional_permissions' in manifest else ""
+                    ext_host_permissions = \
+                        " | ".join(manifest['host_permissions']) \
+                            if 'host_permissions' in manifest else ""
+                    ext_optional_host_permissions = \
+                        " | ".join(manifest['optional_host_permissions']) \
+                            if 'optional_host_permissions' in manifest else ""
                     content_script_injected_into =\
                         " | ".join(analysis_result['content_script_injected_into'])\
                         if 'content_script_injected_into' in analysis_result else ""
@@ -347,7 +357,8 @@ def main():
                                                                cs_exfiltration_dangers, cs_infiltration_dangers])
                     files_and_line_numbers = "" # ToDo: write once more types of vuln. are supported!
                     csv_out.write(f"{crx},{ext_name},{ext_browser_action_default_title},{ext_version},"
-                                  f"{ext_description},{ext_permissions},"
+                                  f"{ext_description},{ext_permissions},{ext_optional_permissions},"
+                                  f"{ext_host_permissions},{ext_optional_host_permissions},"
                                   f"{extension_size_packed},{extension_size_unpacked},{js_loc},"
                                   f"{content_script_injected_into},{crashes},"
                                   f"{analysis_time},{total_no_of_dangers},"
