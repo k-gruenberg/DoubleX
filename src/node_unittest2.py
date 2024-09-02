@@ -245,6 +245,64 @@ class TestNodeClass2(unittest.TestCase):
         # 1  2   3   4   5
         self.assertEqual(pdg.get_height(), 5)
 
+    def test_promise_returning_function_call_get_all_then_calls(self):
+        # Example #1 (fetch):
+        code = """
+        fetch(constants.CNAME_DOMAINS_LOCAL_URL)
+                        .then(response => response.json())
+                        .then(data => {
+                            badger.cnameDomains = data;
+                        });
+        """  # taken from: /pkehgijcmpdhfbdbbnkijodmdjhbjlgp-2021.11.23.1-Crx4Chrome.com/background.js
+        pdg = generate_pdg(code)
+        print(pdg)
+        promise_returning_function = pdg.get_identifier_by_name("fetch").get_parent(["CallExpression"])
+        all_then_calls = promise_returning_function.promise_returning_function_call_get_all_then_calls()
+        self.assertEqual(len(all_then_calls), 2)
+        print(all_then_calls[0])
+        print(all_then_calls[1])
+        self.assertEqual(all_then_calls[0].name, "ArrowFunctionExpression")
+        self.assertEqual(all_then_calls[0].children[0].name, "Identifier")
+        self.assertEqual(all_then_calls[0].children[0].attributes['name'], "response")
+        self.assertEqual(all_then_calls[1].name, "ArrowFunctionExpression")
+        self.assertEqual(all_then_calls[1].children[0].name, "Identifier")
+        self.assertEqual(all_then_calls[1].children[0].attributes['name'], "data")
+
+        # Example #2 (chrome.cookies.getAll):
+        code = """
+        function logCookies(cookies) {
+            for (const cookie of cookies) {
+                console.log(cookie.value);
+            }
+        }
+        
+        chrome.cookies.getAll({name: "favorite-color"}).then(logCookies);
+        """  # taken from: https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/cookies/getAll
+        pdg = generate_pdg(code)
+        print(pdg)
+        # ...
+        # [1] [CallExpression] (2 children)
+        # 	[2] [MemberExpression:"False"] (2 children)
+        # 		[3] [MemberExpression:"False"] (2 children)
+        # 			[4] [Identifier:"chrome"] (0 children)
+        # 			[5] [Identifier:"cookies"] (0 children)
+        #       [6] [Identifier:"getAll"] (0 children)
+        #   [7] [ObjectExpression] (1 child)
+        #       [8] [Property] (2 children)
+        #           [9] [Identifier:"name"] (0 children)
+        #           [10] [Literal::{'raw': '"favorite-color"', 'value': 'favorite-color'}] (0 children)
+        # ...
+        promise_returning_function = pdg.get_identifier_by_name("chrome").great_grandparent()
+        all_then_calls = promise_returning_function.promise_returning_function_call_get_all_then_calls(
+            resolve_function_references=True)
+        self.assertEqual(len(all_then_calls), 1)
+        self.assertEqual(all_then_calls[0].name, "FunctionDeclaration")
+        all_then_calls = promise_returning_function.promise_returning_function_call_get_all_then_calls(
+            resolve_function_references=False)
+        self.assertEqual(len(all_then_calls), 1)
+        self.assertEqual(all_then_calls[0].name, "Identifier")
+        self.assertEqual(all_then_calls[0].attributes['name'], "logCookies")
+
 
 if __name__ == '__main__':
     unittest.main()

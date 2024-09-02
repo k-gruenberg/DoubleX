@@ -299,6 +299,46 @@ class TestNodeClass(unittest.TestCase):
                 )
         self.assertEqual(pdg.get_height(), 3)
 
+    def test_get_sibling_by_name(self):
+        expression = Node("BinaryExpression", attributes={"operator": "+"}) \
+            .child(Node("Literal", attributes={"raw": "'x'", "value": "x"})) \
+            .child(Node("Literal", attributes={"raw": "'y'", "value": "y"}))
+        print(expression)
+        self.assertEqual(len(expression.children), 2)
+        [sibling1, sibling2] = expression.children
+        self.assertEqual(sibling1.get_sibling_by_name("Literal"), sibling2)
+        self.assertEqual(sibling2.get_sibling_by_name("Literal"), sibling1)
+
+    def test_get_only_sibling(self):
+        expression = Node("BinaryExpression", attributes={"operator": "+"}) \
+            .child(Node("Literal", attributes={"raw": "'x'", "value": "x"})) \
+            .child(Node("Literal", attributes={"raw": "'y'", "value": "y"}))
+        print(expression)
+        self.assertEqual(len(expression.children), 2)
+        [sibling1, sibling2] = expression.children
+        self.assertEqual(sibling1.get_only_sibling(), sibling2)
+        self.assertEqual(sibling2.get_only_sibling(), sibling1)
+
+    def test_has_sibling(self):
+        expression = Node("BinaryExpression", attributes={"operator": "+"}) \
+            .child(Node("Literal", attributes={"raw": "'x'", "value": "x"})) \
+            .child(Node("Literal", attributes={"raw": "'y'", "value": "y"}))
+        print(expression)
+        self.assertEqual(len(expression.children), 2)
+        [sibling1, sibling2] = expression.children
+        self.assertTrue(sibling1.has_sibling("Literal"))
+        self.assertTrue(sibling2.has_sibling("Literal"))
+
+    def test_count_siblings(self):
+        expression = Node("BinaryExpression", attributes={"operator": "+"}) \
+            .child(Node("Literal", attributes={"raw": "'x'", "value": "x"})) \
+            .child(Node("Literal", attributes={"raw": "'y'", "value": "y"}))
+        print(expression)
+        self.assertEqual(len(expression.children), 2)
+        [sibling1, sibling2] = expression.children
+        self.assertEqual(sibling1.count_siblings(), 1)
+        self.assertEqual(sibling2.count_siblings(), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

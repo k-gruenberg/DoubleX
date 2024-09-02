@@ -239,24 +239,54 @@ class Node:
             raise TypeError(f"calling Node.child(): a(n) {self.name} cannot have more than 3 children!")
 
         self.children.append(c)
+        c.parent = self
         return self
 
     # ADDED BY ME:
-    def get_sibling(self, idx):
+    def get_sibling(self, idx: int):
         sibling = self.parent.children[idx]
         # Safety check, when the programmer calls get_sibling(), he likely wants a *different* Node:
         assert sibling.id != self.id
         return sibling
 
     # ADDED BY ME:
+    def get_sibling_by_name(self, name: str):
+        for sibling in self.parent.children:
+            if sibling.name == name and sibling.id != self.id:
+                return sibling
+        return None
+
+    # ADDED BY ME:
+    def get_only_sibling(self):
+        siblings = [c for c in self.parent.children if c.id != self.id]
+        assert len(siblings) == 1
+        return siblings[0]
+
+    # ADDED BY ME:
+    def has_sibling(self, name: str):
+        return self.get_sibling_by_name(name=name) is not None
+
+    # ADDED BY ME:
     def is_sibling_of(self, other):
         return self.parent is not None and self.parent == other.parent
+
+    # ADDED BY ME:
+    def count_siblings(self):
+        return len(self.parent.children) -1
 
     # ADDED BY ME:
     def grandparent(self):
         if self.parent is None:  # No parent...
             return None  # ...no grandparent.
         return self.parent.parent  # (might be None)
+
+    # ADDED BY ME:
+    def great_grandparent(self):
+        if self.parent is None:  # No parent...
+            return None  # ...no great-grandparent.
+        elif self.parent.parent is None:  # No grandparent...
+            return None  # ...no great-grandparent.
+        return self.parent.parent.parent  # (might be None)
 
     # ADDED BY ME:
     def get_parents(self):
@@ -971,6 +1001,164 @@ class Node:
         else:
             return 1 + max(child.get_height() for child in self.children)
 
+    # ADDED BY ME:
+    def promise_returning_function_call_get_all_then_calls(self, resolve_function_references=True): # ToDo: use for chrome.cookies API as well!!!
+        """
+        Examples:
+
+        Example #1:
+
+        Code (taken from /pkehgijcmpdhfbdbbnkijodmdjhbjlgp-2021.11.23.1-Crx4Chrome.com/background.js):
+        fetch(constants.CNAME_DOMAINS_LOCAL_URL)
+                .then(response => response.json())
+                .then(data => {
+                    badger.cnameDomains = data;
+                });
+
+        Entire PDG:
+        [1] [Program] (1 child)
+            [2] [ExpressionStatement] (1 child)
+                [3] [CallExpression] (2 children)
+                    [4] [MemberExpression:"False"] (2 children)
+                        [5] [CallExpression] (2 children)
+                            [6] [MemberExpression:"False"] (2 children)
+                                [7] [CallExpression] (2 children)
+                                    [8] [Identifier:"fetch"] (0 children)
+                                    [9] [MemberExpression:"False"] (2 children)
+                                        [10] [Identifier:"constants"] (0 children)
+                                        [11] [Identifier:"CNAME_DOMAINS_LOCAL_URL"] (0 children)
+                                [12] [Identifier:"then"] (0 children)
+                            [13] [ArrowFunctionExpression] (2 children)
+                                [14] [Identifier:"response"] (0 children) --data--> [17]
+                                [15] [CallExpression] (1 child)
+                                    [16] [MemberExpression:"False"] (2 children)
+                                        [17] [Identifier:"response"] (0 children)
+                                        [18] [Identifier:"json"] (0 children)
+                        [19] [Identifier:"then"] (0 children)
+                    [20] [ArrowFunctionExpression] (2 children)
+                        [21] [Identifier:"data"] (0 children) --data--> [28]
+                        [22] [BlockStatement] (1 child) --e--> [23]
+                            [23] [ExpressionStatement] (1 child)
+                                [24] [AssignmentExpression:"="] (2 children)
+                                    [25] [MemberExpression:"False"] (2 children)
+                                        [26] [Identifier:"badger"] (0 children)
+                                        [27] [Identifier:"cnameDomains"] (0 children)
+                                    [28] [Identifier:"data"] (0 children) --data--> [26]
+
+        Input (self):
+        [7] [CallExpression] (2 children)
+            which might be nested inside many MemberExpressions/CallExpressions due to repeated then() calls!
+
+        Output #1:
+        [13] [ArrowFunctionExpression] (2 children)
+            [14] [Identifier:"response"] (0 children) --data--> [17]
+            [15] [CallExpression] (1 child)
+                [16] [MemberExpression:"False"] (2 children)
+                    [17] [Identifier:"response"] (0 children)
+                    [18] [Identifier:"json"] (0 children)
+
+        Output #2:
+        [20] [ArrowFunctionExpression] (2 children)
+            [21] [Identifier:"data"] (0 children) --data--> [28]
+            [22] [BlockStatement] (1 child) --e--> [23]
+                [23] [ExpressionStatement] (1 child)
+                    [24] [AssignmentExpression:"="] (2 children)
+                        [25] [MemberExpression:"False"] (2 children)
+                            [26] [Identifier:"badger"] (0 children)
+                            [27] [Identifier:"cnameDomains"] (0 children)
+                        [28] [Identifier:"data"] (0 children) --data--> [26]
+
+
+
+        Example #2:
+
+        Code (taken from https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/cookies/getAll):
+        function logCookies(cookies) {
+          for (const cookie of cookies) {
+            console.log(cookie.value);
+          }
+        }
+
+        chrome.cookies
+          .getAll({
+            name: "favorite-color",
+          })
+          .then(logCookies);
+        """
+        assert self.name == "CallExpression"
+
+        result = []
+
+        call_expression = self
+
+        while (call_expression.name == "CallExpression"
+               and call_expression.count_siblings() == 1
+               and call_expression.has_sibling("Identifier")
+               and call_expression.get_sibling_by_name("Identifier").attributes['name'] == "then"
+               and call_expression.parent.count_siblings() == 1):
+
+            then_call = call_expression.parent.get_only_sibling()  # = what's inside the then(...)
+            if then_call.name in ["ArrowFunctionExpression", "FunctionExpression"]:
+                result.append(then_call)
+            elif then_call.name == "Identifier":  # "then(function_name)"
+                if resolve_function_references:
+                    function_declaration = then_call.function_Identifier_get_FunctionDeclaration()
+                    if function_declaration is None:
+                        result.append(then_call)
+                    else:
+                        assert function_declaration.name == "FunctionDeclaration"
+                        result.append(function_declaration)
+                else:
+                    result.append(then_call)
+            else:
+                print(f"[Warning] .then() call in line {then_call.get_line()} of file {then_call.get_file()} "
+                      f"contains something unexpected: a {then_call.name}")
+
+            call_expression = call_expression.grandparent()
+
+        return result
+
+    # ADDED BY ME:
+    def function_Identifier_get_FunctionDeclaration(self): # ToDo: use everywhere!!!
+        """
+        When this Node is an Identifier referencing a function, this method returns the corresponding
+        FunctionDeclaration where said function is defined.
+
+        When no FunctionDeclaration could be found, `None` is returned.
+
+        When *more* than 1 corresponding FunctionDeclaration was found, an `AssertionError` is raised as a function
+        shouldn't be able to be declared more than once!
+
+        Also raises an `AssertionError` when `self.name != "Identifier"`
+
+        Returns:
+            (a) the FunctionDeclaration Node declaring the function referenced by this Identifier; or
+            (b) None when no FunctionDeclaration could be found for this Identifier.
+        """
+        assert self.name == "Identifier"
+
+        # Get all data flow parents:
+        self_data_flow_parents = self.get_data_flow_parents()
+
+        # Get all data flow parents that are function declarations
+        #     (technically: whose parents are FunctionDeclaration Nodes):
+        function_declaration_data_flow_parents = \
+            [df_parent for df_parent in self_data_flow_parents if df_parent.parent.name == "FunctionDeclaration"]
+
+        # If exactly 1 data flow parent was found that's a function declaration, return that one:
+        if len(function_declaration_data_flow_parents) == 1:
+            return function_declaration_data_flow_parents[0].get_parent("FunctionDeclaration")
+
+        # If no declaring data flow parent for the function identifier was found, return None:
+        elif len(function_declaration_data_flow_parents) == 0:
+            # function reference couldn't be resolved, simply return None then:
+            return None
+
+        # If *MORE* than 1 corresponding function declaration was found, raise an AssertionError, as a function
+        #    is not allowed to be declared twice(!):
+        else:
+            raise AssertionError(f"Identifier '{self.attributes['name']}' has >1 data flow parent, "
+                                 f"even though functions may not be declared twice!")
 
     def is_leaf(self):
         return not self.children
