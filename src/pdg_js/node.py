@@ -1167,7 +1167,12 @@ class Node:
         # Get all data flow parents that are function declarations
         #     (technically: whose parents are FunctionDeclaration Nodes):
         function_declaration_data_flow_parents = \
-            [df_parent for df_parent in self_data_flow_parents if df_parent.parent.name == "FunctionDeclaration"]
+            [df_parent for df_parent in self_data_flow_parents if df_parent.parent.name == "FunctionDeclaration"
+                                                               and df_parent.is_nth_child_of_parent(0)]
+        # The `df_parent.is_nth_child_of_parent(0)` check is very important to ensure that the function identifier
+        #   is the 0th child of the FunctionDeclaration, i.e., that the FunctionDeclaration actually *defines* that
+        #   function identifier and doesn't just take it as its argument (yes, functions may take other functions
+        #   as arguments...)
 
         # If exactly 1 data flow parent was found that's a function declaration, return that one:
         if len(function_declaration_data_flow_parents) == 1:
