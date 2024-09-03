@@ -303,6 +303,33 @@ class TestNodeClass2(unittest.TestCase):
         self.assertEqual(all_then_calls[0].name, "Identifier")
         self.assertEqual(all_then_calls[0].attributes['name'], "logCookies")
 
+    def test_get_sibling_relative(self):
+        code = """function foo(x,y,z) {}"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [1] [Program] (1 child)
+        # 	[2] [FunctionDeclaration] (5 children) --e--> [55]
+        # 		[3] [Identifier:"foo"] (0 children)
+        # 		[4] [Identifier:"x"] (0 children)
+        # 		[5] [Identifier:"y"] (0 children)
+        # 		[6] [Identifier:"z"] (0 children)
+        # 		[7] [BlockStatement] (0 children)
+        x_identifier = pdg.get_child("FunctionDeclaration").children[1]
+        y_identifier = pdg.get_child("FunctionDeclaration").children[2]
+        z_identifier = pdg.get_child("FunctionDeclaration").children[3]
+
+        self.assertEqual(x_identifier.get_sibling_relative(0), x_identifier)
+        self.assertEqual(x_identifier.get_sibling_relative(1), y_identifier)
+        self.assertEqual(x_identifier.get_sibling_relative(2), z_identifier)
+
+        self.assertEqual(y_identifier.get_sibling_relative(-1), x_identifier)
+        self.assertEqual(y_identifier.get_sibling_relative(0), y_identifier)
+        self.assertEqual(y_identifier.get_sibling_relative(1), z_identifier)
+
+        self.assertEqual(z_identifier.get_sibling_relative(-2), x_identifier)
+        self.assertEqual(z_identifier.get_sibling_relative(-1), y_identifier)
+        self.assertEqual(z_identifier.get_sibling_relative(0), z_identifier)
+
 
 if __name__ == '__main__':
     unittest.main()

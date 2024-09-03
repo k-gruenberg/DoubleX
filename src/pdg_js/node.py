@@ -250,6 +250,30 @@ class Node:
         return sibling
 
     # ADDED BY ME:
+    def get_sibling_relative(self, relative_index: int):
+        """
+        Cf. get_sibling() but the given index is *relative* to this node.
+
+        Example:
+
+        [1] parent
+            [2] child A
+            [3] child B
+            [4] child C
+            [5] child D
+            [6] child E
+
+        When being called on [4] child C, ...
+        ...get_sibling_relative(-2) returns [2] child A
+        ...get_sibling_relative(-1) returns [3] child B
+        ...get_sibling_relative(0) returns [4] child C itself
+        ...get_sibling_relative(1) returns [5] child D
+        ...get_sibling_relative(2) returns [6] child E
+        """
+        self_index = self.parent.children.index(self)
+        return self.parent.children[self_index + relative_index]
+
+    # ADDED BY ME:
     def get_sibling_by_name(self, name: str):
         for sibling in self.parent.children:
             if sibling.name == name and sibling.id != self.id:
@@ -1119,7 +1143,7 @@ class Node:
         return result
 
     # ADDED BY ME:
-    def function_Identifier_get_FunctionDeclaration(self): # ToDo: use everywhere!!!
+    def function_Identifier_get_FunctionDeclaration(self):
         """
         When this Node is an Identifier referencing a function, this method returns the corresponding
         FunctionDeclaration where said function is defined.
