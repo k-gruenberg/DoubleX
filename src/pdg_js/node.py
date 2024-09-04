@@ -1187,7 +1187,7 @@ class Node:
         return result
 
     # ADDED BY ME:
-    def function_Identifier_get_FunctionDeclaration(self):
+    def function_Identifier_get_FunctionDeclaration(self) -> Optional[Self]:
         """
         When this Node is an Identifier referencing a function, this method returns the corresponding
         FunctionDeclaration where said function is defined.
@@ -1363,7 +1363,7 @@ class Node:
         return identifiers[1:]  # ignore 1st Identifier as that's not a parameter but rather the name of the function!
 
     # ADDED BY ME:
-    def arrow_function_expression_get_params(self) -> List[Self]: # ToDo
+    def arrow_function_expression_get_params(self) -> List[Self]:
         # From the Esprima docs:
         # interface ArrowFunctionExpression {
         #     id: Identifier | null;
