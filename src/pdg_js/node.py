@@ -38,7 +38,7 @@ import random
 import itertools
 import os
 import re
-from typing import Set, Tuple
+from typing import Set, Tuple, Optional, Self, List
 
 from . import utility_df
 
@@ -344,6 +344,34 @@ class Node:
             raise LookupError(f"parent of [{self.id}] has name '{self.parent.name}' but none of: {allowed_parent_names}")
 
     # ADDED BY ME:
+    def get_parent_or_grandparent(self, allowed_ancestor_names):
+        if self.parent.name in allowed_ancestor_names:
+            return self.parent
+        elif self.grandparent().name in allowed_ancestor_names:
+            return self.grandparent()
+        else:
+            raise LookupError(f"neither parent nor grandparent of [{self.id}] has name in: {allowed_ancestor_names} "
+                              f"(parent name: '{self.parent.name}', grandparent name: '{self.grandparent().name}')")
+
+    # ADDED BY ME:
+    def get_ancestor(self, allowed_ancestor_names):
+        parent = self.parent
+        while parent is not None:
+            if parent.name in allowed_ancestor_names:
+                return parent
+            parent = parent.parent
+        raise LookupError(f"no ancestor named '{allowed_ancestor_names}' found for node [{self.id}]")
+
+    # ADDED BY ME:
+    def has_ancestor(self, allowed_ancestor_names):
+        parent = self.parent
+        while parent is not None:
+            if parent.name in allowed_ancestor_names:
+                return True
+            parent = parent.parent
+        return False
+
+    # ADDED BY ME:
     def __str__(self):
         str_repr = ""
 
@@ -481,8 +509,12 @@ class Node:
         return self.children[0]
 
     # ADDED BY ME:
-    def is_nth_child_of_parent(self, n):
+    def is_nth_child_of_parent(self, n) -> bool:
         sibling_ids = [sibling.id for sibling in self.parent.children]
+        return self.id == sibling_ids[n]
+
+    def is_nth_child_of_parent_ignoring_certain_siblings(self, n, siblings_names_to_ignore: List[str]) -> bool:
+        sibling_ids = [sibling.id for sibling in self.parent.children if sibling.name not in siblings_names_to_ignore]
         return self.id == sibling_ids[n]
 
     # ADDED BY ME:
@@ -868,6 +900,18 @@ class Node:
         else:
             raise Exception(f"error in if_statement_has_else_if_branch(): if statement has unknown format:\n{self}")
 
+    # ##### ##### occurs_in_code_before() & occurs_in_code_after(): ##### #####
+    # Note how simply comparing Node IDs isn't enough as the following example shows:
+    # Code: "function foo() { function bar() {} }"
+    # PDG:
+    # [46] [Program] (1 child)
+    # 	[47] [FunctionDeclaration] (3 children) --e--> [50] --e--> [49]
+    # 		[50] [FunctionDeclaration] (2 children) --e--> [52]
+    # 			[51] [Identifier:"bar"] (0 children)
+    # 			[52] [BlockStatement] (0 children)
+    # 		[48] [Identifier:"foo"] (0 children)
+    # 		[49] [BlockStatement] (0 children)
+
     # ADDED BY ME:
     def occurs_in_code_before(self, other_node):
         assert self.get_file() == other_node.get_file()
@@ -1168,7 +1212,7 @@ class Node:
         #     (technically: whose parents are FunctionDeclaration Nodes):
         function_declaration_data_flow_parents = \
             [df_parent for df_parent in self_data_flow_parents if df_parent.parent.name == "FunctionDeclaration"
-                                                               and df_parent.is_nth_child_of_parent(0)]
+                            and df_parent.is_nth_child_of_parent_ignoring_certain_siblings(0, ["FunctionDeclaration"])]
         # The `df_parent.is_nth_child_of_parent(0)` check is very important to ensure that the function identifier
         #   is the 0th child of the FunctionDeclaration, i.e., that the FunctionDeclaration actually *defines* that
         #   function identifier and doesn't just take it as its argument (yes, functions may take other functions
@@ -1188,6 +1232,175 @@ class Node:
         else:
             raise AssertionError(f"Identifier '{self.attributes['name']}' has >1 data flow parent, "
                                  f"even though functions may not be declared twice!")
+
+    # ADDED BY ME:
+    def function_param_get_identifier(self) -> Optional[Self]:
+        """
+        Function parameters will usually look like this:
+        * function foo(x) {}
+
+        However, they may also look like this, with a default value:
+        * function foo(x=42) {}
+
+        This method retrieves the Identifier corresponding to this function parameter, whether there's a default
+        value or not.
+
+        There are other possibilities as well, these are of destructuring nature however:
+        * function foo([x,y]) {}
+        * function foo([x,y]=[1,2]) {}
+        * function foo({x,y}) {}
+        * function foo({x,y}={x:1,y:2}) {}
+        For all of these, this method simply returns `None`.
+        If you want those returned as well, use the function_param_get_identifiers() instead!
+        """
+        if self.name == "Identifier":  # function foo(x) {}
+            return self
+        elif self.name == "AssignmentPattern" and self.lhs().name == "Identifier":  # function foo(x=42) {}
+            return self.lhs()
+        else:  # e.g., "function foo([x,y]) {}", or "function foo([x,y]=[1,2]) {}", or "function foo({x,y}) {}"
+            return None
+
+    # ADDED BY ME:
+    def function_param_get_identifiers(self) -> List[Self]:
+        """
+        Function parameters will usually look like this:
+        * function foo(x) {}
+
+        However, they may also look like this:
+        * function foo(x=42) {}
+        * function foo([x,y]) {}
+        * function foo([x,y]=[1,2]) {}
+        * function foo({x,y}) {}
+        * function foo({x,y}={x:1,y:2}) {}
+
+        This method returns all LHS Identifiers corresponding to the function parameter represented by this Node.
+        Returns an empty list on error.
+        """
+
+        # type FunctionParameter = AssignmentPattern | Identifier | BindingPattern;
+        #
+        # interface AssignmentPattern {
+        #     left: Identifier | BindingPattern;
+        #     right: Expression;
+        # }
+        #
+        # type BindingPattern = ArrayPattern | ObjectPattern;
+        #
+        # interface ArrayPattern {
+        #     elements: ArrayPatternElement[];
+        # }
+        #
+        # type ArrayPatternElement = AssignmentPattern | Identifier | BindingPattern | RestElement | null;
+        #
+        # interface ObjectPattern {
+        #     properties: Property[];
+        # }
+        #
+        # interface Property {
+        #     key: Expression;
+        #     value: Expression | null;
+        # }
+
+        if self.name == "Identifier":  # function foo(x) {}
+            return [self]
+        elif self.name == "AssignmentPattern":
+            if self.lhs().name == "Identifier":  # function foo(x=42) {}
+                return [self.lhs()]
+            elif self.lhs().name == "ArrayPattern":  # function foo([x,y]=[1,2]) {}
+                return self.lhs().function_param_get_identifiers()
+            elif self.lhs().name == "ObjectPattern":  # function foo({x,y}={x:1,y:2}) {}
+                return self.lhs().function_param_get_identifiers()
+            else:
+                print(f"[Warning] function_param_get_identifiers(): unknown LHS of AssignmentPattern: "
+                      f"{self.lhs().name}, line {self.lhs().get_line()}, file {self.lhs().get_file()}")
+                return []
+        elif self.name == "ArrayPattern":  # function foo([x,y]) {}
+            return [child for child in self.children if child.name == "Identifier"]
+        elif self.name == "ObjectPattern":  # function foo({a:x,b:y}) {}
+            return [property_.children[1] for property_ in self.children if property_.children[1].name == "Identifier"]
+        else:
+            print(f"[Warning] function_param_get_identifiers(): unknown type of Node for function param: "
+                  f"{self.lhs().name}, line {self.lhs().get_line()}, file {self.lhs().get_file()}")
+            return []
+
+    # ADDED BY ME:
+    def function_declaration_get_params(self) -> List[Self]:
+        # According to the Esprima docs, a FunctionDeclaration looks like this:
+        # interface FunctionDeclaration {
+        #     id: Identifier | null;
+        #     params: FunctionParameter[];
+        #     body: BlockStatement;
+        #     generator: boolean;
+        #     async: boolean;
+        #     expression: false;
+        # }
+        # where: type FunctionParameter = AssignmentPattern | Identifier | BindingPattern;
+        #        type BindingPattern = ArrayPattern | ObjectPattern;
+        #
+        # However, in reality, functions inside of functions will be hoisted directly inside the Function Declaration,
+        # for example the following code:
+        #
+        # function foo() {
+        #     function bar() {}
+        # }
+        #
+        # ...results in the following PDG:
+        #
+        # [708] [Program] (1 child)
+        # 	[709] [FunctionDeclaration] (3 children) --e--> [712] --e--> [711]
+        # 		[712] [FunctionDeclaration] (2 children) --e--> [714]
+        # 			[713] [Identifier:"bar"] (0 children)
+        # 			[714] [BlockStatement] (0 children)
+        # 		[710] [Identifier:"foo"] (0 children)
+        # 		[711] [BlockStatement] (0 children)
+        #
+        # Notice how the IDs of the children are *NOT* in ascending order!
+        #
+        # This function returns the parameters of this FunctionDeclaration only, no hoisted FunctionDeclarations,
+        #   not the name of the declared function and not the BlockStatement!
+        assert self.name == "FunctionDeclaration"
+        identifiers = [param for param in self.children if param.name not in ["FunctionDeclaration", "BlockStatement"]]
+        return identifiers[1:]  # ignore 1st Identifier as that's not a parameter but rather the name of the function!
+
+    # ADDED BY ME:
+    def function_declaration_get_nth_param(self, n) -> Self:
+        assert self.name == "FunctionDeclaration"
+        return self.function_declaration_get_params()[n]
+
+    # ADDED BY ME:
+    def then_call_get_param_identifiers(self) -> List[Self]:
+        if self.name in ["ArrowFunctionExpression", "FunctionExpression"]:
+            # [1] [ArrowFunctionExpression] (3 children)
+            # 	[2] [Identifier:"response2"] (0 children)
+            # 	[3] [Identifier:"response3"] (0 children)
+            # 	...
+            #
+            # [1] [FunctionExpression] (3 children)
+            # 	[2] [Identifier:"response2"] (0 children)
+            # 	[3] [Identifier:"response3"] (0 children)
+            # 	...
+            params = self.children[:-1]  # [:-1] leaves out only the very last element
+            identifiers = [identifier for param in params for identifier in param.function_param_get_identifiers()]
+            return identifiers
+        elif self.name == "FunctionDeclaration":
+            # Example: "function foo(x,y,z) {}"
+            # [1] [FunctionDeclaration] (5 children) --e--> [6]
+            # 		[2] [Identifier:"foo"] (0 children) --data--> [...]
+            # 		[3] [Identifier:"x"] (0 children)
+            # 		[4] [Identifier:"y"] (0 children)
+            # 		[5] [Identifier:"z"] (0 children)
+            # 		[6] [BlockStatement] (0 children)
+            params = self.function_declaration_get_params()  # unfortunately not as simple as [1:-1] when there are nested functions!
+            identifiers = [identifier for param in params for identifier in param.function_param_get_identifiers()]
+            return identifiers
+        elif self.name == "Identifier":
+            print(f"[Warning] Identifier {self.attributes['name']} in line {self.get_line()} in file "
+                  f"{self.get_file()} could not be resolved to a function!")
+            return []
+        else:
+            print(f"[Warning] Unexpected node in then(): {self.name}, line {self.get_line()}, "
+                  f"file {self.get_file()}")
+            return []
 
     def is_leaf(self):
         return not self.children
