@@ -1363,6 +1363,23 @@ class Node:
         return identifiers[1:]  # ignore 1st Identifier as that's not a parameter but rather the name of the function!
 
     # ADDED BY ME:
+    def arrow_function_expression_get_params(self) -> List[Self]: # ToDo
+        # From the Esprima docs:
+        # interface ArrowFunctionExpression {
+        #     id: Identifier | null;
+        #     params: FunctionParameter[];
+        #     body: BlockStatement | Expression;
+        # }
+        # interface FunctionExpression {
+        #     id: Identifier | null;
+        #     params: FunctionParameter[];
+        #     body: BlockStatement; generator: boolean;
+        # }
+        # The "id" seems appears to be always null, however.
+        assert self.name in ["FunctionExpression", "ArrowFunctionExpression"]
+        return self.children[:-1]  # remove the body
+
+    # ADDED BY ME:
     def function_declaration_get_nth_param(self, n) -> Self:
         assert self.name == "FunctionDeclaration"
         return self.function_declaration_get_params()[n]
