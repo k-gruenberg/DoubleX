@@ -651,7 +651,7 @@ class Node:
                             f"nor an Identifier nor a MemberExpression: {self.lhs()}")
 
     # ADDED BY ME:
-    def call_expression_get_full_function_name(self):
+    def call_expression_get_full_function_name(self) -> str:
         """
         For...
 
@@ -701,6 +701,15 @@ class Node:
         else:
             raise TypeError(f"call_expression_get_full_function_name(): "
                             f"Unsupported type of callee Expression used for a CallExpression: {callee}")
+
+    # ADDED BY ME:
+    def call_expression_get_all_arguments(self) -> List[Self]:
+        # interface CallExpression {
+        #     callee: Expression | Import;
+        #     arguments: ArgumentListElement[];
+        # }
+        assert self.name == "CallExpression"
+        return self.children[1:]
 
     DEFAULT_SENSITIVE_APIS = ["chrome.cookies", "chrome.scripting", "chrome.tabs.executeScript", "indexedDB", "fetch"]
 
@@ -1512,6 +1521,111 @@ class Node:
             return f"{start_line}:{start_column} - {end_line}:{end_column}"
         except KeyError:
             return None
+
+    # ADDED BY ME:
+    def functional_arg_get_arg(self, arg_index: int, resolve_arg_to_identifier: bool) -> Self: # ToDo: write custom Exception classes
+        """
+        Example 1 (used by get_all_sendResponse_sinks()):
+            self                 = (message, sender, sendResponse) => { /* ... */ }
+            arg_index            = 3
+            return value         = sendResponse (Node)
+
+        Example 2 (used by get_all_port_postMessage_sinks()):
+            self                 = port => { /* ... */ }
+            arg_index            = 0
+            return value         = port (Node)
+
+        Parameters:
+            arg_index: which argument to get, zero-based index
+            resolve_arg_to_identifier: resolve more complex arguments consisting of parameter name + default value
+                                       (e.g., "function foo(x=42) {}") just into the Identifier.
+
+        Returns:
+            the Node representing the n-th argument of this functional argument (see examples above)
+
+        Raises:
+            a TypeError when this is neither a FunctionExpression nor an ArrowFunctionExpression nor an Identifier;
+            a KeyError when this is an Identifier but the Identifier couldn't be resolved to a FunctionDeclaration;
+            an IndexError when the given `arg_index` >= # of. arguments;
+            an AttributeError when resolve_arg_to_identifier=True but resolving the arg to an Identifier failed
+        """
+        if self.name in ["FunctionExpression", "ArrowFunctionExpression"]:  # cases 1 and 2: (Arrow)FunctionExpression:
+            # interface FunctionExpression {
+            #     id: Identifier | null;       // == null
+            #     params: FunctionParameter[];
+            #     body: BlockStatement;
+            # }
+            # interface ArrowFunctionExpression {
+            #     id: Identifier | null;             // == null
+            #     params: FunctionParameter[];
+            #     body: BlockStatement | Expression;
+            # }
+            if arg_index < (len(self.children) - 1):  # (arg, arg2, arg, block), but "block" is not an argument!
+                return self.children[arg_index]  # (arg1, arg2, *arg3*)
+            else:
+                raise IndexError()
+
+        elif self.name == "Identifier":  # case 3: Identifier (function reference):
+            function_declaration = self.function_Identifier_get_FunctionDeclaration()
+            if function_declaration is None:
+                raise KeyError()
+            else:
+                assert function_declaration.name == "FunctionDeclaration"
+                # interface FunctionDeclaration {
+                #     id: Identifier | null;       // == null
+                #     params: FunctionParameter[];
+                #     body: BlockStatement;
+                # }
+                # Note that in case of nested functions, there might be additional FunctionDeclaration children(!!!)
+                #
+                # [1] [FunctionDeclaration] (5 children) --e--> [6]
+                # 		[2] [Identifier:"msg_handler"] (0 children) --data--> [...]
+                # 		[3] [Identifier:"msg"] (0 children)
+                # 		[4] [Identifier:"sender"] (0 children) --data--> [...]
+                # 		[5] [Identifier:"sendResponse"] (0 children) --data--> [...] --data--> [...]
+                # 		[6] [BlockStatement]
+                function_declaration_params = function_declaration.function_declaration_get_params()
+                if arg_index < len(function_declaration_params):  # (arg1, arg2, arg3)
+                    param = function_declaration_params[arg_index]  # (arg1, arg2, *arg3*)
+                    if not resolve_arg_to_identifier:
+                        return param
+                    else:
+                        # Instead of an Identifier, the FunctionParameter may also be an ArrayPattern or ObjectPattern, or
+                        #     an AssignmentPattern (whose left hand side in turn may be
+                        #     an Identifier, ArrayPattern or ObjectPattern; the right hand side may be any Expression):
+                        # * ArrayPattern:                         function msg_handler(msg, sender, [sendResponse1, sendResponse2]) { ... }
+                        # * ObjectPattern:                        function msg_handler(msg, sender, {x:x, y:y}) { ... }
+                        # * AssignmentPattern, LHS=Identifier:    function msg_handler(msg, sender, sendResponse=null) { ... }
+                        # * AssignmentPattern, LHS=ArrayPattern:  function msg_handler(msg, sender, [x,y]=[1,2]) { ... }
+                        # * AssignmentPattern, LHS=ObjectPattern: function msg_handler(msg, sender, {x, y}={x:1,y:2}) { ... }
+                        # => Here were only handle the AssignmentPattern, LHS=Identifier case using the
+                        #    function_param_get_identifier() method:  # ToDo: also handle all the other cases!
+                        identifier = param.function_param_get_identifier()  # necessary for "sendResponse=null" case (default param value)
+                        if identifier is not None:
+                            return identifier
+                        else:
+                            raise AttributeError()
+                else:
+                    raise IndexError()
+        else:
+            raise TypeError()
+
+    # ADDED BY ME:
+    def get_lowest_common_ancestor(self, other: Self) -> Self:
+        self_ancestors = [self]
+        while self_ancestors[-1].parent is not None:
+            self_ancestors.append(self_ancestors[-1].parent)
+
+        other_ancestors = [self]
+        while other_ancestors[-1].parent is not None:
+            other_ancestors.append(other_ancestors[-1].parent)
+
+        for ancestor in self_ancestors:
+            if ancestor in other_ancestors:
+                return ancestor
+
+        raise AssertionError("every two Nodes should have a common ancestor ([Program])")
+
 
     def get_file(self):
         parent = self
