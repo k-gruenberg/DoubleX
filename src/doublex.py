@@ -26,6 +26,7 @@ import datetime
 from pathlib import Path
 import time
 import json
+import traceback
 
 # Original DoubleX extension analysis:
 from vulnerability_detection import analyze_extension as doublex_analyze_extension
@@ -187,6 +188,11 @@ def main():
                              "starting to unpack and analyze them in that order. The idea is to begin with extensions "
                              "that are probably(!) quicker to analyze.")
 
+    parser.add_argument("--prod",
+                        dest='prod',
+                        action='store_true',
+                        help="Enables production mode. Program will continue after Exceptions.")
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
@@ -287,86 +293,95 @@ def main():
 
         for crx in crxs:
             try:
-                extension_size_packed = f"{os.path.getsize(crx):_}"
-            except OSError:
-                extension_size_packed = "?"
-            # Unpack .CRX file into a temp directory:
-            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacking '{crx}' ...")
-            dest2 = unpack_extension(extension_crx=crx, dest=dest1)
-            extension_size_unpacked = f"{get_directory_size(dest2):_}"
-            js_loc = f"{get_javascript_loc(dest2):_}"
-            if dest2 is None:
-                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacking failed: '{crx}'")
-            else:
-                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacked '{crx}' into '{dest2}'")
+                try:
+                    extension_size_packed = f"{os.path.getsize(crx):_}"
+                except OSError:
+                    extension_size_packed = "?"
+                # Unpack .CRX file into a temp directory:
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacking '{crx}' ...")
+                dest2 = unpack_extension(extension_crx=crx, dest=dest1)
+                extension_size_unpacked = f"{get_directory_size(dest2):_}"
+                js_loc = f"{get_javascript_loc(dest2):_}"
+                if dest2 is None:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacking failed: '{crx}'")
+                else:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacked '{crx}' into '{dest2}'")
 
-                cs = os.path.join(dest2, "content_scripts.js")
-                bp = os.path.join(dest2, "background.js")
+                    cs = os.path.join(dest2, "content_scripts.js")
+                    bp = os.path.join(dest2, "background.js")
 
-                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Analyzing '{crx}' ...")
-                analysis_start = time.time()
-                analysis_result = analyze_extension(cs, bp, json_analysis=args.analysis, chrome=not args.not_chrome,
-                                  war=args.war, json_apis=args.apis, manifest_path=args.manifest)
-                # Note that analysis_result will be None if analyze_extension = doublex_analyze_extension!
-                analysis_end = time.time()
-                analysis_time = analysis_end - analysis_start  # gives the elapsed time in seconds(!)
-                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Done analyzing '{crx}' after "
-                      f"{analysis_time} seconds")
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Analyzing '{crx}' ...")
+                    analysis_start = time.time()
+                    analysis_result = analyze_extension(cs, bp, json_analysis=args.analysis, chrome=not args.not_chrome,
+                                      war=args.war, json_apis=args.apis, manifest_path=args.manifest)
+                    # Note that analysis_result will be None if analyze_extension = doublex_analyze_extension!
+                    analysis_end = time.time()
+                    analysis_time = analysis_end - analysis_start  # gives the elapsed time in seconds(!)
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Done analyzing '{crx}' after "
+                          f"{analysis_time} seconds")
 
-                if args.csv_out != "":
-                    manifest_path = os.path.join(dest2, 'manifest.json')  # dest2 == os.path.dirname(cs)
-                    manifest = json.load(open(manifest_path))
-                    ext_name =\
-                        manifest['name'].replace(",", "").replace("\n", "")\
-                        if 'name' in manifest else ""
-                    ext_browser_action_default_title =\
-                        manifest['browser_action']['default_title'].replace(",", "").replace("\n", "")\
-                        if 'browser_action' in manifest and 'default_title' in manifest['browser_action'] else ""
-                    ext_version =\
-                        manifest['version'].replace(",", "").replace("\n", "")\
-                        if 'version' in manifest else ""
-                    ext_description =\
-                        manifest['description'][:100].replace(",", "").replace("\n", "")\
-                        if 'description' in manifest else ""
-                    ext_permissions =\
-                        " | ".join(manifest['permissions'])\
-                        if 'permissions' in manifest else ""
-                    ext_optional_permissions = \
-                        " | ".join(manifest['optional_permissions']) \
-                            if 'optional_permissions' in manifest else ""
-                    ext_host_permissions = \
-                        " | ".join(manifest['host_permissions']) \
-                            if 'host_permissions' in manifest else ""
-                    ext_optional_host_permissions = \
-                        " | ".join(manifest['optional_host_permissions']) \
-                            if 'optional_host_permissions' in manifest else ""
-                    content_script_injected_into =\
-                        " | ".join(analysis_result['content_script_injected_into'])\
-                        if 'content_script_injected_into' in analysis_result else ""
-                    crashes =\
-                        " | ".join(analysis_result['benchmarks']['crashes'])\
-                        if 'benchmarks' in analysis_result and 'crashes' in analysis_result['benchmarks'] else ""
-                    bp_exfiltration_dangers = analysis_result['bp']['exfiltration_dangers']
-                    bp_infiltration_dangers = analysis_result['bp']['infiltration_dangers']
-                    bp_31_violations_wo_api_danger =\
-                        len(analysis_result['bp']['31_violations_without_sensitive_api_access'])\
-                        if '31_violations_without_sensitive_api_access' in analysis_result['bp'] else "N/A"
-                    cs_exfiltration_dangers = analysis_result['cs']['exfiltration_dangers']
-                    cs_infiltration_dangers = analysis_result['cs']['infiltration_dangers']
-                    total_no_of_dangers = sum(len(x) for x in [bp_exfiltration_dangers, bp_infiltration_dangers,
-                                                               cs_exfiltration_dangers, cs_infiltration_dangers])
-                    files_and_line_numbers = "" # ToDo: write once more types of vuln. are supported!
-                    csv_out.write(f"{crx},{ext_name},{ext_browser_action_default_title},{ext_version},"
-                                  f"{ext_description},{ext_permissions},{ext_optional_permissions},"
-                                  f"{ext_host_permissions},{ext_optional_host_permissions},"
-                                  f"{extension_size_packed},{extension_size_unpacked},{js_loc},"
-                                  f"{content_script_injected_into},{crashes},"
-                                  f"{analysis_time},{total_no_of_dangers},"
-                                  f"{len(bp_exfiltration_dangers)},{len(bp_infiltration_dangers)},"
-                                  f"{bp_31_violations_wo_api_danger},"
-                                  f"{len(cs_exfiltration_dangers)},{len(cs_infiltration_dangers)},"
-                                  f"{files_and_line_numbers}\n")
-                    csv_out.flush()
+                    if args.csv_out != "":
+                        manifest_path = os.path.join(dest2, 'manifest.json')  # dest2 == os.path.dirname(cs)
+                        manifest = json.load(open(manifest_path))
+                        ext_name =\
+                            manifest['name'].replace(",", "").replace("\n", "")\
+                            if 'name' in manifest else ""
+                        ext_browser_action_default_title =\
+                            manifest['browser_action']['default_title'].replace(",", "").replace("\n", "")\
+                            if 'browser_action' in manifest and 'default_title' in manifest['browser_action'] else ""
+                        ext_version =\
+                            manifest['version'].replace(",", "").replace("\n", "")\
+                            if 'version' in manifest else ""
+                        ext_description =\
+                            manifest['description'][:100].replace(",", "").replace("\n", "")\
+                            if 'description' in manifest else ""
+                        ext_permissions =\
+                            " | ".join(manifest['permissions'])\
+                            if 'permissions' in manifest else ""
+                        ext_optional_permissions = \
+                            " | ".join(manifest['optional_permissions']) \
+                                if 'optional_permissions' in manifest else ""
+                        ext_host_permissions = \
+                            " | ".join(manifest['host_permissions']) \
+                                if 'host_permissions' in manifest else ""
+                        ext_optional_host_permissions = \
+                            " | ".join(manifest['optional_host_permissions']) \
+                                if 'optional_host_permissions' in manifest else ""
+                        content_script_injected_into =\
+                            " | ".join(analysis_result['content_script_injected_into'])\
+                            if 'content_script_injected_into' in analysis_result else ""
+                        crashes =\
+                            " | ".join(analysis_result['benchmarks']['crashes'])\
+                            if 'benchmarks' in analysis_result and 'crashes' in analysis_result['benchmarks'] else ""
+                        bp_exfiltration_dangers = analysis_result['bp']['exfiltration_dangers']
+                        bp_infiltration_dangers = analysis_result['bp']['infiltration_dangers']
+                        bp_31_violations_wo_api_danger =\
+                            len(analysis_result['bp']['31_violations_without_sensitive_api_access'])\
+                            if '31_violations_without_sensitive_api_access' in analysis_result['bp'] else "N/A"
+                        cs_exfiltration_dangers = analysis_result['cs']['exfiltration_dangers']
+                        cs_infiltration_dangers = analysis_result['cs']['infiltration_dangers']
+                        total_no_of_dangers = sum(len(x) for x in [bp_exfiltration_dangers, bp_infiltration_dangers,
+                                                                   cs_exfiltration_dangers, cs_infiltration_dangers])
+                        files_and_line_numbers = "" # ToDo: write once more types of vuln. are supported!
+                        csv_out.write(f"{crx},{ext_name},{ext_browser_action_default_title},{ext_version},"
+                                      f"{ext_description},{ext_permissions},{ext_optional_permissions},"
+                                      f"{ext_host_permissions},{ext_optional_host_permissions},"
+                                      f"{extension_size_packed},{extension_size_unpacked},{js_loc},"
+                                      f"{content_script_injected_into},{crashes},"
+                                      f"{analysis_time},{total_no_of_dangers},"
+                                      f"{len(bp_exfiltration_dangers)},{len(bp_infiltration_dangers)},"
+                                      f"{bp_31_violations_wo_api_danger},"
+                                      f"{len(cs_exfiltration_dangers)},{len(cs_infiltration_dangers)},"
+                                      f"{files_and_line_numbers}\n")
+                        csv_out.flush()
+
+            except Exception as e:
+                print(traceback.format_exc())
+                print(f"Exception analyzing '{crx}': {e}")
+                if args.prod:  # When in production mode...
+                    continue  # ...simply continue with next extension.
+                else:  # Otherwise...
+                    break  # ...stop program execution.
 
         if args.csv_out != "":
             csv_out.close()
