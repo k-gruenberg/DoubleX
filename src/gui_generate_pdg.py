@@ -12,7 +12,6 @@ from pdg_js.tokenizer_espree import tokenize
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
 
-# ToDo: display current line & column underneath left text area (cf. IDE)
 # ToDo: syntax highlighting for comments (why doesn't Espree include comment tokens?!)
 # ToDo: remember code snippet from last time?!
 # ToDo: double click on the LHS creates highlighting on the RHS and vice-versa
@@ -160,6 +159,14 @@ def main():
             # Reset the modified flag to ensure the event is triggered again
             text_left.edit_modified(False)
 
+    def on_text_left_selection_change(_event):
+        try:
+            index_start = text_left.index("sel.first")
+            index_end = text_left.index("sel.last")
+            position_label['text'] = index_start + " – " + index_end
+        except tk.TclError:
+            position_label['text'] = ""
+
     root = tk.Tk()
     root.title("PDG Generator")
     root.state("zoomed")
@@ -177,19 +184,23 @@ def main():
     text_left = tk.Text(frame, width=40, height=10, wrap=NONE)
     text_left.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
     text_left.bind("<<Modified>>", on_text_left_change)
+    text_left.bind("<<Selection>>", on_text_left_selection_change)
 
     text_right = tk.Text(frame, width=40, height=10, wrap=NONE)
     text_right.grid(row=0, column=2, columnspan=2, padx=5, pady=5, sticky="nsew")
     text_right.config(state=tk.DISABLED)
 
-    generate_button = tk.Button(frame, text="Generate PDG", command=generate_pdg)
-    generate_button.grid(row=1, column=0, columnspan=1, pady=10)
+    position_label = tk.Label(frame, text="")
+    position_label.grid(row=1, column=0, columnspan=1, pady=10)
 
-    generate_button = tk.Button(frame, text="Analyze as BP", command=analyze_as_bp)
+    generate_button = tk.Button(frame, text="Generate PDG", command=generate_pdg)
     generate_button.grid(row=1, column=1, columnspan=1, pady=10)
 
-    generate_button = tk.Button(frame, text="Analyze as CS", command=analyze_as_cs)
-    generate_button.grid(row=1, column=2, columnspan=1, pady=10)
+    analyze_as_bp_button = tk.Button(frame, text="Analyze as BP", command=analyze_as_bp)
+    analyze_as_bp_button.grid(row=1, column=2, columnspan=1, pady=10)
+
+    analyze_as_cs_button = tk.Button(frame, text="Analyze as CS", command=analyze_as_cs)
+    analyze_as_cs_button.grid(row=1, column=3, columnspan=1, pady=10)
 
     root.mainloop()
 
