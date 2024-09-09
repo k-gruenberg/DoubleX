@@ -4,6 +4,7 @@ import os
 import json
 from tkinter import WORD, CHAR, NONE
 from typing import List, Tuple
+import traceback
 
 import get_pdg
 from kim_and_lee_vulnerability_detection import analyze_extension, add_missing_data_flow_edges
@@ -27,23 +28,31 @@ def main():
     os.environ['INCLUDE_31_VIOLATIONS_WITHOUT_PRIVILEGED_API_ACCESS'] = "yes"
 
     def generate_pdg():
-        js_code = text_left.get("1.0", tk.END)
+        try:
+            js_code = text_left.get("1.0", tk.END)
 
-        tmp_file = tempfile.NamedTemporaryFile()
-        with open(tmp_file.name, 'w') as f:
-            f.write(js_code)
+            tmp_file = tempfile.NamedTemporaryFile()
+            with open(tmp_file.name, 'w') as f:
+                f.write(js_code)
 
-        res_dict = dict()
-        benchmarks = res_dict['benchmarks'] = dict()
-        pdg = get_pdg.get_pdg(file_path=tmp_file.name, res_dict=benchmarks)
-        no_added_df_edges_cs = add_missing_data_flow_edges(pdg)
-        print(f"{no_added_df_edges_cs} missing data flows edges added to PDG")
+            res_dict = dict()
+            benchmarks = res_dict['benchmarks'] = dict()
+            pdg = get_pdg.get_pdg(file_path=tmp_file.name, res_dict=benchmarks)
+            no_added_df_edges_cs = add_missing_data_flow_edges(pdg)
+            print(f"{no_added_df_edges_cs} missing data flows edges added to PDG")
 
-        # Set content of the right text area:
-        text_right.config(state=tk.NORMAL)
-        text_right.delete("1.0", tk.END)
-        text_right.insert(tk.END, str(pdg))
-        text_right.config(state=tk.DISABLED)
+            # Set content of the right text area:
+            text_right.config(state=tk.NORMAL)
+            text_right.delete("1.0", tk.END)
+            text_right.insert(tk.END, str(pdg))
+            text_right.config(state=tk.DISABLED)
+        except Exception as e:
+            traceback.print_exc()
+            # Set content of the right text area to the error:
+            text_right.config(state=tk.NORMAL)
+            text_right.delete("1.0", tk.END)
+            text_right.insert(tk.END, str(e))
+            text_right.config(state=tk.DISABLED)
 
     def analyze_as_bp():
         js_code = text_left.get("1.0", tk.END)
