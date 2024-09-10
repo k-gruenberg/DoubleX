@@ -34,6 +34,10 @@ class Scope:
         self.need_to_recompute_var_list = True
         self.id_name_list = set()
 
+    # ADDED BY ME:
+    def __str__(self):
+        return f"<Scope name='{self.name}' bloc='{self.bloc}' />"
+
     def set_name(self, name):
         self.name = name
 
