@@ -10,6 +10,9 @@ import get_pdg
 from kim_and_lee_vulnerability_detection import analyze_extension, add_missing_data_flow_edges
 from pdg_js.tokenizer_espree import tokenize
 
+
+ADD_MISSING_DATA_FLOW_EDGES = True
+
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
 
@@ -38,8 +41,9 @@ def main():
             res_dict = dict()
             benchmarks = res_dict['benchmarks'] = dict()
             pdg = get_pdg.get_pdg(file_path=tmp_file.name, res_dict=benchmarks)
-            no_added_df_edges_cs = add_missing_data_flow_edges(pdg)
-            print(f"{no_added_df_edges_cs} missing data flows edges added to PDG")
+            if ADD_MISSING_DATA_FLOW_EDGES:
+                no_added_df_edges_cs = add_missing_data_flow_edges(pdg)
+                print(f"{no_added_df_edges_cs} missing data flows edges added to PDG")
 
             # Set content of the right text area:
             text_right.config(state=tk.NORMAL)
