@@ -38,6 +38,7 @@ import random
 import itertools
 import os
 import re
+from functools import total_ordering
 from typing import Set, Tuple, Optional, Self, List
 
 from . import utility_df
@@ -108,6 +109,25 @@ class Node:
         return hash(self.id)
 
     # ADDED BY ME:
+    def root(self):
+        """
+        Returns the root Node of this tree.
+        """
+        if self.parent is None:
+            return self
+        else:
+            return self.parent.root()
+
+    # ADDED BY ME:
+    def all_nodes_iter(self):
+        """
+        Returns an iterator over all the nodes in this tree.
+        """
+        yield self
+        for child in self.children:
+            yield from child.all_nodes_iter()
+
+    # ADDED BY ME:
     def lhs(self):
         """
         Returns the left of the 2 children of this Node (i.e., the LHS child).
@@ -158,7 +178,7 @@ class Node:
                             allow_different_child_order=False)
 
     # ADDED BY ME:
-    def get_data_flow_parents(self, max_depth=1_000_000_000):
+    def get_data_flow_parents(self, max_depth=1_000_000_000) -> Set[Self]:
         """
         Returns all nodes [p] such that there exist nodes [x1], [x2], ..., [xn] such that:
         [p] --data--> [x1] --data--> [x2] --data--> ... --data--> [xn] --data--> [self]
@@ -296,7 +316,14 @@ class Node:
 
     # ADDED BY ME:
     def count_siblings(self):
-        return len(self.parent.children) -1
+        return len(self.parent.children) - 1
+
+    # ADDED BY ME:
+    def siblings(self):
+        """
+        Returns all siblings of this Node, i.e., all the children of this Node's parent, except itself.
+        """
+        return [child for child in self.parent.children if child != self]
 
     # ADDED BY ME:
     def grandparent(self):
@@ -322,6 +349,10 @@ class Node:
             return []
         else:
             return [self.parent] + self.parent.get_parents()
+
+    # ADDED BY ME:
+    def is_inside(self, other):
+        return other in self.get_parents()
 
     # ADDED BY ME:
     def get_parent(self, allowed_parent_names):
@@ -439,7 +470,7 @@ class Node:
             return None  # no child contains any Literal
 
     # ADDED BY ME:
-    def get_all(self, node_name):
+    def get_all(self, node_name: str) -> List[Self]:
         """
         Returns all nodes of a given type/name, e.g. all "VariableDeclaration" nodes.
         """
@@ -451,7 +482,18 @@ class Node:
         return result
 
     # ADDED BY ME:
-    def get_all_identifiers(self):
+    def get_all_as_iter(self, node_name: str):
+        """
+        Returns all nodes of a given type/name, e.g. all "VariableDeclaration" nodes.
+        Unlike get_all(), which returns a list, this function returns an iterator.
+        """
+        if self.name == node_name:
+            yield self
+        for child in self.children:
+            yield from child.get_all_as_iter(node_name)
+
+    # ADDED BY ME:
+    def get_all_identifiers(self) -> List[Self]:
         return self.get_all("Identifier")
 
     # ADDED BY ME:
@@ -909,18 +951,6 @@ class Node:
         else:
             raise Exception(f"error in if_statement_has_else_if_branch(): if statement has unknown format:\n{self}")
 
-    # ##### ##### occurs_in_code_before() & occurs_in_code_after(): ##### #####
-    # Note how simply comparing Node IDs isn't enough as the following example shows:
-    # Code: "function foo() { function bar() {} }"
-    # PDG:
-    # [46] [Program] (1 child)
-    # 	[47] [FunctionDeclaration] (3 children) --e--> [50] --e--> [49]
-    # 		[50] [FunctionDeclaration] (2 children) --e--> [52]
-    # 			[51] [Identifier:"bar"] (0 children)
-    # 			[52] [BlockStatement] (0 children)
-    # 		[48] [Identifier:"foo"] (0 children)
-    # 		[49] [BlockStatement] (0 children)
-
     # ADDED BY ME:
     def occurs_in_code_before(self, other_node):
         assert self.get_file() == other_node.get_file()
@@ -946,6 +976,28 @@ class Node:
 
         return self_start_line > other_start_line or \
             (self_start_line == other_start_line and self_start_column > other_start_column)
+
+    # ADDED BY ME:
+    def code_occurrence(self):
+        """
+        Returns a `CodeOccurrence` object that can be compared to other `CodeOccurrence` objects returned by this
+        function using <, <=, >, >=, ==, != operators.
+        """
+        @total_ordering
+        class CodeOccurrence:
+            def __init__(self, line, column):
+                self.line = line
+                self.column = column
+
+            def __eq__(self, other):
+                return self.line == other.line and self.column == other.column
+
+            def __lt__(self, other):  # implements the "<" operator; cf. logic in occurs_in_code_before()
+                return self.line < other.line or (self.line == other.line and self.column < other.column)
+
+        self_start_line = int(self.attributes['loc']['start']['line'])
+        self_start_column = int(self.attributes['loc']['start']['column'])
+        return CodeOccurrence(line=self_start_line, column=self_start_column)
 
     # ADDED BY ME:
     def lies_within(self, other_node):
@@ -1179,7 +1231,7 @@ class Node:
                 result.append(then_call)
             elif then_call.name == "Identifier":  # "then(function_name)"
                 if resolve_function_references:
-                    function_declaration = then_call.function_Identifier_get_FunctionDeclaration()
+                    function_declaration = then_call.function_Identifier_get_FunctionDeclaration(True)
                     if function_declaration is None:
                         result.append(then_call)
                     else:
@@ -1196,51 +1248,188 @@ class Node:
         return result
 
     # ADDED BY ME:
-    def function_Identifier_get_FunctionDeclaration(self) -> Optional[Self]:
+    def data_flow_distance_to(self, other: Self) -> float:
+        """
+        Returns the "distance" of this Identifier to another Identifier,
+        in terms of the number of data flow edges one has to traverse from `self`, in order to reach `other`.
+        Returns an integer, unless there is no data flow from `self` to `other`, in that case it returns infinity.
+        Returns the length of the shortest data flow path when there are multiple paths from `self` to `other`.
+        """
+        assert self.name == "Identifier" and other.name == "Identifier"
+        if self == other:
+            return 0
+        elif len(self.data_dep_children) == 0:
+            return float("inf")
+        else:
+            return 1 + min(data_flow_child.extremity.data_flow_distance_to(other)
+                           for data_flow_child in self.data_dep_children)
+
+    # ADDED BY ME:
+    def function_Identifier_get_FunctionDeclaration(self,
+                                                    print_warning_if_not_found: bool,
+                                                    add_data_flow_edges=True) -> Optional[Self]:
         """
         When this Node is an Identifier referencing a function, this method returns the corresponding
         FunctionDeclaration where said function is defined.
 
-        When no FunctionDeclaration could be found, `None` is returned.
+        When no FunctionDeclaration could be found, `None` is returned and a warning message is printed to console
+        (but only if the `print_warning_if_not_found` parameter was set to `True`).
 
-        When *more* than 1 corresponding FunctionDeclaration was found, an `AssertionError` is raised as a function
-        shouldn't be able to be declared more than once!
+        This function does *not* use data flow edges (which might be missing in more complex programs...).
+        Instead, it looks for all FunctionDeclarations that are in scope and returns the one with the same name as
+        this Identifier (or `None` if no FunctionDeclaration in scope has the same name as this Identifier).
 
-        Also raises an `AssertionError` when `self.name != "Identifier"`
+        When there are *multiple* functions both in scope and with the same name, the function within the innermost
+        scope shadows all the others and will therefore be the one returned; an example:
+
+            function foo() {return 1;}
+            function bar() {
+                function foo() {return 2;}
+                console.log(foo());
+            }
+
+        According to the Mozilla docs, "[t]he scope of a function declaration is the function in which it is declared
+        (or the entire program, if it is declared at the top level)."
+        => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Functions
+
+        ***** DISCLAIMER: *****
+        In JavaScript, named functions cannot just be declared using FunctionDeclarations, but also by assigning to an
+        identifier (as functions are objects in JavaScript, too); take the following example:
+            foo = ((x) => {return x;});
+            foo(42);
+        Moreover, there can be a function "foo" being declared in the regular way that is *overwritten* by such a
+        more obscure function definition; take the following example:
+            function foo() {return 1;}
+            function bar() {
+                var foo = (() => {return 2;});
+                console.log(foo()); // prints 2 and not 1
+            }
+        WE DO NOT HANDLE THESE COMPLEX CASES!
+        This has the following 2 consequences:
+        1. This function may return `None`, even though there *is* a corresponding function for this function call
+           identifier, it just isn't set via a "plain regular" FunctionDeclaration but rather in a manner as shown
+           above.
+        2. This function may return a FunctionDeclaration that *isn't* actually the function called with this function
+           call because it is overshadowed by an identifier in local scope that isn't defined via a regular
+           FunctionDeclaration.
+        This means that there may be both *missing* and *incorrect* data flows, depending on the circumstances!
+        ***** END OF DISCLAIMER *****
+
+        Raises an `AssertionError` when:
+        * `self.name != "Identifier"`
+
+        Parameters:
+            print_warning_if_not_found: whether to print a warning to console when no FunctionDeclaration could be
+                                        found / `None` is returned; should only be set to True if you do not *expect*
+                                        this function to return None, unless there's something wrong!
+            add_data_flow_edges: when set to True (default), a data flow edge will be added to the PDG from
+                                 FunctionDeclaration Identifier to the CallExpression Identifier (self); *if*
+                                 a corresponding FunctionDeclaration was found for this function Identifier that is;
+                                 when set to False, the PDG will remain unaltered.
 
         Returns:
             (a) the FunctionDeclaration Node declaring the function referenced by this Identifier; or
             (b) None when no FunctionDeclaration could be found for this Identifier.
         """
+
+        # Examples:
+        #
+        # 1. function foo() { function bar() { function baz() {return 42;} return baz(); } return baz(); }
+        #                                                                                         ^^^
+        #    => throws: Uncaught ReferenceError: baz is not defined
+        #    => FunctionDeclarations inside FunctionDeclaration siblings are *not* in scope!
+        #
+        #    - foo
+        #        - bar      <--- scope of declaration: bar
+        #            - baz  <--- declaration
+        #        - baz()    <--- call: fails! (as it's not in 'bar')
+        #
+        # 2. function foo() {
+        #        function bar() { function baz() {return boo();} return baz(); }
+        #        function boo() { return 43; }           ^^^
+        #        return bar();
+        #    }
+        #
+        #    - foo                <--- scope of declaration: foo
+        #        - bar
+        #            - baz
+        #                - boo()  <--- call: works! (as it *is* in 'foo')
+        #        - boo            <--- declaration
+        #
+        #    => works; calling foo() returns 43
+        #    => sibling FunctionDeclarations of an ancestor FunctionDeclaration *are* in scope!
+        #
+        # => "The scope of a function declaration is the function in which it is declared" (Mozilla docs)
+
         assert self.name == "Identifier"
 
-        # Get all data flow parents:
-        self_data_flow_parents = self.get_data_flow_parents()
+        function_declarations_in_scope = [fd for fd in self.root().get_all_as_iter("FunctionDeclaration")
+                                          if fd.function_declaration_get_name() == self.attributes['name']
+                                          and self.is_inside(fd.function_declaration_get_scope())]
 
-        # Get all data flow parents that are function declarations
-        #     (technically: whose parents are FunctionDeclaration Nodes):
-        function_declaration_data_flow_parents = \
-            [df_parent for df_parent in self_data_flow_parents if df_parent.parent.name == "FunctionDeclaration"
-                            and df_parent.is_nth_child_of_parent_ignoring_certain_siblings(0, ["FunctionDeclaration"])]
-        # The `df_parent.is_nth_child_of_parent(0)` check is very important to ensure that the function identifier
-        #   is the 0th child of the FunctionDeclaration, i.e., that the FunctionDeclaration actually *defines* that
-        #   function identifier and doesn't just take it as its argument (yes, functions may take other functions
-        #   as arguments...)
-
-        # If exactly 1 data flow parent was found that's a function declaration, return that one:
-        if len(function_declaration_data_flow_parents) == 1:
-            return function_declaration_data_flow_parents[0].get_parent("FunctionDeclaration")
-
-        # If no declaring data flow parent for the function identifier was found, return None:
-        elif len(function_declaration_data_flow_parents) == 0:
-            # function reference couldn't be resolved, simply return None then:
+        if len(function_declarations_in_scope) == 0:
+            if print_warning_if_not_found:
+                print(f"[Warning] no function definition found for call to '{self.attributes['name']}' in line "
+                      f"{self.get_line()} (file {self.get_file()})")
             return None
 
-        # If *MORE* than 1 corresponding function declaration was found, raise an AssertionError, as a function
-        #    is not allowed to be declared twice(!):
+        elif len(function_declarations_in_scope) == 1:
+            func_decl = function_declarations_in_scope[0]
+            print(f"[Info] function declaration for call to '{self.attributes['name']}' in line "
+                  f"{self.get_line()} (file {self.get_file()}) found in line "
+                  f"{func_decl.get_line()}: '{func_decl.function_declaration_get_name()}'")
+            if add_data_flow_edges:
+                # While already at it, add a data flow edge on the fly:
+                #     declaration identifier --data--> call identifier
+                #     (DoubleX should add all of those but doesn't!)
+                function_decl_identifier = func_decl.function_declaration_get_function_identifier()
+                if function_decl_identifier.set_data_dependency(self):  # returns 1 if edge was added, 0 if existed
+                    print(f"[Info] added missing data flow edge from function declaration identifier "
+                          f"'{function_decl_identifier.attributes['name']}' in line "
+                          f"{function_decl_identifier.get_line()} "
+                          f"to function identifier '{self.attributes['name']}' in line {self.get_line()}")
+            return func_decl
+
         else:
-            raise AssertionError(f"Identifier '{self.attributes['name']}' has >1 data flow parent, "
-                                 f"even though functions may not be declared twice!")
+            # Multiple FunctionDeclarations with the correct name are in scope.
+            # An example for this would be this:
+            #
+            # function foo() {return 1;}      // <----- in scope
+            # function bar() {
+            #     function foo() {return 2;}  // <----- in scope (innermost)
+            #     console.log(foo());         // <----- call/reference to a function named "foo"
+            # }
+            #
+            # Resolve this issue by returning the innermost matching FunctionDeclaration in scope:
+            innermost_func_decl = function_declarations_in_scope[0]
+            innermost_func_decl_scope = innermost_func_decl.function_declaration_get_scope()
+            for func_decl in function_declarations_in_scope[1:]:
+                func_decl_scope = func_decl.function_declaration_get_scope()
+                if func_decl_scope.is_inside(innermost_func_decl_scope):
+                    innermost_func_decl = func_decl
+                    innermost_func_decl_scope = func_decl_scope
+            return innermost_func_decl
+
+    # ADDED BY ME:
+    def function_declaration_get_scope(self) -> Self:
+        """
+        For a given FunctionDeclaration (self), returns the entire subtree in which said FunctionDeclaration is
+        accessible/in scope.
+
+        According to the Mozilla docs, "[t]he scope of a function declaration is the function in which it is declared
+        (or the entire program, if it is declared at the top level)."
+        => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Functions
+
+        If the scope is indeed the entire program, the PDGs "Program" root node will be returned by this function!
+        """
+        assert self.name == "FunctionDeclaration"
+        p = self.parent
+        while p.name not in ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression", "Program"]:
+            p = p.parent
+        return p
+        # Don't forget that functions might be declared inside ArrowFunctionExpressions as well, there scope is going
+        # to be that very ArrowFunctionExpression then:
+        #     (() => {function foo() {return 42;} console.log(foo());})();
 
     # ADDED BY ME:
     def function_param_get_identifier(self) -> Optional[Self]:
@@ -1346,7 +1535,7 @@ class Node:
         # where: type FunctionParameter = AssignmentPattern | Identifier | BindingPattern;
         #        type BindingPattern = ArrayPattern | ObjectPattern;
         #
-        # However, in reality, functions inside of functions will be hoisted directly inside the Function Declaration,
+        # DoubleX, however, hoists functions inside of functions directly inside the Function Declaration,
         # for example the following code:
         #
         # function foo() {
@@ -1368,11 +1557,22 @@ class Node:
         # This function returns the parameters of this FunctionDeclaration only, no hoisted FunctionDeclarations,
         #   not the name of the declared function and not the BlockStatement!
         assert self.name == "FunctionDeclaration"
-        identifiers = [param for param in self.children if param.name not in ["FunctionDeclaration", "BlockStatement"]]
-        return identifiers[1:]  # ignore 1st Identifier as that's not a parameter but rather the name of the function!
+        params = [param for param in self.children if param.name not in ["FunctionDeclaration", "BlockStatement"]]
+        return params[1:]  # ignore 1st Identifier as that's not a parameter but rather the name of the function!
 
     # ADDED BY ME:
-    def arrow_function_expression_get_params(self) -> List[Self]:
+    def function_declaration_get_function_identifier(self) -> Self:
+        assert self.name == "FunctionDeclaration"
+        params = [param for param in self.children if param.name not in ["FunctionDeclaration", "BlockStatement"]]
+        assert params[0].name == "Identifier"
+        return params[0]  # 1st non-declaration, non-block child = Identifier = the name of the function!
+
+    # ADDED BY ME:
+    def function_declaration_get_name(self) -> str:
+        return self.function_declaration_get_function_identifier().attributes['name']
+
+    # ADDED BY ME:
+    def arrow_function_expression_get_params(self) -> List[Self]: # ToDo: handle "x = function a() {}"/id!=null (!!!!!)
         # From the Esprima docs:
         # interface ArrowFunctionExpression {
         #     id: Identifier | null;
@@ -1566,7 +1766,7 @@ class Node:
                 raise IndexError()
 
         elif self.name == "Identifier":  # case 3: Identifier (function reference):
-            function_declaration = self.function_Identifier_get_FunctionDeclaration()
+            function_declaration = self.function_Identifier_get_FunctionDeclaration(True)
             if function_declaration is None:
                 raise KeyError()
             else:
@@ -1829,13 +2029,21 @@ class Identifier(Node, Value):
     def set_fun(self, fun):  # The Identifier node refers to a function ('s name)
         self.fun = fun
 
-    def set_data_dependency(self, extremity, nearest_statement=None):
+    def set_data_dependency(self, extremity, nearest_statement=None) -> int:  # return value newly added by me
+        """
+        Returns:
+            0 if the data dependency edge already existed;
+            1 if a new data dependency edge has been added.
+        """
+        return_value = 0
         if extremity not in [el.extremity for el in self.data_dep_children]:  # Avoids duplicates
             self.data_dep_children.append(Dependence('data dependency', extremity, 'data',
                                                      nearest_statement))
             extremity.data_dep_parents.append(Dependence('data dependency', self, 'data',
                                                          nearest_statement))
+            return_value = 1
         self.set_provenance_dd(extremity)  # Stored provenance
+        return return_value
 
 
 class ValueExpr(Node, Value):

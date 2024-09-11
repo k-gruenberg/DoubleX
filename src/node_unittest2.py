@@ -10,6 +10,7 @@ from src.kim_and_lee_vulnerability_detection import add_missing_data_flow_edges
 
 os.environ['PARSER'] = "espree"
 os.environ['SOURCE_TYPE'] = "module"
+os.environ['DEBUG'] = "yes"
 
 
 def generate_pdg(code):
@@ -329,6 +330,371 @@ class TestNodeClass2(unittest.TestCase):
         self.assertEqual(z_identifier.get_sibling_relative(-2), x_identifier)
         self.assertEqual(z_identifier.get_sibling_relative(-1), y_identifier)
         self.assertEqual(z_identifier.get_sibling_relative(0), z_identifier)
+
+    def test_data_flow_distance_to(self):
+        code = """x = 42; y = x;"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [1] [Program] (2 children)
+        # 	[2] [ExpressionStatement] (1 child)
+        # 		[3] [AssignmentExpression:"="] (2 children)
+        # 			[4] [Identifier:"x"] (0 children) --data--> [9]
+        # 			[5] [Literal::{'raw': '42', 'value': 42}] (0 children)
+        # 	[6] [ExpressionStatement] (1 child)
+        # 		[7] [AssignmentExpression:"="] (2 children)
+        # 			[8] [Identifier:"y"] (0 children)
+        # 			[9] [Identifier:"x"] (0 children) --data--> [8]
+        first_x_identifier = pdg.children[0].get_child("AssignmentExpression").get_child("Identifier")
+        second_x_identifier = pdg.children[1].get_child("AssignmentExpression").children[1]
+        y_identifier = pdg.children[1].get_child("AssignmentExpression").children[0]
+
+        self.assertEqual(first_x_identifier.data_flow_distance_to(first_x_identifier), 0)
+        self.assertEqual(second_x_identifier.data_flow_distance_to(second_x_identifier), 0)
+        self.assertEqual(y_identifier.data_flow_distance_to(y_identifier), 0)
+
+        self.assertEqual(first_x_identifier.data_flow_distance_to(y_identifier), 2)
+        self.assertEqual(second_x_identifier.data_flow_distance_to(y_identifier), 1)
+
+        self.assertEqual(y_identifier.data_flow_distance_to(first_x_identifier), float("inf"))
+        self.assertEqual(y_identifier.data_flow_distance_to(second_x_identifier), float("inf"))
+
+    def test_code_occurrence(self):
+        code = """x = 42; y = x;"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [1] [Program] (2 children)
+        # 	[2] [ExpressionStatement] (1 child)
+        # 		[3] [AssignmentExpression:"="] (2 children)
+        # 			[4] [Identifier:"x"] (0 children) --data--> [9]
+        # 			[5] [Literal::{'raw': '42', 'value': 42}] (0 children)
+        # 	[6] [ExpressionStatement] (1 child)
+        # 		[7] [AssignmentExpression:"="] (2 children)
+        # 			[8] [Identifier:"y"] (0 children)
+        # 			[9] [Identifier:"x"] (0 children) --data--> [8]
+        first_x_identifier = pdg.children[0].get_child("AssignmentExpression").get_child("Identifier")
+        second_x_identifier = pdg.children[1].get_child("AssignmentExpression").children[1]
+        y_identifier = pdg.children[1].get_child("AssignmentExpression").children[0]
+        identifiers = {first_x_identifier, second_x_identifier, y_identifier}
+
+        # == operator:
+        self.assertTrue(first_x_identifier.code_occurrence() == first_x_identifier.code_occurrence())
+        self.assertTrue(second_x_identifier.code_occurrence() == second_x_identifier.code_occurrence())
+        self.assertTrue(y_identifier.code_occurrence() == y_identifier.code_occurrence())
+
+        # < operator:
+        self.assertTrue(first_x_identifier.code_occurrence() < y_identifier.code_occurrence())
+        self.assertTrue(y_identifier.code_occurrence() < second_x_identifier.code_occurrence())
+        self.assertTrue(first_x_identifier.code_occurrence() < second_x_identifier.code_occurrence())
+
+        # <= operator:
+        self.assertTrue(first_x_identifier.code_occurrence() <= first_x_identifier.code_occurrence())
+        self.assertTrue(second_x_identifier.code_occurrence() <= second_x_identifier.code_occurrence())
+        self.assertTrue(y_identifier.code_occurrence() <= y_identifier.code_occurrence())
+        self.assertTrue(first_x_identifier.code_occurrence() <= y_identifier.code_occurrence())
+        self.assertTrue(y_identifier.code_occurrence() <= second_x_identifier.code_occurrence())
+        self.assertTrue(first_x_identifier.code_occurrence() <= second_x_identifier.code_occurrence())
+
+        # >= operator:
+        self.assertTrue(first_x_identifier.code_occurrence() >= first_x_identifier.code_occurrence())
+        self.assertTrue(second_x_identifier.code_occurrence() >= second_x_identifier.code_occurrence())
+        self.assertTrue(y_identifier.code_occurrence() >= y_identifier.code_occurrence())
+
+        # > operator:
+        self.assertTrue(y_identifier.code_occurrence() > first_x_identifier.code_occurrence())
+        self.assertTrue(second_x_identifier.code_occurrence() > y_identifier.code_occurrence())
+        self.assertTrue(second_x_identifier.code_occurrence() > first_x_identifier.code_occurrence())
+
+        # test min():
+        self.assertEqual(
+            min(identifiers, key=lambda identifier: identifier.code_occurrence()),
+            first_x_identifier
+        )
+
+        # test max():
+        self.assertEqual(
+            max(identifiers, key=lambda identifier: identifier.code_occurrence()),
+            second_x_identifier
+        )
+
+    def test_all_nodes_iter(self):
+        code = """x = 1"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [1] [Program] (1 child)
+        # 	[2] [ExpressionStatement] (1 child)
+        # 		[3] [AssignmentExpression:"="] (2 children)
+        # 			[4] [Identifier:"x"] (0 children)
+        # 			[5] [Literal::{'raw': '1', 'value': 1}] (0 children)
+        all_nodes = [node.id for node in pdg.all_nodes_iter()]
+        print(all_nodes)
+        self.assertEqual(len(all_nodes), 5)
+
+    def test_function_declaration_get_name(self):
+        code = """function foo() {}"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [1] [Program] (1 child)
+        # 	[2] [FunctionDeclaration] (2 children) --e--> [4]
+        # 		[3] [Identifier:"foo"] (0 children)
+        # 		[4] [BlockStatement] (0 children)
+        function_declaration = pdg.get_child("FunctionDeclaration")
+        self.assertEqual(function_declaration.function_declaration_get_name(), "foo")
+
+    def test_function_Identifier_get_FunctionDeclaration(self):
+        # A very simple test:
+        code = """
+        function foo(x) {return x;}
+        foo(42);
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [57] [Program] (2 children)
+        # 	[58] [FunctionDeclaration] (3 children) --e--> [61]
+        # 		[59] [Identifier:"foo"] (0 children) --data--> [66]
+        # 		[60] [Identifier:"x"] (0 children) --data--> [63]
+        # 		[61] [BlockStatement] (1 child) --e--> [62]
+        # 			[62] [ReturnStatement] (1 child)
+        # 				[63] [Identifier:"x"] (0 children)
+        # 	[64] [ExpressionStatement] (1 child)
+        # 		[65] [CallExpression] (2 children)
+        # 			[66] [Identifier:"foo"] (0 children)
+        # 			[67] [Literal::{'raw': '42', 'value': 42}] (0 children)
+        foos = [identifier for identifier in pdg.get_all_identifiers() if identifier.attributes['name'] == "foo"]
+        self.assertEqual(len(foos), 2)
+        function_identifier = [foo for foo in foos if foo.parent.name == "CallExpression"][0]
+        correct_function_declaration = [foo.parent for foo in foos if foo.parent.name == "FunctionDeclaration"][0]
+        print(f"function_identifier = {function_identifier}")
+        print(f"correct_function_declaration = {correct_function_declaration}")
+
+        self.assertEqual(
+            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
+                                                                            add_data_flow_edges=True),
+            correct_function_declaration
+        )
+        self.assertEqual(
+            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
+                                                                            add_data_flow_edges=False),
+            correct_function_declaration
+        )
+
+        # Test a somewhat complex scope: Function called is declared within the scope of "foo", 2 scopes above the
+        #   scope of the call:
+        code = """
+        function foo() {
+            function bar() { function baz() {return boo();} return baz(); }
+            function boo() { return 43; } //        ^^^
+            return bar();
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [55] [Program] (1 child)
+        # 	[56] [FunctionDeclaration] (4 children) --e--> [71] --e--> [59] --e--> [58]
+        # 		[71] [FunctionDeclaration] (2 children) --e--> [73]
+        # 			[72] [Identifier:"boo"] (0 children) --data--> [67]
+        # 			[73] [BlockStatement] (1 child) --e--> [74]
+        # 				[74] [ReturnStatement] (1 child)
+        # 					[75] [Literal::{'raw': '43', 'value': 43}] (0 children)
+        # 		[59] [FunctionDeclaration] (3 children) --e--> [62] --e--> [61]
+        # 			[62] [FunctionDeclaration] (2 children) --e--> [64]
+        # 				[63] [Identifier:"baz"] (0 children) --data--> [70]
+        # 				[64] [BlockStatement] (1 child) --e--> [65]
+        # 					[65] [ReturnStatement] (1 child)
+        # 						[66] [CallExpression] (1 child)
+        # 							[67] [Identifier:"boo"] (0 children)
+        # 			[60] [Identifier:"bar"] (0 children) --data--> [78]
+        # 			[61] [BlockStatement] (1 child) --e--> [68]
+        # 				[68] [ReturnStatement] (1 child)
+        # 					[69] [CallExpression] (1 child)
+        # 						[70] [Identifier:"baz"] (0 children)
+        # 		[57] [Identifier:"foo"] (0 children)
+        # 		[58] [BlockStatement] (1 child) --e--> [76]
+        # 			[76] [ReturnStatement] (1 child)
+        # 				[77] [CallExpression] (1 child)
+        # 					[78] [Identifier:"bar"] (0 children)
+        boos = [identifier for identifier in pdg.get_all_identifiers() if identifier.attributes['name'] == "boo"]
+        function_identifier = [boo for boo in boos if boo.parent.name == "CallExpression"][0]
+        function_declaration = [boo for boo in boos if boo.parent.name == "FunctionDeclaration"][0].parent
+        os.environ['DEBUG'] = "no"
+        self.assertEqual(
+            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
+                                                                            add_data_flow_edges=True),
+            function_declaration
+        )
+        self.assertEqual(
+            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
+                                                                            add_data_flow_edges=False),
+            function_declaration
+        )
+        os.environ['DEBUG'] = "yes"
+        self.assertEqual(
+            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
+                                                                            add_data_flow_edges=True),
+            function_declaration
+        )
+        self.assertEqual(
+            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
+                                                                            add_data_flow_edges=False),
+            function_declaration
+        )
+
+        # Test the fact that functions defined in higher scopes may be shadowed/overwritten in lower scopes:
+        code = """
+        function foo() {return 1;}
+        function bar() {
+            function foo() {return 2;}
+            console.log(foo());
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [81] [Program] (2 children)
+        # 	[87] [FunctionDeclaration] (3 children) --e--> [90] --e--> [89]
+        # 		[90] [FunctionDeclaration] (2 children) --e--> [92]
+        # 			[91] [Identifier:"foo"] (0 children) --data--> [101]     <--------- ...should refer to this!
+        # 			[92] [BlockStatement] (1 child) --e--> [93]
+        # 				[93] [ReturnStatement] (1 child)
+        # 					[94] [Literal::{'raw': '2', 'value': 2}] (0 children)
+        # 		[88] [Identifier:"bar"] (0 children)
+        # 		[89] [BlockStatement] (1 child) --e--> [95]
+        # 			[95] [ExpressionStatement] (1 child)
+        # 				[96] [CallExpression] (2 children)
+        # 					[97] [MemberExpression:"False"] (2 children)
+        # 						[98] [Identifier:"console"] (0 children)
+        # 						[99] [Identifier:"log"] (0 children)
+        # 					[100] [CallExpression] (1 child)
+        # 						[101] [Identifier:"foo"] (0 children)        <--------- This...
+        # 	[82] [FunctionDeclaration] (2 children) --e--> [84]
+        # 		[83] [Identifier:"foo"] (0 children)
+        # 		[84] [BlockStatement] (1 child) --e--> [85]
+        # 			[85] [ReturnStatement] (1 child)
+        # 				[86] [Literal::{'raw': '1', 'value': 1}] (0 children)
+        foos = [identifier for identifier in pdg.get_all_identifiers() if identifier.attributes['name'] == "foo"]
+        self.assertEqual(len(foos), 3)
+        function_identifier = [foo for foo in foos if foo.parent.name == "CallExpression"][0]
+        correct_function_declaration = [foo.parent for foo in foos if foo.parent.name == "FunctionDeclaration"
+                                                            and foo.grandparent().name == "FunctionDeclaration"][0]
+        print(f"function_identifier = {function_identifier}")
+        print(f"correct_function_declaration = {correct_function_declaration}")
+
+        self.assertEqual(
+            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
+                                                                            add_data_flow_edges=True),
+            correct_function_declaration
+        )
+        self.assertEqual(
+            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
+                                                                            add_data_flow_edges=False),
+            correct_function_declaration
+        )
+
+        # Test a (simplified) real-world example from content script of the "Binance Wallet" extension
+        #   (extension ID fhbohimaelbohpjbbldcngcnapndodjp, version 2.12.2)
+        #   which, for some reason, caused trouble for DoubleX's data flow creation:
+        code = """
+        !function(e, r, t) {
+            function s(e) {
+                v(e)           // <---------- usage
+            }
+        
+            function u(e, r, t, n) {
+                var o = Object.getPrototypeOf(r);
+                !function(e, r, t) {
+                        (r[t] = function() {
+                            var v = r.level;
+                            l(this, {}, u)
+                        })
+                    }(e, r, t)
+            }
+        
+            function a(e, r, t, i) {
+                return e, r, t, i
+            }
+        
+            function c(e, r, t, n) {
+                return e, r, t, n
+            }
+        
+            function d(e, r, t) {
+                return e, r, t
+            }
+        
+            function l(e, r, t) {
+                return e, r, t
+            }
+        
+            function f(e) {
+                return e
+            }
+        
+            function v(e) {  // <---------- declaration
+                return e
+            }
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [103] [Program] (1 child)
+        # 	[104] [ExpressionStatement] (1 child)
+        # 		[105] [UnaryExpression:"!"] (1 child)
+        # 			[106] [FunctionExpression] (12 children)
+        # 				[218] [FunctionDeclaration] (3 children) --e--> [221]
+        # 					[219] [Identifier:"v"] (0 children) --data--> [117]
+        # 					[220] [Identifier:"e"] (0 children) --data--> [223]
+        # 					[221] [BlockStatement] (1 child) --e--> [222]
+        # 						[222] [ReturnStatement] (1 child)
+        # 							[223] [Identifier:"e"] (0 children)
+        # 				...
+        # 				[111] [FunctionDeclaration] (3 children) --e--> [114]
+        # 					[112] [Identifier:"s"] (0 children)
+        # 					[113] [Identifier:"e"] (0 children) --data--> [118]
+        # 					[114] [BlockStatement] (1 child) --e--> [115]
+        # 						[115] [ExpressionStatement] (1 child)
+        # 							[116] [CallExpression] (2 children)
+        # 								[117] [Identifier:"v"] (0 children)
+        # 								[118] [Identifier:"e"] (0 children) --data--> [220]
+        # 				[107] [Identifier:"e"] (0 children)
+        # 				[108] [Identifier:"r"] (0 children)
+        # 				[109] [Identifier:"t"] (0 children)
+        # 				[110] [BlockStatement] (0 children)
+        vs = [identifier for identifier in pdg.get_all_identifiers() if identifier.attributes['name'] == "v"]
+        self.assertEqual(len(vs), 3)
+        function_identifier = [v for v in vs if v.parent.name == "CallExpression"][0]
+        correct_function_declaration = [v.parent for v in vs if v.parent.name == "FunctionDeclaration"][0]
+        print(f"function_identifier = {function_identifier}")
+        print(f"correct_function_declaration = {correct_function_declaration}")
+
+        self.assertEqual(
+            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
+                                                                            add_data_flow_edges=True),
+            correct_function_declaration
+        )
+        self.assertEqual(
+            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
+                                                                            add_data_flow_edges=False),
+            correct_function_declaration
+        )
+
+    def test_get_all_as_iter(self):
+        code = """a + b + c + d + e"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [55] [Program] (1 child)
+        # 	[56] [ExpressionStatement] (1 child)
+        # 		[57] [BinaryExpression:"+"] (2 children)
+        # 			[58] [BinaryExpression:"+"] (2 children)
+        # 				[59] [BinaryExpression:"+"] (2 children)
+        # 					[60] [BinaryExpression:"+"] (2 children)
+        # 						[61] [Identifier:"a"] (0 children)
+        # 						[62] [Identifier:"b"] (0 children)
+        # 					[63] [Identifier:"c"] (0 children)
+        # 				[64] [Identifier:"d"] (0 children)
+        # 			[65] [Identifier:"e"] (0 children)
+        all_identifiers1 = pdg.get_all("Identifier")
+        self.assertEqual(len(all_identifiers1), 5)
+        all_identifiers2 = [identifier for identifier in pdg.get_all_as_iter("Identifier")]
+        self.assertEqual(len(all_identifiers2), 5)
+        self.assertEqual(set(all_identifiers1), set(all_identifiers2))
 
 
 if __name__ == '__main__':

@@ -339,6 +339,27 @@ class TestNodeClass(unittest.TestCase):
         self.assertEqual(sibling1.count_siblings(), 1)
         self.assertEqual(sibling2.count_siblings(), 1)
 
+    def test_root(self):
+        expression = Node("BinaryExpression", attributes={"operator": "+"}) \
+            .child(Node("Literal", attributes={"raw": "'x'", "value": "x"})) \
+            .child(Node("Literal", attributes={"raw": "'y'", "value": "y"}))
+        print(expression)
+        self.assertEqual(expression.root(), expression)
+        [literal1, literal2] = expression.children
+        self.assertEqual(literal1.root(), expression)
+        self.assertEqual(literal1.root(), expression)
+
+    def test_is_inside(self):
+        expression = Node("BinaryExpression", attributes={"operator": "+"}) \
+            .child(Node("Literal", attributes={"raw": "'x'", "value": "x"})) \
+            .child(Node("Literal", attributes={"raw": "'y'", "value": "y"}))
+        print(expression)
+        [literal1, literal2] = expression.children
+        self.assertTrue(literal1.is_inside(expression))
+        self.assertTrue(literal2.is_inside(expression))
+        self.assertFalse(expression.is_inside(literal1))
+        self.assertFalse(expression.is_inside(literal2))
+
 
 if __name__ == '__main__':
     unittest.main()
