@@ -6,7 +6,7 @@ import unittest
 
 from src.get_pdg import get_pdg
 from src.pdg_js.build_pdg import get_data_flow
-from src.kim_and_lee_vulnerability_detection import add_missing_data_flow_edges
+from src.add_missing_data_flow_edges import add_missing_data_flow_edges
 
 os.environ['PARSER'] = "espree"
 os.environ['SOURCE_TYPE'] = "module"

@@ -7,7 +7,8 @@ from typing import List, Tuple
 import traceback
 
 import get_pdg
-from kim_and_lee_vulnerability_detection import analyze_extension, add_missing_data_flow_edges
+from kim_and_lee_vulnerability_detection import analyze_extension
+from add_missing_data_flow_edges import add_missing_data_flow_edges
 from pdg_js.tokenizer_espree import tokenize
 
 
