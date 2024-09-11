@@ -188,10 +188,13 @@ def main():
                              "starting to unpack and analyze them in that order. The idea is to begin with extensions "
                              "that are probably(!) quicker to analyze.")
 
-    parser.add_argument("--prod",
-                        dest='prod',
-                        action='store_true',
+    group3 = parser.add_mutually_exclusive_group(required=True)
+    group3.add_argument('--prod', action='store_true',
                         help="Enables production mode. Program will continue after Exceptions.")
+    group3.add_argument('--debug', action='store_true',
+                        help="Enables debug mode. "
+                             "Program will do some unnecessary computations that may find subtle bugs during "
+                             "development however.")
 
     # TODO: control verbosity of logging?
 
@@ -238,6 +241,14 @@ def main():
 
     if args.include_31_violations_without_privileged_api_access:
         os.environ['INCLUDE_31_VIOLATIONS_WITHOUT_PRIVILEGED_API_ACCESS'] = "yes"
+
+    if args.debug:
+        os.environ['DEBUG'] = "yes"
+        print("[Info] Debug mode.")
+    elif args.prod:
+        print("[Info] Production mode.")
+    else:
+        raise AssertionError("neither args.debug nor args.prod is set")
 
     # Whether to use the original DoubleX extension analysis,
     #   or whether to look for vulnerabilities exploitable by a renderer attacker:

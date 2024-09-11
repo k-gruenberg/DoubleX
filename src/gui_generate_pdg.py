@@ -29,6 +29,7 @@ def main():
     os.environ['PARSER'] = "espree"
     os.environ['SOURCE_TYPE'] = "module"
     os.environ['INCLUDE_31_VIOLATIONS_WITHOUT_PRIVILEGED_API_ACCESS'] = "yes"
+    os.environ['DEBUG'] = "yes"
 
     def generate_pdg():
         try:
