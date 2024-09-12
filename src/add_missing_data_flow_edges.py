@@ -596,6 +596,106 @@ def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  #
                   f"(in line {pattern_match.get_line()}, file {pattern_match.get_file()}) is not an "
                   f"Identifier; no data flow added.")
 
-    # ToDo: implement handling of Object.defineProperties()
+    # ##### ##### ##### ##### ##### Object.defineProperties(): ##### ##### ##### ##### #####
+
+    # Input:
+    #   "Object.defineProperties(x, {property1: {value: y, writable: true}, property2: {value: z, writable:false}});"
+    #
+    # Output PDG:
+    # [1] [Program] (1 child)
+    # 	[2] [ExpressionStatement] (1 child)
+    # 		[3] [CallExpression] (3 children)
+    # 			[4] [MemberExpression:"False"] (2 children)
+    # 				[5] [Identifier:"Object"] (0 children)
+    # 				[6] [Identifier:"defineProperties"] (0 children)
+    # 			[7] [Identifier:"x"] (0 children)
+    # 			[8] [ObjectExpression] (2 children)
+    # 				[9] [Property] (2 children)
+    # 					[10] [Identifier:"property1"] (0 children)
+    # 					[11] [ObjectExpression] (2 children)
+    # 						[12] [Property] (2 children)
+    # 							[13] [Identifier:"value"] (0 children)
+    # 							[14] [Identifier:"y"] (0 children)
+    # 						[15] [Property] (2 children)
+    # 							[16] [Identifier:"writable"] (0 children)
+    # 							[17] [Literal::{'raw': 'true', 'value': True}] (0 children)
+    # 				[18] [Property] (2 children)
+    # 					[19] [Identifier:"property2"] (0 children)
+    # 					[20] [ObjectExpression] (2 children)
+    # 						[21] [Property] (2 children)
+    # 							[22] [Identifier:"value"] (0 children)
+    # 							[23] [Identifier:"z"] (0 children)
+    # 						[24] [Property] (2 children)
+    # 							[25] [Identifier:"writable"] (0 children)
+    # 							[26] [Literal::{'raw': 'false', 'value': False}] (0 children)
+    object_define_properties_pattern = \
+        Node("CallExpression") \
+            .child(
+                Node("MemberExpression")
+                    .child(
+                        Node.identifier("Object")
+                    )
+                    .child(
+                        Node.identifier("defineProperties")
+                    )
+            )\
+            .child(
+                Node("ObjectExpression")
+            )
+
+    if os.environ.get('PRINT_PDGS') == "yes":
+        print(f"Object.defineProperties() Pattern:\n{object_define_properties_pattern}")
+
+    for pattern_match in pdg.find_pattern(object_define_properties_pattern,
+                                          match_identifier_names=True,
+                                          match_literals=False,  # irrelevant in this case
+                                          match_operators=False,  # irrelevant in this case
+                                          allow_additional_children=True,  # IMPORTANT!
+                                          allow_different_child_order=False):
+        # Syntax (see
+        #   https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperties):
+        #
+        # Object.defineProperties(obj, props)
+        #
+        # obj:   The object on which to define or modify properties.
+        # props: An object whose keys represent the names of properties to be defined or modified and whose values are
+        #        objects describing those properties. Each value in props must be either a data descriptor or an
+        #        accessor descriptor; it cannot be both (see Object.defineProperty() for more details).
+        #
+        # Return value: The object that was passed to the function.
+
+        assert pattern_match.name == "CallExpression"
+
+        if len(pattern_match.children) < 3:
+            # 0th child of CallExpression = "Object.defineProperties" MemberExpression
+            # 1st child of CallExpression = obj parameter
+            # 2nd child of CallExpression = props parameter
+            # + as for any JavaScript function, additional redundant parameters may be supplied w/o having any effect!
+            print(f"[Warning] incorrect usage of Object.defineProperties(obj, props) found "
+                  f"in line {pattern_match.get_line()} (file {pattern_match.get_file()}): "
+                  f"supplied too few arguments: {len(pattern_match.children) - 1} instead of 2; no data flow added.")
+            continue
+
+        obj: Node = pattern_match.children[1]
+        if obj.name == "Identifier":
+            props: Node = pattern_match.children[2]
+            if props.name == "ObjectExpression":
+                for property_ in props.children:
+                    if property_.name == "Property" and len(property_.children) == 2 and property_.rhs().name == "ObjectExpression":
+                        for property__ in property_.rhs().children:
+                            if (property__.name == "Property"
+                                    and len(property_.children) == 2
+                                    and property__.lhs().name == "Identifier"
+                                    and property__.lhs().attributes['name'] == "value"):
+                                value = property__.rhs()  # "y" in the example above
+                                for value_identifier in value.get_all_identifiers():
+                                    # Add a data flow edge: y --data--> x
+                                    data_flow_edges_added += value_identifier.set_data_dependency(obj)
+                                    # => includes call: value_identifier.data_dep_children.append(extremity=obj)
+
+        else:
+            print(f"[Warning] obj parameter found in Object.defineProperties(obj, props) call "
+                  f"(in line {pattern_match.get_line()}, file {pattern_match.get_file()}) is not an "
+                  f"Identifier; no data flow added.")
 
     return data_flow_edges_added
