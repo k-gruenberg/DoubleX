@@ -382,7 +382,7 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
         sum(add_missing_data_flow_edges_call_expressions(child) for child in pdg.children)#
 
 
-def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:
+def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  # ToDo: create test cases
     """
     Some dataflows are non-obvious without knowing the semantics of certain functions from JavaScript's standard
     library.
@@ -418,6 +418,8 @@ def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:
     """
 
     data_flow_edges_added = 0
+
+    # ##### ##### ##### ##### ##### Object.assign(): ##### ##### ##### ##### #####
 
     # Input: "Object.assign(x, y)"
     #
@@ -472,7 +474,128 @@ def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:
                     data_flow_edges_added += src_identifier.set_data_dependency(target)
                     # => includes call: src_identifier.data_dep_children.append(extremity=target)
 
-    # ToDo: implement handling of Object.defineProperty()
+    # ##### ##### ##### ##### ##### Object.defineProperty(): ##### ##### ##### ##### #####
+
+    # Input: "Object.defineProperty(x, 'property1', {value: y, writable: false});"
+    #
+    # Output PDG:
+    # [1] [Program] (1 child)
+    # 	[2] [ExpressionStatement] (1 child)
+    # 		[3] [CallExpression] (4 children)
+    # 			[4] [MemberExpression:"False"] (2 children)
+    # 				[5] [Identifier:"Object"] (0 children)
+    # 				[6] [Identifier:"defineProperty"] (0 children)
+    # 			[7] [Identifier:"x"] (0 children)
+    # 			[8] [Literal::{'raw': "'property1'", 'value': 'property1'}] (0 children)
+    # 			[9] [ObjectExpression] (2 children)
+    # 				[10] [Property] (2 children)
+    # 					[11] [Identifier:"value"] (0 children)
+    # 					[12] [Identifier:"y"] (0 children)
+    # 				[13] [Property] (2 children)
+    # 					[14] [Identifier:"writable"] (0 children)
+    # 					[15] [Literal::{'raw': 'false', 'value': False}] (0 children)
+    object_define_property_pattern =\
+        Node("CallExpression")\
+            .child(
+                Node("MemberExpression")
+                    .child(
+                        Node.identifier("Object")
+                    )
+                    .child(
+                        Node.identifier("defineProperty")
+                    )
+            )
+            # .child(
+            #     Node("ObjectExpression")
+            #         .child(
+            #             Node("Property")
+            #                 .child(
+            #                     Node.identifier("value")
+            #                 )
+            #         )
+            # )
+
+    if os.environ.get('PRINT_PDGS') == "yes":
+        print(f"Object.defineProperty() Pattern:\n{object_define_property_pattern}")
+
+    for pattern_match in pdg.find_pattern(object_define_property_pattern,
+                                          match_identifier_names=True,
+                                          match_literals=False,  # irrelevant in this case
+                                          match_operators=False,  # irrelevant in this case
+                                          allow_additional_children=True,  # IMPORTANT!
+                                          allow_different_child_order=False):
+        # Syntax (see
+        #   https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty):
+        #
+        # Object.defineProperty(obj, prop, descriptor)
+        #
+        # obj:        The object on which to define the property.
+        # prop:       A string or Symbol specifying the key of the property to be defined or modified.
+        # descriptor: The descriptor for the property being defined or modified.
+        #             -> come in 2 main flavors: data descriptors and accessor descriptors:
+        #                -> A data descriptor is a property with a value that may or may not be writable.
+        #                -> An accessor descriptor is a property described by a getter-setter pair of functions.
+        #                => A descriptor must be one of these two flavors; it cannot be both.
+        #             -> Both data and accessor descriptors are objects. They share the following optional keys:
+        #                -> "configurable" (Defaults to false.)
+        #                -> "enumerable"   (Defaults to false.)
+        #             -> A data descriptor also has the following optional keys:
+        #                -> "value"    (Defaults to undefined.)
+        #                -> "writable" (Defaults to false.)
+        #             -> An accessor descriptor also has the following optional keys:
+        #                -> "get" (Defaults to undefined.)
+        #                -> "set" (Defaults to undefined.)
+        #             -> If a descriptor doesn't have any of the value, writable, get, and set keys, it is treated as a
+        #                data descriptor.
+        #             -> If a descriptor has both [value or writable] and [get or set] keys, an exception is thrown.
+        #
+        # Return value: The object that was passed to the function, with the specified property added or modified.
+        #
+        # => Note that we only care about the data flow:
+        #    value --data--> obj
+        #    (or rather for each identifier occurring within `value`)
+
+        assert pattern_match.name == "CallExpression"
+
+        if len(pattern_match.children) < 4:
+            # 0th child of CallExpression = "Object.defineProperty" MemberExpression
+            # 1st child of CallExpression = obj parameter
+            # 2nd child of CallExpression = prop parameter
+            # 3rd child of CallExpression = descriptor parameter
+            # + as for any JavaScript function, additional redundant parameters may be supplied w/o having any effect!
+            print(f"[Warning] incorrect usage of Object.defineProperty(obj, prop, descriptor) found "
+                  f"in line {pattern_match.get_line()} (file {pattern_match.get_file()}): "
+                  f"supplied too few arguments: {len(pattern_match.children) - 1} instead of 3; no data flow added.")
+            continue
+
+        obj: Node = pattern_match.children[1]
+        if obj.name == "Identifier":
+            descriptor: Node = pattern_match.children[3]
+            if descriptor.name == "ObjectExpression":  # Object.defineProperty(x, 'prop1', {value: y, writable: false});
+                for property_ in descriptor.children:
+                    if (property_.name == "Property" and len(property_.children) == 2
+                            and property_.lhs().name == "Identifier" and property_.lhs().attributes['name'] == "value"):
+                        value = property_.rhs()  # "y" in the example above
+                        for value_identifier in value.get_all_identifiers():
+                            # Add a data flow edge: y --data--> x
+                            data_flow_edges_added += value_identifier.set_data_dependency(obj)
+                            # => includes call: value_identifier.data_dep_children.append(extremity=obj)
+
+            elif descriptor.name == "Identifier":   # Object.defineProperty(x, 'property1', descriptor);
+                # Add a data flow edge: descriptor --data--> x
+                data_flow_edges_added += descriptor.set_data_dependency(obj)
+                # => includes call: descriptor.data_dep_children.append(extremity=obj)
+
+            else:
+                print(f"[Warning] descriptor parameter found in Object.defineProperty(obj, prop, descriptor) call "
+                      f"(in line {pattern_match.get_line()}, file {pattern_match.get_file()}) is neither an "
+                      f"ObjectExpression nor an Identifier; no data flow added.")
+
+        else:
+            print(f"[Warning] obj parameter found in Object.defineProperty(obj, prop, descriptor) call "
+                  f"(in line {pattern_match.get_line()}, file {pattern_match.get_file()}) is not an "
+                  f"Identifier; no data flow added.")
+
     # ToDo: implement handling of Object.defineProperties()
 
     return data_flow_edges_added
