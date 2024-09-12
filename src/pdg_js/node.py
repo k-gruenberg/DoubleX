@@ -39,7 +39,7 @@ import itertools
 import os
 import re
 from functools import total_ordering
-from typing import Set, Tuple, Optional, Self, List
+from typing import Set, Tuple, Optional, Self, List, Any
 
 from . import utility_df
 
@@ -109,7 +109,7 @@ class Node:
         return hash(self.id)
 
     # ADDED BY ME:
-    def root(self):
+    def root(self) -> Self:
         """
         Returns the root Node of this tree.
         """
@@ -128,7 +128,7 @@ class Node:
             yield from child.all_nodes_iter()
 
     # ADDED BY ME:
-    def lhs(self):
+    def lhs(self) -> Self:
         """
         Returns the left of the 2 children of this Node (i.e., the LHS child).
         Raises an Exception when this Node has != 2 children!
@@ -139,7 +139,7 @@ class Node:
             raise TypeError(f"calling Node.lhs() on a Node with {len(self.children)} != 2 children")
 
     # ADDED BY ME:
-    def rhs(self):
+    def rhs(self) -> Self:
         """
         Returns the right of the 2 children of this Node (i.e., the RHS child).
         Raises an Exception when this Node has != 2 children!
@@ -150,7 +150,7 @@ class Node:
             raise TypeError(f"calling Node.rhs() on a Node with {len(self.children)} != 2 children")
 
     # ADDED BY ME:
-    def equivalent(self, other):
+    def equivalent(self, other: Self) -> bool:
         """
         Unlike == / __eq__, which checks the equality of the node ID, i.e., whether we're talking about the exact same
         subtree, this function tests for structural equivalence, e.g. to detect when an Expression is compared to itself
@@ -203,7 +203,7 @@ class Node:
         return self_data_dep_parents
 
     # ADDED BY ME:
-    def is_data_flow_equivalent_identifier(self, other, max_depth=1_000_000_000):
+    def is_data_flow_equivalent_identifier(self, other: Self, max_depth=1_000_000_000) -> bool:
         """
         Sometimes, we may want to check equality/equivalence between two different Identifiers beyond just their raw
         variable names. This function returns True if both `self` and `other` have a common data flow parent.
@@ -223,21 +223,21 @@ class Node:
 
     # ADDED BY ME:
     @classmethod
-    def identifier(cls, name):
+    def identifier(cls, name: str) -> Self:
         n = cls("Identifier")
         n.attributes['name'] = name
         return n
 
     # ADDED BY ME:
     @classmethod
-    def literal(cls, raw):
+    def literal(cls, raw: str) -> Self:
         n = cls("Literal")
         n.attributes['raw'] = raw
         return n
 
     # ADDED BY ME:
     @classmethod
-    def wildcard(cls):
+    def wildcard(cls) -> Self:
         """
         When used as a pattern supplied to the matches() function, the wildcard will match *anything*!
         """
@@ -246,7 +246,7 @@ class Node:
         return n
 
     # ADDED BY ME:
-    def child(self, c):
+    def child(self, c: Self) -> Self:
         """
         Appends the given Node as a child and then returns itself again.
         """
@@ -263,14 +263,14 @@ class Node:
         return self
 
     # ADDED BY ME:
-    def get_sibling(self, idx: int):
+    def get_sibling(self, idx: int) -> Self:
         sibling = self.parent.children[idx]
         # Safety check, when the programmer calls get_sibling(), he likely wants a *different* Node:
         assert sibling.id != self.id
         return sibling
 
     # ADDED BY ME:
-    def get_sibling_relative(self, relative_index: int):
+    def get_sibling_relative(self, relative_index: int) -> Self:
         """
         Cf. get_sibling() but the given index is *relative* to this node.
 
@@ -294,45 +294,45 @@ class Node:
         return self.parent.children[self_index + relative_index]
 
     # ADDED BY ME:
-    def get_sibling_by_name(self, name: str):
+    def get_sibling_by_name(self, name: str) -> Optional[Self]:
         for sibling in self.parent.children:
             if sibling.name == name and sibling.id != self.id:
                 return sibling
         return None
 
     # ADDED BY ME:
-    def get_only_sibling(self):
+    def get_only_sibling(self) -> Self:
         siblings = [c for c in self.parent.children if c.id != self.id]
         assert len(siblings) == 1
         return siblings[0]
 
     # ADDED BY ME:
-    def has_sibling(self, name: str):
+    def has_sibling(self, name: str) -> bool:
         return self.get_sibling_by_name(name=name) is not None
 
     # ADDED BY ME:
-    def is_sibling_of(self, other):
+    def is_sibling_of(self, other) -> bool:
         return self.parent is not None and self.parent == other.parent
 
     # ADDED BY ME:
-    def count_siblings(self):
+    def count_siblings(self) -> int:
         return len(self.parent.children) - 1
 
     # ADDED BY ME:
-    def siblings(self):
+    def siblings(self) -> List[Self]:
         """
         Returns all siblings of this Node, i.e., all the children of this Node's parent, except itself.
         """
         return [child for child in self.parent.children if child != self]
 
     # ADDED BY ME:
-    def grandparent(self):
+    def grandparent(self) -> Optional[Self]:
         if self.parent is None:  # No parent...
             return None  # ...no grandparent.
         return self.parent.parent  # (might be None)
 
     # ADDED BY ME:
-    def great_grandparent(self):
+    def great_grandparent(self) -> Optional[Self]:
         if self.parent is None:  # No parent...
             return None  # ...no great-grandparent.
         elif self.parent.parent is None:  # No grandparent...
@@ -340,7 +340,7 @@ class Node:
         return self.parent.parent.parent  # (might be None)
 
     # ADDED BY ME:
-    def get_parents(self):
+    def get_parents(self) -> List[Self]:
         """
         Return the parent, grandparent, great-grandparent, etc. of this Node (in that order)
         until the root node is reached.
@@ -351,11 +351,11 @@ class Node:
             return [self.parent] + self.parent.get_parents()
 
     # ADDED BY ME:
-    def is_inside(self, other):
+    def is_inside(self, other: Self) -> bool:
         return other in self.get_parents()
 
     # ADDED BY ME:
-    def get_parent(self, allowed_parent_names):
+    def get_parent(self, allowed_parent_names) -> Self:
         """
         Returns `self.parent` but only if `self.parent.name in allowed_parent_names`, otherwise this function raises
         a LookupError.
@@ -375,7 +375,7 @@ class Node:
             raise LookupError(f"parent of [{self.id}] has name '{self.parent.name}' but none of: {allowed_parent_names}")
 
     # ADDED BY ME:
-    def get_parent_or_grandparent(self, allowed_ancestor_names):
+    def get_parent_or_grandparent(self, allowed_ancestor_names) -> Self:
         if self.parent.name in allowed_ancestor_names:
             return self.parent
         elif self.grandparent().name in allowed_ancestor_names:
@@ -385,7 +385,7 @@ class Node:
                               f"(parent name: '{self.parent.name}', grandparent name: '{self.grandparent().name}')")
 
     # ADDED BY ME:
-    def get_ancestor(self, allowed_ancestor_names):
+    def get_ancestor(self, allowed_ancestor_names) -> Self:
         parent = self.parent
         while parent is not None:
             if parent.name in allowed_ancestor_names:
@@ -394,7 +394,7 @@ class Node:
         raise LookupError(f"no ancestor named '{allowed_ancestor_names}' found for node [{self.id}]")
 
     # ADDED BY ME:
-    def has_ancestor(self, allowed_ancestor_names):
+    def has_ancestor(self, allowed_ancestor_names) -> bool:
         parent = self.parent
         while parent is not None:
             if parent.name in allowed_ancestor_names:
@@ -403,12 +403,13 @@ class Node:
         return False
 
     # ADDED BY ME:
-    def __str__(self):
+    def __str__(self) -> str:
         str_repr = ""
 
         attributes_of_interest = {
             "Identifier": 'name',
             "Literal": ['raw', 'value'],
+            "TemplateElement": ['value'],
             "BinaryExpression": 'operator',      # 'instanceof' | 'in' | '+' | '-' | '*' | '/' | '%' | '**' |
                                                  # '|' | '^' | '&' | '==' | '!=' | '===' | '!==' |
                                                  # '<' | '>' | '<=' | '<<' | '>>' | '>>>'
@@ -445,18 +446,20 @@ class Node:
         return str_repr
 
     # ADDED BY ME:
-    def contains_literal(self):
+    def contains_literal(self) -> bool:
         """
         Does this subtree contain any Literal (Node)?
         """
-        return self.get_literal() is not None
+        return self.get_literal_raw() is not None
 
     # ADDED BY ME:
-    def get_literal(self):
+    def get_literal_raw(self) -> Optional[str]:
         """
         Returns the Literal contained inside this subtree.
         When there is no Literal to be found, `None` is returned.
         When there are multiple Literals, the first one encountered is returned.
+        Returns the raw version of the literal, as it occurs in code, which is always a string
+        (i.e., no conversion to integer/float/bool).
         """
         if self.name == "Literal":
             return self.attributes['raw']
@@ -464,7 +467,7 @@ class Node:
             return None
         else:
             for child in self.children:
-                child_literal = child.get_literal()
+                child_literal = child.get_literal_raw()
                 if child_literal is not None:
                     return child_literal  # return the first Literal found
             return None  # no child contains any Literal
@@ -497,7 +500,7 @@ class Node:
         return self.get_all("Identifier")
 
     # ADDED BY ME:
-    def get_identifier_by_name(self, name):
+    def get_identifier_by_name(self, name: str) -> Self:
         """
         A function mostly for testing purposes, e.g., for use in unit tests.
         Raises a LookupError, unless the identifier with name `name` occurs exactly *once* inside this PDG!
@@ -511,11 +514,11 @@ class Node:
             raise LookupError(f"get_identifier_by_name(): identifier name '{name}' is ambiguous, {len(result)} found!")
 
     # ADDED BY ME:
-    def get_all_literals(self):
+    def get_all_literals(self) -> List[Self]:
         return self.get_all("Literal")
 
     # ADDED BY ME:
-    def get_all_if_statements_inside(self):
+    def get_all_if_statements_inside(self) -> List[Self]:
         """
         Returns all if-statements ("IfStatement" nodes) inside this piece of code as a list.
 
@@ -525,43 +528,49 @@ class Node:
         return self.get_all("IfStatement")
 
     # ADDED BY ME:
-    def get_all_return_statements_inside(self):
+    def get_all_return_statements_inside(self) -> List[Self]:
         """
         Returns all return-statements ("ReturnStatement" nodes) inside this piece of code as a list.
         """
         return self.get_all("ReturnStatement")
 
     # ADDED BY ME:
-    def has_child(self, child_name):
+    def has_child(self, child_name: str) -> bool:
         for child in self.children:
             if child.name == child_name:
                 return True
         return False
 
     # ADDED BY ME:
-    def get_child(self, child_name):
+    def get_child(self, child_name: str) -> Optional[Self]:
         for child in self.children:
             if child.name == child_name:
                 return child
         return None
 
     # ADDED BY ME:
-    def get_only_child(self):
+    def get_only_child(self) -> Self:
         assert len(self.children) == 1
         return self.children[0]
 
     # ADDED BY ME:
-    def is_nth_child_of_parent(self, n) -> bool:
+    def is_nth_child_of_parent(self, n: int) -> bool:
         sibling_ids = [sibling.id for sibling in self.parent.children]
         return self.id == sibling_ids[n]
 
-    def is_nth_child_of_parent_ignoring_certain_siblings(self, n, siblings_names_to_ignore: List[str]) -> bool:
+    # ADDED BY ME:
+    def is_nth_child_of_parent_ignoring_certain_siblings(self, n: int, siblings_names_to_ignore: List[str]) -> bool:
         sibling_ids = [sibling.id for sibling in self.parent.children if sibling.name not in siblings_names_to_ignore]
         return self.id == sibling_ids[n]
 
     # ADDED BY ME:
-    def matches(self, pattern, match_identifier_names, match_literals, match_operators, allow_additional_children,
-                allow_different_child_order):
+    def matches(self,
+                pattern: Self,
+                match_identifier_names: bool,
+                match_literals: bool,
+                match_operators: bool,
+                allow_additional_children: bool,
+                allow_different_child_order: bool) -> bool:
         """
         Returns if this AST subtree matches another given AST tree (pattern), only comparing:
         * name of root
@@ -633,8 +642,13 @@ class Node:
         #    the same raw Literal value for Literals), matches() will return True!
 
     # ADDED BY ME:
-    def find_pattern(self, pattern, match_identifier_names, match_literals, match_operators, allow_additional_children,
-                     allow_different_child_order):
+    def find_pattern(self,
+                     pattern: Self,
+                     match_identifier_names: bool,
+                     match_literals: bool,
+                     match_operators: bool,
+                     allow_additional_children: bool,
+                     allow_different_child_order: bool) -> List[Self]:
         """
         Returns all subtrees of this PDG matching the given pattern `pattern`.
         Cf. `Node.matches()` function.
@@ -654,7 +668,7 @@ class Node:
         return result
 
     # ADDED BY ME:
-    def member_expression_to_string(self):
+    def member_expression_to_string(self) -> str:
         """
         Turns a PDG MemberExpression back into a string.
         For something simple as the PDG representing "foo.bar.baz", "foo.bar.baz" is returned,
@@ -772,14 +786,14 @@ class Node:
         return sensitive_apis_accessed
 
     # ADDED BY ME:
-    def get_statement(self):
+    def get_statement(self) -> Optional[Self]:
         """
         If this Node isn't a Statement itself already, this function returns the Statement that this Node is a part of,
         by going up the PDG parent-by-parent until a Statement is found.
 
         This function is useful when dealing with control flow.
 
-        Returns `None` when this Node isn't part of any Statement but that case should not actually occur!
+        Returns `None` when this Node isn't part of any Statement.
         """
         if self.name in STATEMENTS:
             return self
@@ -789,7 +803,7 @@ class Node:
             return None
 
     # ADDED BY ME:
-    def get_next_higher_up_statement(self):
+    def get_next_higher_up_statement(self) -> Optional[Self]:
         """
         This function returns the Statement that this Node is a part of,
         by going up the PDG parent-by-parent until a Statement is found.
@@ -797,7 +811,7 @@ class Node:
         If this Node is a Statement *itself* does not matter here.
         If you need a function that returns the node itself when it's a Statement already, use get_statement() instead.
 
-        Returns `None` when this Node doesn't have any higher up Statement above it, this may occur when you call this
+        Returns `None` when this Node doesn't have any higher up Statement above it, e.g., when you call this
         function on the root node of the tree!
         """
         if self.parent is not None:
@@ -806,7 +820,7 @@ class Node:
             return None
 
     # ADDED BY ME:
-    def get_innermost_surrounding_if_statement(self):
+    def get_innermost_surrounding_if_statement(self) -> Optional[Self]:
         """
         Returns the innermost if-statement surrounding this piece of code,
         or `None` if there is no if-statement surrounding this piece of code.
@@ -822,7 +836,7 @@ class Node:
             return None
 
     # ADDED BY ME:
-    def get_all_surrounding_if_statements(self):
+    def get_all_surrounding_if_statements(self) -> List[Self]:
         """
         Returns all if-statement surrounding this piece of code, from innermost to outermost, as a list.
         Returns the empty list `[]` if there is no if-statement surrounding this piece of code.
@@ -844,7 +858,7 @@ class Node:
         return result
 
     # ADDED BY ME:
-    def is_return_statement(self):
+    def is_return_statement(self) -> bool:
         """
         Returns True iff this very Statement is a ReturnStatement itself.
         To check if this node is simply *inside* a ReturnStatement, use is_inside_return_statement() instead!
@@ -852,7 +866,7 @@ class Node:
         return self.name == "ReturnStatement"
 
     # ADDED BY ME:
-    def is_inside_return_statement(self):
+    def is_inside_return_statement(self) -> bool:
         """
         Returns True iff this node is either a ReturnStatement itself or is inside of one inside the AST, by
         traversing parent to parent until there is no parent anymore.
@@ -896,7 +910,7 @@ class Node:
     #   }                                                           [7] [BlockStatement] (1 child) --e--> [7.1]
 
     # ADDED BY ME:
-    def is_if_statement(self):
+    def is_if_statement(self) -> bool:
         """
         Returns True iff this node is an "IfStatement" node.
 
@@ -909,7 +923,7 @@ class Node:
         return self.name == "IfStatement"
 
     # ADDED BY ME:
-    def if_statement_has_else_branch(self):
+    def if_statement_has_else_branch(self) -> bool:
         """
         Returns True iff this IfStatement has an else branch.
         Raises an exception when this node isn't an "IfStatement" node; use is_if_statement() to check that beforehand.
@@ -919,13 +933,14 @@ class Node:
         return self.if_statement_get_else_branch() is not None
 
     # ADDED BY ME:
-    def if_statement_get_else_branch(self):
+    def if_statement_get_else_branch(self) -> Optional[Self]:
         """
         Returns the else branch of this IfStatement (will always be of type "BlockStatement").
         Returns `None` when this IfStatement has no else branch.
         Raises an exception when this node isn't an "IfStatement" node; use is_if_statement() to check that beforehand.
 
-        If you just want to know whether there *is* an else branch or not, you may also use if_statement_has_else_branch().
+        If you just want to know whether there *is* an else branch or not, you may also use
+        if_statement_has_else_branch().
         """
         if not self.is_if_statement():
             raise TypeError("called if_statement_get_else_branch() on a Node that's not an IfStatement")
@@ -939,7 +954,7 @@ class Node:
             raise Exception(f"error in if_statement_get_else_branch(): if statement has unknown format:\n{self}")
 
     # ADDED BY ME:
-    def if_statement_has_else_if_branch(self):
+    def if_statement_has_else_if_branch(self) -> bool:
         if not self.is_if_statement():
             raise TypeError("called if_statement_has_else_if_branch() on a Node that's not an IfStatement")
         elif len(self.children) == 2:  # if (...) { ... }
@@ -952,7 +967,7 @@ class Node:
             raise Exception(f"error in if_statement_has_else_if_branch(): if statement has unknown format:\n{self}")
 
     # ADDED BY ME:
-    def occurs_in_code_before(self, other_node):
+    def occurs_in_code_before(self, other_node: Self) -> bool:
         assert self.get_file() == other_node.get_file()
 
         self_start_line = int(self.attributes['loc']['start']['line'])
@@ -965,7 +980,7 @@ class Node:
                 (self_start_line == other_start_line and self_start_column < other_start_column)
 
     # ADDED BY ME:
-    def occurs_in_code_after(self, other_node):
+    def occurs_in_code_after(self, other_node: Self) -> bool:
         assert self.get_file() == other_node.get_file()
 
         self_start_line = int(self.attributes['loc']['start']['line'])
@@ -1000,7 +1015,7 @@ class Node:
         return CodeOccurrence(line=self_start_line, column=self_start_column)
 
     # ADDED BY ME:
-    def lies_within(self, other_node):
+    def lies_within(self, other_node: Self) -> bool:
         """
         Whether this node is a child, grand-child, great-grandchild, etc. of `other_node`.
         Returns False when self == other_node!
@@ -1018,41 +1033,35 @@ class Node:
     # re.fullmatch(pattern, string, flags=0) => If the whole string matches the regex pattern
 
     # ADDED BY ME:
-    def string_literal_strip_quotation_marks(self):
+    def string_literal_without_quotation_marks(self) -> str:
         """
         When this is a String Literal, returns the literal string w/o quotation marks.
+
+        Raises an AssertionError when called on a non-Literal.
+        Raises a TypeError when called on a non-string Literal.
+
         Note that JavaScript has 3 different valid quotation marks: "", '' and ``
+        Backticks generate TemplateLiterals instead of Literals though and will therefore raise an AssertionError!
         """
+        # Example JavaScript ExpressionStatement: "foo"
+        # ...becomes: [1] [Literal::{'raw': '"foo"', 'value': 'foo'}] (0 children)
         assert self.name == "Literal"
-        raw = self.attributes['raw']
-        if raw[0] == raw[-1] and raw[0] in ["\"", "'"]:  # literal is a (correct) string literal
-            string_inside_quotes = raw[1:-1]  # remove the quotation marks
-            return string_inside_quotes
+        self_value = self.attributes['value']
+        if isinstance(self_value, str):
+            return self_value
         else:
-            raise TypeError("string_literal_strip_quotation_marks called on a non-string literal!")
+            raise TypeError("Node.string_literal_without_quotation_marks() called on a non-string literal!")
 
     # ADDED BY ME:
-    def string_literal_matches_full_regex(self, regex):
-        assert self.name == "Literal"
-        raw = self.attributes['raw']
-        if raw[0] == raw[-1] and raw[0] in ["\"", "'"]:  # literal is a (correct) string literal
-            string_inside_quotes = raw[1:-1]  # remove the quotation marks
-            if re.fullmatch(regex, string_inside_quotes):
-                return True
-        return False
+    def string_literal_matches_full_regex(self, regex: str) -> bool:
+        return re.fullmatch(regex, self.string_literal_without_quotation_marks()) is not None
 
     # ADDED BY ME:
-    def string_literal_contains_regex(self, regex):
-        assert self.name == "Literal"
-        raw = self.attributes['raw']
-        if raw[0] == raw[-1] and raw[0] in ["\"", "'"]:  # literal is a (correct) string literal
-            string_inside_quotes = raw[1:-1]  # remove the quotation marks
-            if re.search(regex, string_inside_quotes):
-                return True
-        return False
+    def string_literal_contains_regex(self, regex: str) -> bool:
+        return re.search(regex, self.string_literal_without_quotation_marks()) is not None
 
     # ADDED BY ME:
-    def any_literal_inside_matches_full_regex(self, regex):
+    def any_literal_inside_matches_full_regex(self, regex: str) -> bool:
         """
         Does any literal inside this subtree match the given regular expression?
         The entire raw literal has to match the given regular expression!
@@ -1067,7 +1076,7 @@ class Node:
         return False
 
     # ADDED BY ME:
-    def any_literal_inside_contains_regex(self, regex):
+    def any_literal_inside_contains_regex(self, regex: str) -> bool:
         """
         Does any literal inside this subtree match the given regular expression?
         Beware that literals may be string, integer or float literals!
@@ -1079,7 +1088,7 @@ class Node:
         return False
 
     # ADDED BY ME:
-    def any_string_literal_inside_matches_full_regex(self, regex):
+    def any_string_literal_inside_matches_full_regex(self, regex: str) -> bool:
         """
         Tries to find a string literal matching the given regular expression, ignoring the leading and trailing
         quotation mark. Integer and float literals are ignored.
@@ -1091,7 +1100,7 @@ class Node:
         # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String:
         # const string1 = "A string primitive";
         # const string2 = 'Also a string primitive';
-        # const string3 = `Yet another string primitive`;
+        # const string3 = `Yet another string primitive`; // <----- We do not consider template strings!
         for literal in self.get_all_literals():
             raw = literal.attributes['raw']
             if raw[0] == raw[-1] and raw[0] in ["\"", "'"]:  # literal is a (correct) string literal
@@ -1101,7 +1110,7 @@ class Node:
         return False
 
     # ADDED BY ME:
-    def any_string_literal_inside_contains_regex(self, regex):
+    def any_string_literal_inside_contains_regex(self, regex: str) -> bool:
         """
         Tries to find a string literal matching the given regular expression, ignoring the leading and trailing
         quotation mark. Integer and float literals are ignored.
@@ -1124,14 +1133,14 @@ class Node:
         return False
 
     # ADDED BY ME:
-    def get_height(self):
+    def get_height(self) -> int:
         if len(self.children) == 0:
             return 1
         else:
             return 1 + max(child.get_height() for child in self.children)
 
     # ADDED BY ME:
-    def promise_returning_function_call_get_all_then_calls(self, resolve_function_references=True): # ToDo: use for chrome.cookies API as well!!!
+    def promise_returning_function_call_get_all_then_calls(self, resolve_function_references=True) -> List[Self]:
         """
         Examples:
 
@@ -1589,7 +1598,7 @@ class Node:
         return self.children[:-1]  # remove the body
 
     # ADDED BY ME:
-    def function_declaration_get_nth_param(self, n) -> Self:
+    def function_declaration_get_nth_param(self, n: int) -> Self:
         assert self.name == "FunctionDeclaration"
         return self.function_declaration_get_params()[n]
 
@@ -1628,10 +1637,10 @@ class Node:
                   f"file {self.get_file()}")
             return []
 
-    def is_leaf(self):
+    def is_leaf(self) -> bool:
         return not self.children
 
-    def set_attribute(self, attribute_type, node_attribute):
+    def set_attribute(self, attribute_type: str, node_attribute: Any):
         self.attributes[attribute_type] = node_attribute
 
     def set_body(self, body):
@@ -1640,10 +1649,10 @@ class Node:
     def set_body_list(self, bool_body_list):
         self.body_list = bool_body_list
 
-    def set_parent(self, parent):
+    def set_parent(self, parent: Self):
         self.parent = parent
 
-    def set_child(self, child):
+    def set_child(self, child: Self):
         self.children.append(child)
 
     def adopt_child(self, step_daddy):  # child = self changes parent
@@ -1660,7 +1669,7 @@ class Node:
         # self.statement_dep_children.append(Dependence('comment dependency', extremity, 'c'))
         # extremity.statement_dep_parents.append(Dependence('comment dependency', self, 'c'))
 
-    def is_comment(self):
+    def is_comment(self) -> bool:
         if self.name in COMMENTS:
             return True
         return False
@@ -1681,7 +1690,7 @@ class Node:
             return True, node_attribute['name']
         return False, None  # Just None was a pb when used in get_node_value as value could be None
 
-    def get_line(self):
+    def get_line(self) -> Optional[str]:
         """ Gets the line number where a given node is defined. """
         try:
             line_begin = self.attributes['loc']['start']['line']
@@ -1691,7 +1700,7 @@ class Node:
             return None
 
     # ADDED BY ME:
-    def get_line_number_as_int(self):
+    def get_line_number_as_int(self) -> Optional[int]:
         """ Gets the line number where a given node is defined (as an integer). """
         try:
             return self.attributes['loc']['start']['line']
@@ -1699,7 +1708,7 @@ class Node:
             return None
 
     # ADDED BY ME:
-    def get_whole_line_of_code_as_string(self):
+    def get_whole_line_of_code_as_string(self) -> str:
         try:
             line_no = self.attributes['loc']['start']['line'] - 1  # counting from 1 vs. counting from 0 (here)
             filename = self.get_file()
@@ -1711,7 +1720,7 @@ class Node:
             return f"<error: {e}>"
 
     # ADDED BY ME: # (cf. Esprima documentation PDF, Section 3.1 Token Location)
-    def get_location(self):
+    def get_location(self) -> Optional[str]:
         """ Gets the exact location (line *and* column number) where a given node is defined. """
         try:
             start_line = self.attributes['loc']['start']['line']
@@ -1826,8 +1835,7 @@ class Node:
 
         raise AssertionError("every two Nodes should have a common ancestor ([Program])")
 
-
-    def get_file(self):
+    def get_file(self) -> str:
         parent = self
         while True:
             if parent is not None and parent.parent:
