@@ -418,7 +418,8 @@ class Node:
                                                  # '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|='
             "UnaryExpression": 'operator',       # '+' | '-' | '~' | '!' | 'delete' | 'void' | 'typeof'
             "UpdateExpression": 'operator',      # '++' or '--'
-            "MemberExpression": 'computed'       # (boolean)  # ToDo: handle True/False cases differently in code (x.y vs. x[y])
+            "MemberExpression": 'computed',      # (boolean)  # ToDo: handle True/False cases differently in code (x.y vs. x[y])
+            "FunctionExpression": ['generator', 'async', 'expression']  # (all booleans)
         }
 
         if self.name in attributes_of_interest.keys():
@@ -1571,6 +1572,14 @@ class Node:
 
     # ADDED BY ME:
     def function_declaration_get_function_identifier(self) -> Self:
+        # interface FunctionDeclaration {
+        #     id: Identifier | null;
+        #     params: FunctionParameter[];
+        #     body: BlockStatement;
+        #     generator: boolean;
+        #     async: boolean;
+        #     expression: false;
+        # }
         assert self.name == "FunctionDeclaration"
         params = [param for param in self.children if param.name not in ["FunctionDeclaration", "BlockStatement"]]
         assert params[0].name == "Identifier"
@@ -1581,7 +1590,7 @@ class Node:
         return self.function_declaration_get_function_identifier().attributes['name']
 
     # ADDED BY ME:
-    def arrow_function_expression_get_params(self) -> List[Self]: # ToDo: handle "x = function a() {}"/id!=null (!!!!!)
+    def arrow_function_expression_get_params(self) -> List[Self]:
         # From the Esprima docs:
         # interface ArrowFunctionExpression {
         #     id: Identifier | null;
@@ -1593,9 +1602,26 @@ class Node:
         #     params: FunctionParameter[];
         #     body: BlockStatement; generator: boolean;
         # }
-        # The "id" seems appears to be always null, however.
+        #
+        # An example where id is null:
+        #
+        # An example where id is not null:
+        #
         assert self.name in ["FunctionExpression", "ArrowFunctionExpression"]
-        return self.children[:-1]  # remove the body
+        return self.fun_params  # set by DoubleX; return self.children[:-1] will only work as long as id is null (!!!)
+
+    # ADDED BY ME:
+    def arrow_function_expression_get_nth_param(self, n: int) -> Self:
+        assert self.name in ["FunctionExpression", "ArrowFunctionExpression"]
+        return self.fun_params[n]
+
+    # ADDED BY ME:
+    def arrow_function_expression_get_nth_param_or_none(self, n: int) -> Optional[Self]:
+        assert self.name in ["FunctionExpression", "ArrowFunctionExpression"]
+        if n < len(self.fun_params):
+            return self.fun_params[n]
+        else:
+            return None
 
     # ADDED BY ME:
     def function_declaration_get_nth_param(self, n: int) -> Self:
@@ -1614,7 +1640,7 @@ class Node:
             # 	[2] [Identifier:"response2"] (0 children)
             # 	[3] [Identifier:"response3"] (0 children)
             # 	...
-            params = self.children[:-1]  # [:-1] leaves out only the very last element
+            params = self.arrow_function_expression_get_params()
             identifiers = [identifier for param in params for identifier in param.function_param_get_identifiers()]
             return identifiers
         elif self.name == "FunctionDeclaration":
@@ -1759,21 +1785,7 @@ class Node:
             an AttributeError when resolve_arg_to_identifier=True but resolving the arg to an Identifier failed
         """
         if self.name in ["FunctionExpression", "ArrowFunctionExpression"]:  # cases 1 and 2: (Arrow)FunctionExpression:
-            # interface FunctionExpression {
-            #     id: Identifier | null;       // == null
-            #     params: FunctionParameter[];
-            #     body: BlockStatement;
-            # }
-            # interface ArrowFunctionExpression {
-            #     id: Identifier | null;             // == null
-            #     params: FunctionParameter[];
-            #     body: BlockStatement | Expression;
-            # }
-            if arg_index < (len(self.children) - 1):  # (arg, arg2, arg, block), but "block" is not an argument!
-                return self.children[arg_index]  # (arg1, arg2, *arg3*)
-            else:
-                raise IndexError()
-
+            params = self.arrow_function_expression_get_params()
         elif self.name == "Identifier":  # case 3: Identifier (function reference):
             function_declaration = self.function_Identifier_get_FunctionDeclaration(True)
             if function_declaration is None:
@@ -1793,31 +1805,32 @@ class Node:
                 # 		[4] [Identifier:"sender"] (0 children) --data--> [...]
                 # 		[5] [Identifier:"sendResponse"] (0 children) --data--> [...] --data--> [...]
                 # 		[6] [BlockStatement]
-                function_declaration_params = function_declaration.function_declaration_get_params()
-                if arg_index < len(function_declaration_params):  # (arg1, arg2, arg3)
-                    param = function_declaration_params[arg_index]  # (arg1, arg2, *arg3*)
-                    if not resolve_arg_to_identifier:
-                        return param
-                    else:
-                        # Instead of an Identifier, the FunctionParameter may also be an ArrayPattern or ObjectPattern, or
-                        #     an AssignmentPattern (whose left hand side in turn may be
-                        #     an Identifier, ArrayPattern or ObjectPattern; the right hand side may be any Expression):
-                        # * ArrayPattern:                         function msg_handler(msg, sender, [sendResponse1, sendResponse2]) { ... }
-                        # * ObjectPattern:                        function msg_handler(msg, sender, {x:x, y:y}) { ... }
-                        # * AssignmentPattern, LHS=Identifier:    function msg_handler(msg, sender, sendResponse=null) { ... }
-                        # * AssignmentPattern, LHS=ArrayPattern:  function msg_handler(msg, sender, [x,y]=[1,2]) { ... }
-                        # * AssignmentPattern, LHS=ObjectPattern: function msg_handler(msg, sender, {x, y}={x:1,y:2}) { ... }
-                        # => Here were only handle the AssignmentPattern, LHS=Identifier case using the
-                        #    function_param_get_identifier() method:  # ToDo: also handle all the other cases!
-                        identifier = param.function_param_get_identifier()  # necessary for "sendResponse=null" case (default param value)
-                        if identifier is not None:
-                            return identifier
-                        else:
-                            raise AttributeError()
-                else:
-                    raise IndexError()
+                params = function_declaration.function_declaration_get_params()
         else:
             raise TypeError()
+
+        if arg_index >= len(params):
+            raise IndexError()
+        else:
+            param = params[arg_index]  # (arg1, arg2, *arg3*)
+            if not resolve_arg_to_identifier:
+                return param
+            else:
+                # Instead of an Identifier, the FunctionParameter may also be an ArrayPattern or ObjectPattern, or
+                #     an AssignmentPattern (whose left hand side in turn may be
+                #     an Identifier, ArrayPattern or ObjectPattern; the right hand side may be any Expression):
+                # * ArrayPattern:                         function msg_handler(msg, sender, [sendResponse1, sendResponse2]) { ... }
+                # * ObjectPattern:                        function msg_handler(msg, sender, {x:x, y:y}) { ... }
+                # * AssignmentPattern, LHS=Identifier:    function msg_handler(msg, sender, sendResponse=null) { ... }
+                # * AssignmentPattern, LHS=ArrayPattern:  function msg_handler(msg, sender, [x,y]=[1,2]) { ... }
+                # * AssignmentPattern, LHS=ObjectPattern: function msg_handler(msg, sender, {x, y}={x:1,y:2}) { ... }
+                # => Here were only handle the AssignmentPattern, LHS=Identifier case using the
+                #    function_param_get_identifier() method:  # ToDo: also handle all the other cases!
+                identifier = param.function_param_get_identifier()  # necessary for "sendResponse=null" case (default param value)
+                if identifier is not None:
+                    return identifier
+                else:
+                    raise AttributeError()
 
     # ADDED BY ME:
     def get_lowest_common_ancestor(self, other: Self) -> Self:
