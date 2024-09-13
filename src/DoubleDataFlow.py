@@ -21,9 +21,12 @@ class DoubleDataFlow:
     * function call:               sendResponse(cookies);
     """
     def __init__(self, from_flow, to_flow):
-        if from_flow.last_node().parent.id != to_flow.last_node().parent.id or\
-                from_flow.last_node().parent.name != "CallExpression":
-            raise ValueError("from_flow and to_flow must both end in the same function call/CallExpression")
+        from_flow_final_call_expr = from_flow.last_node().get_ancestor(["CallExpression", "AssignmentExpression"])
+        to_flow_final_call_expr = to_flow.last_node().get_ancestor(["CallExpression", "AssignmentExpression"])
+        if (from_flow_final_call_expr != to_flow_final_call_expr
+                or from_flow_final_call_expr is None
+                or to_flow_final_call_expr is None):
+            raise ValueError("from_flow and to_flow must both end in the same CallExpression or AssignmentExpression")
 
         self.from_flow = from_flow
         self.to_flow = to_flow
@@ -37,10 +40,14 @@ class DoubleDataFlow:
         result = {
             "from_flow": self.from_flow.pretty(),
             "to_flow": self.to_flow.pretty(),
-            "function_call": {
-                "location": self.from_flow.last_node().parent.get_location(),
-                "filename": self.from_flow.last_node().parent.get_file(),
-                "line_of_code": self.from_flow.last_node().parent.get_whole_line_of_code_as_string()
+            "rendezvous": {  # previously called "function_call" but doesn't have to be one; can also be an assignment!
+                "type": self.from_flow.last_node().get_ancestor(["CallExpression", "AssignmentExpression"]).name,
+                "location": self.from_flow.last_node().get_ancestor(["CallExpression", "AssignmentExpression"])
+                                    .get_location(),
+                "filename": self.from_flow.last_node().get_ancestor(["CallExpression", "AssignmentExpression"])
+                                    .get_file(),
+                "line_of_code": self.from_flow.last_node().get_ancestor(["CallExpression", "AssignmentExpression"])
+                                    .get_whole_line_of_code_as_string()
             }
         }
         if self.data_flow_number is not None:

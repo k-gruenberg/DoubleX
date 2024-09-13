@@ -294,6 +294,36 @@ class Node:
         return self.parent.children[self_index + relative_index]
 
     # ADDED BY ME:
+    def get_sibling_relative_or_none(self, relative_index: int) -> Optional[Self]:
+        """
+        Cf. get_sibling_relative() but returns `None` instead of throwing an IndexError.
+        Unlike get_sibling_relative() the index also doesn't wrap around back to the right when becoming
+        negative.
+
+        Use this method instead of get_sibling_relative() when you're unsure about the sibling's existence (!!!)
+
+        Example:
+
+        [1] parent
+            [2] child A
+            [3] child B
+            [4] child C
+
+        When being called on [3] child B, ...
+        ...get_sibling_relative(-2) returns `None`
+        ...get_sibling_relative(-1) returns [2] child A
+        ...get_sibling_relative(0) returns [3] child B itself
+        ...get_sibling_relative(1) returns [4] child C
+        ...get_sibling_relative(2) returns `None`
+        """
+        self_index = self.parent.children.index(self)
+        sibling_index = self_index + relative_index
+        if 0 <= sibling_index < len(self.parent.children):
+            return self.parent.children[self_index + relative_index]
+        else:
+            return None
+
+    # ADDED BY ME:
     def get_sibling_by_name(self, name: str) -> Optional[Self]:
         for sibling in self.parent.children:
             if sibling.name == name and sibling.id != self.id:
@@ -392,6 +422,15 @@ class Node:
                 return parent
             parent = parent.parent
         raise LookupError(f"no ancestor named '{allowed_ancestor_names}' found for node [{self.id}]")
+
+    # ADDED BY ME:
+    def get_ancestor_or_none(self, allowed_ancestor_names) -> Optional[Self]:
+        parent = self.parent
+        while parent is not None:
+            if parent.name in allowed_ancestor_names:
+                return parent
+            parent = parent.parent
+        return None
 
     # ADDED BY ME:
     def has_ancestor(self, allowed_ancestor_names) -> bool:

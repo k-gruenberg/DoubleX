@@ -331,6 +331,41 @@ class TestNodeClass2(unittest.TestCase):
         self.assertEqual(z_identifier.get_sibling_relative(-1), y_identifier)
         self.assertEqual(z_identifier.get_sibling_relative(0), z_identifier)
 
+    def test_get_sibling_relative_or_none(self):
+        code = """function foo(x,y,z) {}"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [1] [Program] (1 child)
+        # 	[2] [FunctionDeclaration] (5 children) --e--> [55]
+        # 		[3] [Identifier:"foo"] (0 children)
+        # 		[4] [Identifier:"x"] (0 children)
+        # 		[5] [Identifier:"y"] (0 children)
+        # 		[6] [Identifier:"z"] (0 children)
+        # 		[7] [BlockStatement] (0 children)
+        x_identifier = pdg.get_child("FunctionDeclaration").children[1]
+        y_identifier = pdg.get_child("FunctionDeclaration").children[2]
+        z_identifier = pdg.get_child("FunctionDeclaration").children[3]
+
+        self.assertEqual(x_identifier.get_sibling_relative_or_none(0), x_identifier)
+        self.assertEqual(x_identifier.get_sibling_relative_or_none(1), y_identifier)
+        self.assertEqual(x_identifier.get_sibling_relative_or_none(2), z_identifier)
+
+        self.assertEqual(y_identifier.get_sibling_relative_or_none(-1), x_identifier)
+        self.assertEqual(y_identifier.get_sibling_relative_or_none(0), y_identifier)
+        self.assertEqual(y_identifier.get_sibling_relative_or_none(1), z_identifier)
+
+        self.assertEqual(z_identifier.get_sibling_relative_or_none(-2), x_identifier)
+        self.assertEqual(z_identifier.get_sibling_relative_or_none(-1), y_identifier)
+        self.assertEqual(z_identifier.get_sibling_relative_or_none(0), z_identifier)
+
+        # Additional test cases for Node.get_sibling_relative_or_none():
+        self.assertIsNone(x_identifier.get_sibling_relative_or_none(-2))
+        self.assertIsNone(x_identifier.get_sibling_relative_or_none(4))
+        self.assertIsNone(y_identifier.get_sibling_relative_or_none(-3))
+        self.assertIsNone(y_identifier.get_sibling_relative_or_none(3))
+        self.assertIsNone(z_identifier.get_sibling_relative_or_none(-4))
+        self.assertIsNone(z_identifier.get_sibling_relative_or_none(2))
+
     def test_data_flow_distance_to(self):
         code = """x = 42; y = x;"""
         pdg = generate_pdg(code)
