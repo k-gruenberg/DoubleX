@@ -142,8 +142,9 @@ def main():
 
     parser.add_argument("--return-multiple-flow-variants", dest='return_multiple_flow_variants',
                         action='store_true',
-                        help="When this flag is set and there exist multiple data flows between the same source and "
-                             "the same sink, *all* of those will be returned in analysis_renderer_attacker.json. "
+                        help="When this flag is set and there exist multiple data flows for a certain vulnerability "
+                             "category, *all* of them will be returned (in analysis_renderer_attacker.json) instead of "
+                             "just one; even multiple ones between the same source and the same sink! "
                              "This will result in a more elaborate but also verbose listing of vulnerabilities. "
                              "Use this flag when trying to fix vulnerabilities / when wanting to report a complete "
                              "list of attack vectors.")
