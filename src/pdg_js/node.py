@@ -486,12 +486,14 @@ class Node:
         return result
 
     # ADDED BY ME:
-    def get_all_as_iter(self, node_name: str):
+    def get_all_as_iter(self, node_name: Optional[str]):
         """
         Returns all nodes of a given type/name, e.g. all "VariableDeclaration" nodes.
         Unlike get_all(), which returns a list, this function returns an iterator.
+
+        When `node_name` is `None`, returns *all* nodes!
         """
-        if self.name == node_name:
+        if node_name is None or self.name == node_name:
             yield self
         for child in self.children:
             yield from child.get_all_as_iter(node_name)
@@ -1027,6 +1029,22 @@ class Node:
                 return True
             parent = parent.parent
         return False
+
+    # ADDED BY ME:
+    def lies_within_piece_of_code(self, other_start_line: int, other_start_col: int,
+                                  other_end_line: int, other_end_col: int) -> bool:
+        self_start_line, self_start_col, self_end_line, self_end_col = self.get_location_as_tuple()
+
+        # Example: If other_start_line == other_end_line == self_start_line == self_end_line:
+        # other_start_col ************************************************************ other_end_col
+        #                            self_start_col ----------- self_end_col
+
+        other_starts_before_self: bool = (other_start_line < self_start_line)\
+                                         or (other_start_line == self_start_line and other_start_col <= self_start_col)
+        self_ends_before_other: bool = (self_end_line < other_end_line)\
+                                         or (self_end_line == other_end_line and self_end_col <= other_end_col)
+
+        return other_starts_before_self and self_ends_before_other
 
     # Python regex recap (cf. https://docs.python.org/3/library/re.html):
     # re.search(pattern, string, flags=0) => Scan through str looking for the first loc where the regex produces a match
@@ -1757,6 +1775,22 @@ class Node:
         except KeyError:
             return None
 
+    # ADDED BY ME: # (cf. Esprima documentation PDF, Section 3.1 Token Location)
+    def get_location_as_tuple(self) -> Tuple[int, int, int, int]:
+        """
+        Gets the exact location (line *and* column number) where a given node is defined.
+        Instead of returning the result as a string, as get_location() does, returns a tuple of 4 integers:
+        start_line, start_column, end_line, end_column
+        """
+        try:
+            start_line = self.attributes['loc']['start']['line']
+            start_column = self.attributes['loc']['start']['column']
+            end_line = self.attributes['loc']['end']['line']
+            end_column = self.attributes['loc']['end']['column']
+            return start_line, start_column, end_line, end_column
+        except KeyError:
+            return -1, -1, -1, -1
+
     # ADDED BY ME:
     def functional_arg_get_arg(self, arg_index: int, resolve_arg_to_identifier: bool) -> Self: # ToDo: write custom Exception classes
         """
@@ -1847,6 +1881,12 @@ class Node:
                 return ancestor
 
         raise AssertionError("every two Nodes should have a common ancestor ([Program])")
+
+    # ADDED BY ME:
+    def get_all_nodes_within_code_excerpt(self, start_line: int, start_col: int,
+                                          end_line: int, end_col: int) -> List[Self]:
+        return [node for node in self.get_all_as_iter(None)
+                if node.lies_within_piece_of_code(start_line, start_col, end_line, end_col)]
 
     def get_file(self) -> str:
         parent = self

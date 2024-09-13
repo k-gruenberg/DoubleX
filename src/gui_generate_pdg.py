@@ -1,25 +1,28 @@
+import time
 import tkinter as tk
 import tempfile
 import os
 import json
 from tkinter import WORD, CHAR, NONE
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import traceback
 
 import get_pdg
 from kim_and_lee_vulnerability_detection import analyze_extension
 from add_missing_data_flow_edges import add_missing_data_flow_edges
 from pdg_js.tokenizer_espree import tokenize
-
+from pdg_js.node import Node
 
 ADD_MISSING_DATA_FLOW_EDGES = True
 
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
+generated_pdg: Optional[Node] = None
+
 
 # ToDo: syntax highlighting for comments (why doesn't Espree include comment tokens?!)
 # ToDo: remember code snippet from last time?!
-# ToDo: double click on the LHS creates highlighting on the RHS and vice-versa
+# ToDo: double click on the RHS also creates highlighting on the LHS (right now only the other way around)
 # ToDo: allow dropping in .js / .json / .crx files
 # ToDo: add a 3rd extension list column on the very left (with option to sort by and display different criteria),
 #       add an extension content list above the current 2nd column => add "Analyze all..." button, make multi-threaded
@@ -33,6 +36,7 @@ def main():
     os.environ['DEBUG'] = "yes"
 
     def generate_pdg():
+        global generated_pdg
         try:
             js_code = text_left.get("1.0", tk.END)
 
@@ -47,6 +51,8 @@ def main():
                 no_added_df_edges_cs = add_missing_data_flow_edges(pdg)
                 print(f"{no_added_df_edges_cs} missing data flows edges added to PDG")
 
+            generated_pdg = pdg
+
             # Set content of the right text area:
             text_right.config(state=tk.NORMAL)
             text_right.delete("1.0", tk.END)
@@ -54,6 +60,10 @@ def main():
             text_right.config(state=tk.DISABLED)
         except Exception as e:
             traceback.print_exc()
+
+            generated_pdg = None
+            text_right.tag_delete("pdg_tag")
+
             # Set content of the right text area to the error:
             text_right.config(state=tk.NORMAL)
             text_right.delete("1.0", tk.END)
@@ -74,6 +84,10 @@ def main():
                                      war=False, json_apis="all", manifest_path=manifest_path, return_result=True,
                                      store_result_as_json_file=False)
         result = json.dumps(res_dict, indent=4, sort_keys=False, skipkeys=True)
+
+        global generated_pdg
+        generated_pdg = None
+        text_right.tag_delete("pdg_tag")
 
         # Set content of the right text area:
         text_right.config(state=tk.NORMAL)
@@ -96,6 +110,10 @@ def main():
                                      war=False, json_apis="all", manifest_path=manifest_path, return_result=True,
                                      store_result_as_json_file=False)
         result = json.dumps(res_dict, indent=4, sort_keys=False, skipkeys=True)
+
+        global generated_pdg
+        generated_pdg = None
+        text_right.tag_delete("pdg_tag")
 
         # Set content of the right text area:
         text_right.config(state=tk.NORMAL)
@@ -178,9 +196,45 @@ def main():
         try:
             index_start = text_left.index("sel.first")
             index_end = text_left.index("sel.last")
+
+            # (A): Display the currently selected lines & columns in a label, e.g.: "3.9 - 3.12"
             position_label['text'] = index_start + " – " + index_end
+
+            # (B): If currently displaying a PDG (generated_pdg is not None), highlight the corresponding Node(s) on the
+            #      RHS text area (displaying the PDG) whenever some code is selected in the LHS text area:
+            text_right.tag_delete("pdg_tag")
+            global generated_pdg
+            if generated_pdg is not None:
+                [start_line, start_col] = index_start.split(".")
+                [end_line, end_col] = index_end.split(".")
+                nodes_to_highlight: List[Node] = generated_pdg.get_all_nodes_within_code_excerpt(
+                    int(start_line), int(start_col), int(end_line), int(end_col)
+                )
+
+                for node_to_highlight in nodes_to_highlight:
+                    node_id = node_to_highlight.id
+                    start_index = "1.0"
+                    while True:  # Highlight *every* occurrence of f"[{node_id}]" in the RHS text area:
+                        highlight_start = text_right.search(f"[{node_id}]", start_index)
+                        # Note that Tkinter's .search() functions exhibits weird behavior:
+                        #   It will only ever return the empty string "" if the pattern isn't found *anywhere* in the
+                        #   text. If it doesn't find the pattern after start_index, it'll wrap back to the beginning
+                        #   of the text and starts searching again from there, creating an infinite loop in our case...
+                        if highlight_start == "" or text_right.compare(highlight_start, "<", start_index):
+                            break
+                        else:
+                            highlight_end = text_right.search("]", highlight_start)
+                            text_right.tag_add("pdg_tag", highlight_start, highlight_end + "+1c")
+                            # "+1c" to include the "]"
+                            # cf. https://anzeljg.github.io/rin2/book2/2405/docs/tkinter/text-index.html for "+1c" syntax
+                            start_index = highlight_end
+
+                text_right.tag_configure("pdg_tag", background="cornflower blue", foreground="black")
         except tk.TclError:
+            # (A): reset:
             position_label['text'] = ""
+            # (B): reset:
+            text_right.tag_delete("pdg_tag")
 
     root = tk.Tk()
     root.title("PDG Generator")
