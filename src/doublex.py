@@ -295,7 +295,7 @@ def main():
                           "CS injected into,crashes,analysis time in seconds,total dangers,"
                           "BP exfiltration dangers,BP infiltration dangers,BP 3.1 violations w/o API danger,"
                           "CS exfiltration dangers,CS infiltration dangers,files and line numbers\n")
-            csv_out.flush() # ToDo: add no. of UXSS vulnerabilities!
+            csv_out.flush() # ToDo: add no. of UXSS vulnerabilities! # ToDo: add manifest version (v2 or v3)
 
         if args.sort_crxs_by_size_ascending:
             print(f"Sorting {len(crxs)} .CRX files by file size...")

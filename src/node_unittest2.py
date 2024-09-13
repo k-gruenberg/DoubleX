@@ -696,6 +696,60 @@ class TestNodeClass2(unittest.TestCase):
         self.assertEqual(len(all_identifiers2), 5)
         self.assertEqual(set(all_identifiers1), set(all_identifiers2))
 
+    def test_object_expression_get_property(self):
+        code = """foo({a: 1, b: 2, c: 3})"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [56] [Program] (1 child)
+        # 	[57] [ExpressionStatement] (1 child)
+        # 		[58] [CallExpression] (2 children)
+        # 			[59] [Identifier:"foo"] (0 children)
+        # 			[60] [ObjectExpression] (3 children)
+        # 				[61] [Property] (2 children)
+        # 					[62] [Identifier:"a"] (0 children)
+        # 					[63] [Literal::{'raw': '1', 'value': 1}] (0 children)
+        # 				[64] [Property] (2 children)
+        # 					[65] [Identifier:"b"] (0 children)
+        # 					[66] [Literal::{'raw': '2', 'value': 2}] (0 children)
+        # 				[67] [Property] (2 children)
+        # 					[68] [Identifier:"c"] (0 children)
+        # 					[69] [Literal::{'raw': '3', 'value': 3}] (0 children)
+        object_expression = pdg.get_child("ExpressionStatement")\
+                             .get_child("CallExpression")\
+                             .get_child("ObjectExpression")
+        self.assertEqual(object_expression.object_expression_get_property("a").children[1].attributes['value'], 1)
+        self.assertEqual(object_expression.object_expression_get_property("b").children[1].attributes['value'], 2)
+        self.assertEqual(object_expression.object_expression_get_property("c").children[1].attributes['value'], 3)
+        self.assertIsNone(object_expression.object_expression_get_property("d"))
+        self.assertIsNone(object_expression.object_expression_get_property("e"))
+
+    def test_object_expression_get_property_value(self):
+        code = """foo({a: 1, b: 2, c: 3})"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [56] [Program] (1 child)
+        # 	[57] [ExpressionStatement] (1 child)
+        # 		[58] [CallExpression] (2 children)
+        # 			[59] [Identifier:"foo"] (0 children)
+        # 			[60] [ObjectExpression] (3 children)
+        # 				[61] [Property] (2 children)
+        # 					[62] [Identifier:"a"] (0 children)
+        # 					[63] [Literal::{'raw': '1', 'value': 1}] (0 children)
+        # 				[64] [Property] (2 children)
+        # 					[65] [Identifier:"b"] (0 children)
+        # 					[66] [Literal::{'raw': '2', 'value': 2}] (0 children)
+        # 				[67] [Property] (2 children)
+        # 					[68] [Identifier:"c"] (0 children)
+        # 					[69] [Literal::{'raw': '3', 'value': 3}] (0 children)
+        object_expression = pdg.get_child("ExpressionStatement") \
+            .get_child("CallExpression") \
+            .get_child("ObjectExpression")
+        self.assertEqual(object_expression.object_expression_get_property_value("a").attributes['value'], 1)
+        self.assertEqual(object_expression.object_expression_get_property_value("b").attributes['value'], 2)
+        self.assertEqual(object_expression.object_expression_get_property_value("c").attributes['value'], 3)
+        self.assertIsNone(object_expression.object_expression_get_property_value("d"))
+        self.assertIsNone(object_expression.object_expression_get_property_value("e"))
+
 
 if __name__ == '__main__':
     unittest.main()

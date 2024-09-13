@@ -1681,6 +1681,28 @@ class Node:
                   f"file {self.get_file()}")
             return []
 
+    # ADDED BY ME:
+    def object_expression_get_property(self, property_name: str) -> Optional[Self]:
+        assert self.name == "ObjectExpression"
+        for child in self.children:
+            if (child.name == "Property"
+                    and len(child.children) >= 1
+                    and child.children[0].name == "Identifier"
+                    and child.children[0].attributes['name'] == property_name):
+                return child
+        return None
+
+    # ADDED BY ME:
+    def object_expression_get_property_value(self, property_name: str) -> Optional[Self]:
+        assert self.name == "ObjectExpression"
+        prop = self.object_expression_get_property(property_name)
+        if prop is None:
+            return None
+        elif len(prop.children) < 2:
+            return None
+        else:
+            return prop.children[1]
+
     def is_leaf(self) -> bool:
         return not self.children
 
@@ -1792,31 +1814,29 @@ class Node:
             return -1, -1, -1, -1
 
     # ADDED BY ME:
-    def functional_arg_get_arg(self, arg_index: int, resolve_arg_to_identifier: bool) -> Self: # ToDo: write custom Exception classes
+    def functional_arg_get_args(self, resolve_args_to_identifiers: bool) -> List[Self]:  # ToDo: write custom Exception classes?
         """
-        Example 1 (used by get_all_sendResponse_sinks()):
+        Example 1:
             self                 = (message, sender, sendResponse) => { /* ... */ }
-            arg_index            = 3
-            return value         = sendResponse (Node)
+            returned list        = [message Node, sender Node, sendResponse Node]
 
-        Example 2 (used by get_all_port_postMessage_sinks()):
+        Example 2:
             self                 = port => { /* ... */ }
-            arg_index            = 0
-            return value         = port (Node)
+            returned list        = [port Node]
 
         Parameters:
-            arg_index: which argument to get, zero-based index
-            resolve_arg_to_identifier: resolve more complex arguments consisting of parameter name + default value
+            resolve_args_to_identifiers: resolve more complex arguments consisting of parameter name + default value
                                        (e.g., "function foo(x=42) {}") just into the Identifier.
 
         Returns:
-            the Node representing the n-th argument of this functional argument (see examples above)
+            the list of Nodes representing the arguments of this functional argument (see examples above);
+            when resolve_args_to_identifiers=True, the returned list will only contain Identifiers and None values as
+            more complex parameters (e.g., "{}") cannot be resolved to a *single* identifier(!);
+            in all cases, the returned list will contain *exactly* as many items as the function has parameters(!)
 
         Raises:
             a TypeError when this is neither a FunctionExpression nor an ArrowFunctionExpression nor an Identifier;
-            a KeyError when this is an Identifier but the Identifier couldn't be resolved to a FunctionDeclaration;
-            an IndexError when the given `arg_index` >= # of. arguments;
-            an AttributeError when resolve_arg_to_identifier=True but resolving the arg to an Identifier failed
+            a KeyError when this is an Identifier but the Identifier couldn't be resolved to a FunctionDeclaration
         """
         if self.name in ["FunctionExpression", "ArrowFunctionExpression"]:  # cases 1 and 2: (Arrow)FunctionExpression:
             params = self.arrow_function_expression_get_params()
@@ -1843,28 +1863,60 @@ class Node:
         else:
             raise TypeError()
 
-        if arg_index >= len(params):
+        if not resolve_args_to_identifiers:
+            return params
+        else:
+            # Instead of an Identifier, the FunctionParameter may also be an ArrayPattern or ObjectPattern, or
+            #     an AssignmentPattern (whose left hand side in turn may be
+            #     an Identifier, ArrayPattern or ObjectPattern; the right hand side may be any Expression):
+            # * ArrayPattern:                         function msg_handler(msg, sender, [sendResp1, sendResp2]) { ... }
+            # * ObjectPattern:                        function msg_handler(msg, sender, {x:x, y:y}) { ... }
+            # * AssignmentPattern, LHS=Identifier:    function msg_handler(msg, sender, sendResponse=null) { ... }
+            # * AssignmentPattern, LHS=ArrayPattern:  function msg_handler(msg, sender, [x,y]=[1,2]) { ... }
+            # * AssignmentPattern, LHS=ObjectPattern: function msg_handler(msg, sender, {x, y}={x:1,y:2}) { ... }
+            # => Here were only handle the AssignmentPattern, LHS=Identifier case using the
+            #    function_param_get_identifier() method:  # ToDo: also handle all the other cases!
+            return [param.function_param_get_identifier() for param in params]
+            # necessary for "sendResponse=null" cases (default param values)
+            # for more complex cases (e.g., "{x, y}" destructurings), function_param_get_identifier() returns `None`
+
+    # ADDED BY ME:
+    def functional_arg_get_arg(self, arg_index: int, resolve_arg_to_identifier: bool) -> Self:  # ToDo: write custom Exception classes?
+        """
+        Example 1 (used by get_all_sendResponse_sinks()):
+            self                 = (message, sender, sendResponse) => { /* ... */ }
+            arg_index            = 3
+            return value         = sendResponse (Node)
+
+        Example 2 (used by get_all_port_postMessage_sinks()):
+            self                 = port => { /* ... */ }
+            arg_index            = 0
+            return value         = port (Node)
+
+        Parameters:
+            arg_index: which argument to get, zero-based index
+            resolve_arg_to_identifier: resolve more complex arguments consisting of parameter name + default value
+                                       (e.g., "function foo(x=42) {}") just into the Identifier.
+
+        Returns:
+            the Node representing the n-th argument of this functional argument (see examples above)
+
+        Raises:
+            a TypeError when this is neither a FunctionExpression nor an ArrowFunctionExpression nor an Identifier;
+            a KeyError when this is an Identifier but the Identifier couldn't be resolved to a FunctionDeclaration;
+            an IndexError when the given `arg_index` >= # of. arguments;
+            an AttributeError when resolve_arg_to_identifier=True but resolving the arg to an Identifier failed
+        """
+        args = self.functional_arg_get_args(resolve_args_to_identifiers=resolve_arg_to_identifier)
+        # The call above may raise a TypeError, or a KeyError.
+
+        if arg_index >= len(args):
             raise IndexError()
         else:
-            param = params[arg_index]  # (arg1, arg2, *arg3*)
-            if not resolve_arg_to_identifier:
-                return param
-            else:
-                # Instead of an Identifier, the FunctionParameter may also be an ArrayPattern or ObjectPattern, or
-                #     an AssignmentPattern (whose left hand side in turn may be
-                #     an Identifier, ArrayPattern or ObjectPattern; the right hand side may be any Expression):
-                # * ArrayPattern:                         function msg_handler(msg, sender, [sendResponse1, sendResponse2]) { ... }
-                # * ObjectPattern:                        function msg_handler(msg, sender, {x:x, y:y}) { ... }
-                # * AssignmentPattern, LHS=Identifier:    function msg_handler(msg, sender, sendResponse=null) { ... }
-                # * AssignmentPattern, LHS=ArrayPattern:  function msg_handler(msg, sender, [x,y]=[1,2]) { ... }
-                # * AssignmentPattern, LHS=ObjectPattern: function msg_handler(msg, sender, {x, y}={x:1,y:2}) { ... }
-                # => Here were only handle the AssignmentPattern, LHS=Identifier case using the
-                #    function_param_get_identifier() method:  # ToDo: also handle all the other cases!
-                identifier = param.function_param_get_identifier()  # necessary for "sendResponse=null" case (default param value)
-                if identifier is not None:
-                    return identifier
-                else:
-                    raise AttributeError()
+            arg = args[arg_index]  # (arg1, arg2, *arg3*)
+            if arg is None:  # (can only occur if resolve_arg_to_identifier=True)
+                raise AttributeError()
+            return arg
 
     # ADDED BY ME:
     def get_lowest_common_ancestor(self, other: Self) -> Self:

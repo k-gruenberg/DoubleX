@@ -1,4 +1,5 @@
 import os
+from typing import List
 
 import utility
 from pdg_js.node import Node
@@ -53,6 +54,10 @@ def add_missing_data_flow_edges(pdg: Node) -> int:
     edges_added_standard_library_functions = add_missing_data_flow_edges_standard_library_functions(pdg)
     print(f"[Adding data flows] {edges_added_standard_library_functions} edges added to standard library functions.")
     total_data_flow_edges_added += edges_added_standard_library_functions
+
+    edges_added_chrome_apis = add_missing_data_flow_edges_chrome_apis(pdg)
+    print(f"[Adding data flows] {edges_added_chrome_apis} edges added to Chrome API calls.")
+    total_data_flow_edges_added += edges_added_chrome_apis
 
     edges_added_call_expressions = add_missing_data_flow_edges_call_expressions(pdg)
     print(f"[Adding data flows] {edges_added_call_expressions} edges added to call expressions.")
@@ -697,5 +702,153 @@ def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  #
             print(f"[Warning] obj parameter found in Object.defineProperties(obj, props) call "
                   f"(in line {pattern_match.get_line()}, file {pattern_match.get_file()}) is not an "
                   f"Identifier; no data flow added.")
+
+    return data_flow_edges_added
+
+
+def add_missing_data_flow_edges_chrome_apis(pdg: Node) -> int:  # ToDo:
+    """
+    Similar to add_missing_data_flow_edges_standard_library_functions() but for Chrome extension API functions
+    instead of JavaScript standard library functions.
+
+    Adds missing data flows from `y` to `x` in CallExpressions like:
+
+    *
+    """
+
+    data_flow_edges_added = 0
+
+    # ##### ##### ##### ##### ##### chrome.scripting.executeScript(): ##### ##### ##### ##### #####
+
+    # chrome.scripting.executeScript(
+    #   injection: ScriptInjection,
+    #   callback?: function,
+    # )
+    #
+    # Description:
+    #   Injects a script into a target context. By default, the script will be run at document_idle, or immediately if
+    #   the page has already loaded. If the injectImmediately property is set, the script will inject without waiting,
+    #   even if the page has not finished loading. If the script evaluates to a promise, the browser will wait for the
+    #   promise to settle and return the resulting value.
+    #
+    # Parameters:
+    #   injection: The details of the script which to inject.
+    #   callback:  (results: InjectionResult[]) => void        // <== we do not care about this
+    #
+    # where:
+    #
+    #   ScriptInjection:
+    #     Properties:
+    #       args:              any[]           optional // The arguments to pass to the provided function.
+    #                                                   // This is only valid if the func parameter is specified.
+    #                                                   // These arguments must be JSON-serializable.
+    #       files:             string[]        optional // Exactly one of files or func must be specified.
+    #       injectImmediately: boolean         optional
+    #       target:            InjectionTarget
+    #       world:             ExecutionWorld  optional // enum: either "ISOLATED" or "MAIN"
+    #       func:              void            optional // The func function looks like: () => {...}
+    #                                                   // A JavaScript function to inject. This function will be
+    #                                                   // serialized, and then deserialized for injection. This means
+    #                                                   // that any bound parameters and execution context will be lost.
+    #                                                   // Exactly one of files or func must be specified.
+    #
+    #   InjectionTarget:
+    #     Properties:
+    #       allFrames:   boolean  optional  // Whether the script should inject into all frames within the tab.
+    #                                       // Defaults to false. This must not be true if frameIds is specified.
+    #       documentIds: string[] optional  // The IDs of specific documentIds to inject into.
+    #                                       // This must not be set if frameIds is set.
+    #       frameIds:    number[] optional  // The IDs of specific frames to inject into.
+    #       tabId:       number             // The ID of the tab into which to inject.
+    #
+    #   InjectionResult:
+    #     Properties:
+    #       documentId: string
+    #       frameId: number
+    #       result: any optional
+    #
+    # => https://developer.chrome.com/docs/extensions/reference/api/scripting
+    # => https://developer.chrome.com/docs/extensions/reference/api/scripting#type-ScriptInjection
+    # => https://developer.chrome.com/docs/extensions/reference/api/scripting#type-InjectionTarget
+    # => https://developer.chrome.com/docs/extensions/reference/api/scripting#type-InjectionResult
+    #
+    # Example:
+    #
+    #                 chrome.scripting.executeScript({
+    #                     target: { tabId: tab.id },
+    #                     func: (uname) => {
+    #                         const body = document.getElementsByTagName('body')[0];
+    #                         const new_span = document.createElement('span');
+    #                         new_span.innerHTML = 'Hello ' + uname + '!';
+    #                         body.append(new_span);
+    #                     },
+    #                     args: [msg["user_name"]]
+    #                 });
+    #
+    # Data flows to add:
+    #   * from all identifiers in the i-th element of `args` to the i-th argument of the `func` function
+
+    chrome_scripting_executeScript_pattern =\
+        Node("CallExpression")\
+            .child(
+                Node("MemberExpression")
+                    .child(
+                        Node("MemberExpression")
+                            .child(
+                                Node.identifier("chrome")
+                            )
+                            .child(
+                                Node.identifier("scripting")
+                            )
+                    )
+                    .child(
+                        Node.identifier("executeScript")
+                    )
+            )\
+            .child(
+                Node("ObjectExpression")
+            )
+
+    if os.environ.get('PRINT_PDGS') == "yes":
+        print(f"chrome.scripting.executeScript() Pattern:\n{chrome_scripting_executeScript_pattern}")
+
+    for pattern_match in pdg.find_pattern(chrome_scripting_executeScript_pattern,
+                                          match_identifier_names=True,
+                                          match_literals=False,  # irrelevant in this case
+                                          match_operators=False,  # irrelevant in this case
+                                          allow_additional_children=True,
+                                          allow_different_child_order=False):
+
+        assert pattern_match.name == "CallExpression"
+
+        object_expression: Node = pattern_match.get_child("ObjectExpression")
+        args_property: Node = object_expression.object_expression_get_property_value("args")
+        func_property: Node = object_expression.object_expression_get_property_value("func")
+
+        if args_property is not None and func_property is not None:  # both "args" and "func" are optional to specify!
+            if args_property.name == "ArrayExpression":
+                args_supplied: List[Node] = args_property.children
+                try:
+                    args_used: List[Node] = func_property.functional_arg_get_args(resolve_args_to_identifiers=True)
+
+                    for i in range(min(len(args_supplied), len(args_used))):
+                        arg_supplied: Node = args_supplied[i]  # in the example (see above): msg["user_name"]
+                        arg_used: Node = args_used[i]  # in the example (see above): uname
+                        if arg_used is not None:  # List returned by functional_arg_get_args() may return Nones for errors
+                            for arg_supplied_identifier in arg_supplied.get_all_identifiers():
+                                # Add data flow:
+                                data_flow_edges_added += arg_supplied_identifier.set_data_dependency(arg_used)
+                                # => includes call: arg_supplied.data_dep_children.append(extremity=arg_used)
+                except TypeError:
+                    # when func_property is neither an (Arrow)FunctionExpression nor an Identifier:
+                    print(f"[Warning] 'func' argument of chrome.scripting.executeScript() call in "
+                          f"line {func_property.get_line()} (file {func_property.get_file()}) "
+                          f"has unknown form: {func_property.name}")
+                except KeyError:
+                    # when func_property is an Identifier but couldn't be resolved to a FunctionDeclaration:
+                    print(f"[Warning] 'func' argument of chrome.scripting.executeScript() call in "
+                          f"line {func_property.get_line()} (file {func_property.get_file()}) "
+                          f"is an identifier that couldn't be resolved to a function: "
+                          f"'{func_property.attributes['name']}'")
 
     return data_flow_edges_added
