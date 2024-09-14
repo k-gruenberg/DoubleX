@@ -163,8 +163,8 @@ def main():
                         help="Path of the .CSV output file. "
                              "Only has an effect in combination with the --crx and --renderer-attacker parameters. "
                              "CSV file will contain list of all extensions analyzed and number of vulnerabilities"
-                             "found, by type."
-                             "No .CSV file will be created when the --csv-out argument is supplied.")
+                             "found, by type. "
+                             "No .CSV file will be created when the --csv-out argument isn't supplied.")
 
     parser.add_argument("--consider-http-as-safe", dest='consider_http_as_safe',
                         action='store_true',
@@ -290,13 +290,13 @@ def main():
                 print(f"Error: '{args.csv_out}' file already exists, please supply another file as --csv-out.")
                 exit(1)
             csv_out = open(args.csv_out, "w")
-            csv_out.write("Extension,name,browser action default title,version,description,"
+            csv_out.write("Extension,name,browser action default title,version,manifest version,description,"
                           "permissions,optional permissions,host permissions,optional host permissions,"
                           "extension size (packed),extension size (unpacked),JS LoC,"
                           "CS injected into,crashes,analysis time in seconds,total dangers,"
                           "BP exfiltration dangers,BP infiltration dangers,BP 3.1 violations w/o API danger,"
                           "CS exfiltration dangers,CS infiltration dangers,files and line numbers\n")
-            csv_out.flush() # ToDo: add no. of UXSS vulnerabilities! # ToDo: add manifest version (v2 or v3)
+            csv_out.flush() # ToDo: add no. of UXSS vulnerabilities!
 
         if args.sort_crxs_by_size_ascending:
             print(f"Sorting {len(crxs)} .CRX files by file size...")
@@ -344,6 +344,9 @@ def main():
                         ext_version =\
                             manifest['version'].replace(",", "").replace("\n", "")\
                             if 'version' in manifest else ""
+                        ext_manifest_version =\
+                            str(manifest['manifest_version']).replace(",", "").replace("\n", "")\
+                            if 'manifest_version' in manifest else ""
                         ext_description =\
                             manifest['description'][:100].replace(",", "").replace("\n", "")\
                             if 'description' in manifest else ""
@@ -376,6 +379,7 @@ def main():
                                                                    cs_exfiltration_dangers, cs_infiltration_dangers])
                         files_and_line_numbers = "" # ToDo: write once more types of vuln. are supported!
                         csv_out.write(f"{crx},{ext_name},{ext_browser_action_default_title},{ext_version},"
+                                      f"{ext_manifest_version},"
                                       f"{ext_description},{ext_permissions},{ext_optional_permissions},"
                                       f"{ext_host_permissions},{ext_optional_host_permissions},"
                                       f"{extension_size_packed},{extension_size_unpacked},{js_loc},"
