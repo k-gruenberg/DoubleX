@@ -7,6 +7,7 @@ from pdg_js.node import Node
 PRINT_DEBUG = utility.PRINT_DEBUG
 
 JAVASCRIPT_BUILT_IN_FUNCTIONS = [
+    # Note that this list also includes constructors, anything that might end up in a CallExpression!
     "eval", "isFinite", "isNaN", "parseFloat", "parseInt",
     "decodeURI", "decodeURIComponent", "encodeURI", "encodeURIComponent",
     "escape", "unescape",  # both deprecated!
@@ -21,8 +22,10 @@ JAVASCRIPT_BUILT_IN_FUNCTIONS = [
     # same for WeakRef(), FinalizationRegistry(),
     # same for Iterator(), Promise(),
     # same for Proxy()
+    # => Source: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects
+    "clearInterval", "setInterval", "setTimeout",
+    # => https://developer.mozilla.org/en-US/docs/Web/API/clearInterval
 ]
-# => Source: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects
 
 
 def add_missing_data_flow_edges(pdg: Node) -> int:
@@ -209,9 +212,7 @@ def add_missing_data_flow_edges_declarations_and_assignments(pdg: Node) -> int:
             # 					[5] [Identifier:"y"] (0 children)
             # 				[6] [Identifier:"z"] (0 children)
             # 			[7] [Identifier:"w"] (0 children)
-            leftmost_identifier = lhs.children[0]
-            while leftmost_identifier.name == "MemberExpression":
-                leftmost_identifier = leftmost_identifier.children[0]
+            leftmost_identifier = lhs.member_expression_get_leftmost_identifier()
 
             if leftmost_identifier.name == "Identifier":  # could also be a "ThisExpression" but we're not handling that for now!
                 # cf. if-case above:
@@ -328,19 +329,63 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
                   f"{function_reference.get_line()}, file {function_reference.get_file()}), "
                   f"possible missing data flow edge(s)...")
 
+    elif pdg.name == "CallExpression" and len(pdg.children) > 1 and pdg.children[0].name == "FunctionExpression":
+        # For each IIFE, e.g.: "!function(x,y){}(a,b)", add data flows from `a` to `x` and from `b` to `y`:
+        # [1] [Program] (1 child)
+        # 	[2] [ExpressionStatement] (1 child)
+        # 		[3] [UnaryExpression:"!"] (1 child)
+        # 			[4] [CallExpression] (3 children)
+        # 				[5] [FunctionExpression::{'generator': False, 'async': False, 'expression': False}] (3 children)
+        # 					[6] [Identifier:"x"] (0 children)
+        # 					[7] [Identifier:"y"] (0 children)
+        # 					[8] [BlockStatement] (0 children)
+        # 				[9] [Identifier:"a"] (0 children)
+        # 				[10] [Identifier:"b"] (0 children)
+        #
+        # This will also handle more complex cases, e.g.:
+        #   "!function(x=null,y,z){}(a+1,b)"
+
+        function_expression: Node = pdg.children[0]
+        assert function_expression.name == "FunctionExpression"  # because of check above
+
+        no_of_params_in_call_expr: int = len(pdg.children) - 1  # a CallExpression = 1 callee + N arguments (cf. Esprima docs)
+        no_of_params_in_func_expr: int = len(function_expression.arrow_function_expression_get_params())
+        for param_index in range(min(no_of_params_in_call_expr, no_of_params_in_func_expr)):
+            n_th_call_expr_param = pdg.children[1 + param_index]
+            n_th_func_expr_param = function_expression.arrow_function_expression_get_nth_param(param_index)
+            n_th_func_expr_identifier = n_th_func_expr_param.function_param_get_identifier()  # handles `function foo(x=42) { ... }` case (default parameter)
+            if n_th_func_expr_identifier is not None:
+                # Add a data flow edge for each identifier in the expression used as the parameter:
+                for identifier in n_th_call_expr_param.get_all_identifiers():
+                    # Add data flow edge:
+                    data_flow_edges_added += identifier.set_data_dependency(n_th_func_expr_identifier)  # a --data--> x
+                # => handles all of the following:
+                #    * `foo(y)` (i.e., n_th_call_expr_param.name == "Identifier"),
+                #    * `foo(y=z)` (i.e., n_th_call_expr_param.name == "AssignmentExpression"),
+                #    * `foo(42*y)` (i.e. n_th_call_expr_param.name == "BinaryExpression").
+
     elif (pdg.name == "CallExpression" and len(pdg.children) > 1 and pdg.children[0].name == "MemberExpression"
-            and pdg.children[0].attributes['computed'] == False
+            and pdg.children[0].attributes['computed'] == False # ToDo: also catch foo['bar'] instead of foo.bar !!!
             and len(pdg.children[0].children) == 2
-            and pdg.children[0].lhs().name == "Identifier"
+            and pdg.children[0].lhs().name in ["Identifier", "MemberExpression"]
             and pdg.children[0].rhs().name == "Identifier"):
+        # CallExpressions where the LHS is of callee is a MemberExpression, like `foo.bar(...)`:
         # interface CallExpression {
         #     callee: Expression | Import;
         #     arguments: ArgumentListElement[];
         # }
-        callee_member_expression = pdg.children[0]
-        callee_lhs_identifier = callee_member_expression.lhs()
-        callee_rhs_identifier = callee_member_expression.rhs()
-        arguments = pdg.children[1:]
+        # [CallExpression]
+        #     [MemberExpression:"False"]
+        #         [Identifier/MemberExpression]
+        #         [Identifier]
+        #     [...]
+        #     ...
+        callee_member_expression: Node = pdg.children[0]
+        assert callee_member_expression.name == "MemberExpression"  # because of check above
+        callee_lhs: Node = callee_member_expression.lhs()  # an Identifier or another MemberExpression
+        callee_leftmost_identifier: Node = callee_member_expression.member_expression_get_leftmost_identifier()
+        callee_rhs_identifier: Node = callee_member_expression.rhs()  # an Identifier
+        arguments: List[Node] = pdg.children[1:]
         assert len(arguments) > 0  # because of len(pdg.children) > 1 check above
 
         # For CallExpressions like `foo.bar(y)`, ...
@@ -348,7 +393,8 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
         #   2nd: try to find the class declaration,
         #   3rd: try to find the declaration of a method called "bar" inside that class declaration
         #   4th: add a data flow from `y` to the `x` parameter of the "bar(x)" method declaration from step 3
-        pass  # ToDo
+        if callee_lhs == callee_leftmost_identifier:
+            pass  # ToDo
 
         # For CallExpressions like `foo.bar((y) => { /* ... */ })`,
         #   add a data flow from `foo` to `y`.
@@ -366,6 +412,9 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
         # * `array1.find(...);`
         # * `array1.sort(...);`
         #
+        # Note that instead of `foo.bar`, the MemberExpressions might be longer, too, e.g. `t.data.data.forEach`:
+        #   t.data.data.forEach(function(r) { /* ... */ })
+        #
         # Note, however, that there might be many other function calls that look like this but where the arguments are
         #   not references to functions, take the following example:
         # * `Object.assign(target, source)` where both `target` and `source` are non-function objects!
@@ -374,17 +423,17 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
             if argument.name in ["FunctionExpression", "ArrowFunctionExpression"]:
                 for arrow_function_param in argument.arrow_function_expression_get_params():  # for each "[a,b]":
                     for identifier in arrow_function_param.function_param_get_identifiers():   # for each "a":
-                        data_flow_edges_added += callee_lhs_identifier.set_data_dependency(identifier)  # foo --data--> y
+                        data_flow_edges_added += callee_leftmost_identifier.set_data_dependency(identifier)  # foo --data--> y
             elif argument.name == "Identifier":
                 function_declaration = argument.function_Identifier_get_FunctionDeclaration(False)
                 if function_declaration is not None:
                     assert function_declaration.name == "FunctionDeclaration"
                     for arrow_function_param in function_declaration.function_declaration_get_params():  # for each "[a,b]":
                         for identifier in arrow_function_param.function_param_get_identifiers():  # for each "a":
-                            data_flow_edges_added += callee_lhs_identifier.set_data_dependency(identifier)  # foo --data--> y
+                            data_flow_edges_added += callee_leftmost_identifier.set_data_dependency(identifier)  # foo --data--> y
 
     return data_flow_edges_added +\
-        sum(add_missing_data_flow_edges_call_expressions(child) for child in pdg.children)#
+        sum(add_missing_data_flow_edges_call_expressions(child) for child in pdg.children)
 
 
 def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  # ToDo: create test cases
@@ -706,14 +755,14 @@ def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  #
     return data_flow_edges_added
 
 
-def add_missing_data_flow_edges_chrome_apis(pdg: Node) -> int:  # ToDo:
+def add_missing_data_flow_edges_chrome_apis(pdg: Node) -> int:
     """
     Similar to add_missing_data_flow_edges_standard_library_functions() but for Chrome extension API functions
     instead of JavaScript standard library functions.
 
     Adds missing data flows from `y` to `x` in CallExpressions like:
 
-    *
+    * chrome.scripting.executeScript({target: { tabId: tab.id }, func: (x) => {}, args: [y]});
     """
 
     data_flow_edges_added = 0

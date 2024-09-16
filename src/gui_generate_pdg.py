@@ -9,10 +9,13 @@ import traceback
 
 import get_pdg
 from kim_and_lee_vulnerability_detection import analyze_extension
+from remove_incorrect_data_flow_edges import remove_incorrect_data_flow_edges
 from add_missing_data_flow_edges import add_missing_data_flow_edges
 from pdg_js.tokenizer_espree import tokenize
 from pdg_js.node import Node
+from DataFlow import DataFlow
 
+REMOVE_INCORRECT_DATA_FLOW_EDGES = True
 ADD_MISSING_DATA_FLOW_EDGES = True
 
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
@@ -48,9 +51,12 @@ def main():
             res_dict = dict()
             benchmarks = res_dict['benchmarks'] = dict()
             pdg = get_pdg.get_pdg(file_path=tmp_file.name, res_dict=benchmarks)
+            if REMOVE_INCORRECT_DATA_FLOW_EDGES:
+                no_removed_df_edges: int = remove_incorrect_data_flow_edges(pdg)
+                print(f"{no_removed_df_edges} incorrect data flows edges removed from DoubleX-generated PDG")
             if ADD_MISSING_DATA_FLOW_EDGES:
-                no_added_df_edges_cs = add_missing_data_flow_edges(pdg)
-                print(f"{no_added_df_edges_cs} missing data flows edges added to PDG")
+                no_added_df_edges: int = add_missing_data_flow_edges(pdg)
+                print(f"{no_added_df_edges} missing data flows edges added to PDG")
 
             generated_pdg = pdg
 
@@ -203,7 +209,10 @@ def main():
 
             # (B): If currently displaying a PDG (generated_pdg is not None), highlight the corresponding Node(s) on the
             #      RHS text area (displaying the PDG) whenever some code is selected in the LHS text area:
-            text_right.tag_delete("pdg_tag")
+            # (C): highlight all data flow children within the LHS source code:
+            text_right.tag_delete("pdg_tag")  # (B)
+            text_left.tag_delete("df_child_tag")  # (C)
+            text_left.tag_delete("df_parent_tag")  # (C)
             global generated_pdg
             if generated_pdg is not None:
                 [start_line, start_col] = index_start.split(".")
@@ -212,6 +221,7 @@ def main():
                     int(start_line), int(start_col), int(end_line), int(end_col)
                 )
 
+                # (B): highlight nodes on RHS:
                 for node_to_highlight in nodes_to_highlight:
                     node_id = node_to_highlight.id
                     start_index = "1.0"
@@ -229,13 +239,48 @@ def main():
                             # "+1c" to include the "]"
                             # cf. https://anzeljg.github.io/rin2/book2/2405/docs/tkinter/text-index.html for "+1c" syntax
                             start_index = highlight_end
-
                 text_right.tag_configure("pdg_tag", background="cornflower blue", foreground="black")
+
+                # (C): highlight identifiers in data flow on LHS:
+                identifiers: List[Node] = [node for node in nodes_to_highlight if node.name == "Identifier"]
+                object_patterns: List[Node] = [node for node in nodes_to_highlight if node.name == "ObjectPattern"]
+                # Only highlight anything if the user selects either exactly *one* ObjectPattern, or, when no
+                #   ObjectPattern is selected, exactly *one* Identifier:
+                if len(object_patterns) == 1:
+                    object_pattern: Node = object_patterns[0]
+                    data_flows: List[DataFlow] = DataFlow.all_continued_beginning_at(object_pattern)
+                elif len(object_patterns) == 0 and len(identifiers) == 1:
+                    identifier: Node = identifiers[0]
+
+                    # Highlight all data flow parents in red:
+                    for df_parent in identifier.data_dep_parents:
+                        df_parent_node = df_parent.extremity
+                        start_line, start_column, end_line, end_column = df_parent_node.get_location_as_tuple()
+                        highlight_start = f"{start_line}.{start_column}"
+                        highlight_end = f"{end_line}.{end_column}"
+                        text_left.tag_add("df_parent_tag", highlight_start, highlight_end)
+                    text_left.tag_configure("df_parent_tag", background="red", foreground="black")
+
+                    data_flows: List[DataFlow] = DataFlow.all_continued_beginning_at(identifier)
+                else:
+                    return
+                # Highlight all data flow children in green:
+                for data_flow in data_flows:
+                    for df_child_node in data_flow.nodes:
+                        start_line, start_column, end_line, end_column = df_child_node.get_location_as_tuple()
+                        highlight_start = f"{start_line}.{start_column}"
+                        highlight_end = f"{end_line}.{end_column}"
+                        text_left.tag_add("df_child_tag", highlight_start, highlight_end)
+                text_left.tag_configure("df_child_tag", background="pale green", foreground="black")
+
         except tk.TclError:
             # (A): reset:
             position_label['text'] = ""
             # (B): reset:
             text_right.tag_delete("pdg_tag")
+            # (C): reset:
+            text_left.tag_delete("df_child_tag")
+            text_left.tag_delete("df_parent_tag")
 
     root = tk.Tk()
     root.title("PDG Generator")

@@ -4,9 +4,10 @@ import os
 import tempfile
 import unittest
 
-from src.get_pdg import get_pdg
-from src.pdg_js.build_pdg import get_data_flow
-from src.add_missing_data_flow_edges import add_missing_data_flow_edges
+from get_pdg import get_pdg
+from pdg_js.build_pdg import get_data_flow
+from add_missing_data_flow_edges import add_missing_data_flow_edges
+from remove_incorrect_data_flow_edges import remove_incorrect_data_flow_edges
 
 os.environ['PARSER'] = "espree"
 os.environ['SOURCE_TYPE'] = "module"
@@ -30,8 +31,10 @@ def generate_pdg(code):
     # ...even though get_pdg() does nothing more than to call get_data_flow().
     # The reason for that is the isinstance(lhs, Identifier) check in add_missing_data_flow_edges(); isinstance()
     #     apparently somehow depends on how modules are imported, cf. https://bugs.python.org/issue1249615
-    no_added_df_edges_cs = add_missing_data_flow_edges(pdg)
-    print(f"{no_added_df_edges_cs} missing data flows edges added to PDG")
+    no_removed_df_edges = remove_incorrect_data_flow_edges(pdg)
+    print(f"{no_removed_df_edges} incorrect data flows edges removed from PDG")
+    no_added_df_edges = add_missing_data_flow_edges(pdg)
+    print(f"{no_added_df_edges} missing data flows edges added to PDG")
     return pdg
 
 
@@ -161,6 +164,18 @@ class TestNodeClass2(unittest.TestCase):
         call_expression = pdg.get_all("CallExpression")[0]
         self.assertEqual(call_expression.call_expression_get_full_function_name(),
                          "x()")
+
+        pdg = generate_pdg("!function(x) {console.log(x)}(42)")
+        call_expression = pdg.get_all("CallExpression")[0]
+        self.assertEqual(call_expression.call_expression_get_full_function_name(),
+                         "<function_expression>")
+
+        # A real-world example from the "ClassLink OneClick Extension",
+        #   version 10.6, extension ID jgfbgkjjlonelmpenhpfeeljjlcgnkpe:
+        pdg = generate_pdg("!function(t, n, e) { f.apply(this, arguments) }(l, t.data, n.frameId)")
+        call_expression = pdg.get_all("CallExpression")[0]
+        self.assertEqual(call_expression.call_expression_get_full_function_name(),
+                         "<function_expression>")
 
     def test_get_sensitive_apis_accessed(self):
         # No sensitive API:

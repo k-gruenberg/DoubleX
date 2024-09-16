@@ -729,10 +729,13 @@ class Node:
             return "<literal>." + self.rhs().attributes['name']
             # Note how "<literal>" is *NOT* a valid JavaScript identifier! (see https://mothereff.in/js-variables)
 
+        elif self.lhs().name == "NewExpression":  # e.g.: "new RegExp(/^(http|https):\/\//).test" (followed by "(u[0])")
+            return "<new_expression>"
+
         elif self.lhs().name == "Identifier":
             return self.lhs().attributes['name'] + "." + self.rhs().attributes['name']
 
-        elif self.lhs().name == "MemberExpression":
+        elif self.lhs().name == "MemberExpression": # ToDo: handle a[b] and a['b'] type member expressions as well!!!
             return self.lhs().member_expression_to_string() + "." + self.rhs().attributes['name']
 
         elif self.lhs().name == "CallExpression" and self.lhs().children[0].name == "ThisExpression":
@@ -745,8 +748,27 @@ class Node:
             return self.lhs().children[0].member_expression_to_string() + "()." + self.rhs().attributes['name']
 
         else:
-            raise TypeError(f"member_expression_to_string(): LHS of MemberExpression is neither a ThisExpression "
+            raise TypeError(f"member_expression_to_string(): LHS of MemberExpression in line {self.get_line()} "
+                            f"is neither a ThisExpression "
                             f"nor an Identifier nor a MemberExpression: {self.lhs()}")
+
+    # ADDED BY ME:
+    def member_expression_get_leftmost_identifier(self) -> Self:
+        """
+        Note that the Node returned may not necessarily *be* an Identifier, so be sure to check that!
+        (May also be a ThisExpression or FunctionExpression, for example.)
+        """
+        if self.name != "MemberExpression":
+            raise TypeError("member_expression_get_leftmost_identifier() may only be called on a MemberExpression")
+        elif len(self.children) == 0:
+            raise TypeError("member_expression_get_leftmost_identifier() called on a MemberExpression w/o any children")
+
+        leftmost_identifier = self.children[0]
+
+        while leftmost_identifier.name == "MemberExpression":
+            leftmost_identifier = leftmost_identifier.children[0]
+
+        return leftmost_identifier
 
     # ADDED BY ME:
     def call_expression_get_full_function_name(self) -> str:
@@ -764,12 +786,14 @@ class Node:
         ...this functions returns "foo.bar.baz" (as a string!) for example.
 
         Note that both "a[b](x,y,z)" and "a.b(x,y,z)" will result in the same output of "a.b" as the full function name!
+        => ToDo: fix!
 
         Note that the returned value may also be more complex:
         * call_expression_get_full_function_name("x().y()") ==returns==> "x().y"
         * call_expression_get_full_function_name("x(a,b).y()") ==returns==> "x().y"
         
         Raises an Exception when called on a Node that isn't a CallExpression!
+        Returns "<function_expression>" when the CallExpression calls a FunctionExpression (IIFE)!
         """
         if self.name != "CallExpression":
             raise TypeError("call_expression_get_full_function_name() may only be called on a CallExpression")
@@ -796,9 +820,13 @@ class Node:
         elif callee.name == "CallExpression":  # "x()()"
             return callee.call_expression_get_full_function_name() + "()"
 
+        elif callee.name == "FunctionExpression":  # "!function(x) {console.log(x)}(42)"
+            return "<function_expression>"
+
         else:
             raise TypeError(f"call_expression_get_full_function_name(): "
-                            f"Unsupported type of callee Expression used for a CallExpression: {callee}")
+                            f"Unsupported type of callee Expression used for a CallExpression "
+                            f"in line {callee.get_line()}: {callee}")
 
     # ADDED BY ME:
     def call_expression_get_all_arguments(self) -> List[Self]:
@@ -1648,6 +1676,11 @@ class Node:
 
     # ADDED BY ME:
     def arrow_function_expression_get_params(self) -> List[Self]:
+        """
+        Returns the parameters of this (Arrow)FunctionExpression.
+        Note that this is non-trivial because FunctionExpression may also have a name!!!
+        """
+
         # From the Esprima docs:
         # interface ArrowFunctionExpression {
         #     id: Identifier | null;
@@ -1661,9 +1694,11 @@ class Node:
         # }
         #
         # An example where id is null:
+        #   !function(x,y){}(a,b)
         #
         # An example where id is not null:
-        #
+        #   !function foo(x,y){}(a,b)
+
         assert self.name in ["FunctionExpression", "ArrowFunctionExpression"]
         return self.fun_params  # set by DoubleX; return self.children[:-1] will only work as long as id is null (!!!)
 
@@ -2196,6 +2231,24 @@ class Identifier(Node, Value):
             return_value = 1
         self.set_provenance_dd(extremity)  # Stored provenance
         return return_value
+
+    # ADDED BY ME:
+    def remove_data_dependency(self, extremity: Node) -> int:
+        """
+        Sadly, DoubleX sometimes adds data flows where they don't belong (cf. remove_incorrect_data_flow_edges.py),
+        therefore we need a way to remove them...
+
+        Returns:
+            the number of removed data dependency children
+        """
+        prev_no_data_dep_children = len(self.data_dep_children)
+
+        self.data_dep_children = [el for el in self.data_dep_children if el.extremity != extremity]
+
+        # Don't forget to also remove the extremity's data dependency parent(!):
+        extremity.data_dep_parents = [el for el in extremity.data_dep_parents if el.extremity != self]
+
+        return prev_no_data_dep_children - len(self.data_dep_children)  # the no. of removed data dependency children
 
 
 class ValueExpr(Node, Value):
