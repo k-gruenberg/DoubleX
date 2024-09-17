@@ -148,17 +148,12 @@ def get_data_flow(input_file, benchmarks, store_pdgs=None, check_var=False, beau
             display_graph.draw_cfg(cfg_nodes, attributes=True, save_path=save_path_cfg)
 
         unknown_var = []
-        try:
-            with utility_df.Timeout(600):  # Tries to produce DF within 10 minutes
-                scopes = [_scope.Scope('Global')]
-                dfg_nodes, scopes = data_flow.df_scoping(cfg_nodes, scopes=scopes,
-                                                         id_list=[], entry=1)
-                # This may have to be added if we want to make the fake hoisting work
-                # dfg_nodes = data_flow.df_scoping(dfg_nodes, scopes=scopes, id_list=[], entry=1)[0]
-        except utility_df.Timeout.Timeout:
-            logging.critical('Building the PDG timed out for %s', input_file)
-            benchmarks['errors'].append('pdg-timeout')
-            return _node.Node('Program')  # Empty PDG to avoid trying to get the children of None
+
+        scopes = [_scope.Scope('Global')]
+        dfg_nodes, scopes = data_flow.df_scoping(cfg_nodes, scopes=scopes,
+                                                 id_list=[], entry=1)
+        # This may have to be added if we want to make the fake hoisting work
+        # dfg_nodes = data_flow.df_scoping(dfg_nodes, scopes=scopes, id_list=[], entry=1)[0]
 
         # except MemoryError:  # Catching it will catch ALL memory errors,
             # while we just want to avoid getting over our 20GB limit

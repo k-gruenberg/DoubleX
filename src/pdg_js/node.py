@@ -1483,6 +1483,7 @@ class Node:
                           f"'{function_decl_identifier.attributes['name']}' in line "
                           f"{function_decl_identifier.get_line()} "
                           f"to function identifier '{self.attributes['name']}' in line {self.get_line()}")
+                    # ToDo: doesn't this spam a bit too much sometimes?!
             return func_decl
 
         else:

@@ -328,6 +328,7 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
             print(f"[Warning] declaration of function '{function_reference.attributes['name']}' not found (line "
                   f"{function_reference.get_line()}, file {function_reference.get_file()}), "
                   f"possible missing data flow edge(s)...")
+            # ToDo: doesn't this spam a bit too much sometimes?!
 
     elif pdg.name == "CallExpression" and len(pdg.children) > 1 and pdg.children[0].name == "FunctionExpression":
         # For each IIFE, e.g.: "!function(x,y){}(a,b)", add data flows from `a` to `x` and from `b` to `y`:
@@ -384,53 +385,55 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
         assert callee_member_expression.name == "MemberExpression"  # because of check above
         callee_lhs: Node = callee_member_expression.lhs()  # an Identifier or another MemberExpression
         callee_leftmost_identifier: Node = callee_member_expression.member_expression_get_leftmost_identifier()
-        callee_rhs_identifier: Node = callee_member_expression.rhs()  # an Identifier
-        arguments: List[Node] = pdg.children[1:]
-        assert len(arguments) > 0  # because of len(pdg.children) > 1 check above
+        callee_rhs_identifier: Node = callee_member_expression.rhs()
+        if callee_leftmost_identifier.name == "Identifier":
+            arguments: List[Node] = pdg.children[1:]
+            assert len(arguments) > 0  # because of len(pdg.children) > 1 check above
 
-        # For CallExpressions like `foo.bar(y)`, ...
-        #   1st: try to find the class that "foo" belongs to,
-        #   2nd: try to find the class declaration,
-        #   3rd: try to find the declaration of a method called "bar" inside that class declaration
-        #   4th: add a data flow from `y` to the `x` parameter of the "bar(x)" method declaration from step 3
-        if callee_lhs == callee_leftmost_identifier:
-            pass  # ToDo
+            # For CallExpressions like `foo.bar(y)`, ...
+            #   1st: try to find the class that "foo" belongs to,
+            #   2nd: try to find the class declaration,
+            #   3rd: try to find the declaration of a method called "bar" inside that class declaration
+            #   4th: add a data flow from `y` to the `x` parameter of the "bar(x)" method declaration from step 3
+            if callee_lhs == callee_leftmost_identifier:
+                pass  # ToDo
 
-        # For CallExpressions like `foo.bar((y) => { /* ... */ })`,
-        #   add a data flow from `foo` to `y`.
-        # Common examples for this would be Promises and Arrays:
-        # * `promise1.then((y) => { /* ... */ })`
-        # * `array1.forEach((element) => console.log(element));`
-        #
-        # However, there are many more functions of this form
-        #     (a lambda accessing all/some of an array's elements):
-        # * `array1.map((element) => console.log(element));`
-        # * `array1.filter((element) => {console.log(element); return true;});`
-        # * `array1.reduce(...);`
-        # * `array1.some(...);`
-        # * `array1.every(...);`
-        # * `array1.find(...);`
-        # * `array1.sort(...);`
-        #
-        # Note that instead of `foo.bar`, the MemberExpressions might be longer, too, e.g. `t.data.data.forEach`:
-        #   t.data.data.forEach(function(r) { /* ... */ })
-        #
-        # Note, however, that there might be many other function calls that look like this but where the arguments are
-        #   not references to functions, take the following example:
-        # * `Object.assign(target, source)` where both `target` and `source` are non-function objects!
-        # => Therefore, resolving identifiers to function declarations might easily "fail" here w/o the need to worry:)
-        for argument in arguments:  # for each "([a,b], [c,d]) => console.log(a,b,c,d)":
-            if argument.name in ["FunctionExpression", "ArrowFunctionExpression"]:
-                for arrow_function_param in argument.arrow_function_expression_get_params():  # for each "[a,b]":
-                    for identifier in arrow_function_param.function_param_get_identifiers():   # for each "a":
-                        data_flow_edges_added += callee_leftmost_identifier.set_data_dependency(identifier)  # foo --data--> y
-            elif argument.name == "Identifier":
-                function_declaration = argument.function_Identifier_get_FunctionDeclaration(False)
-                if function_declaration is not None:
-                    assert function_declaration.name == "FunctionDeclaration"
-                    for arrow_function_param in function_declaration.function_declaration_get_params():  # for each "[a,b]":
-                        for identifier in arrow_function_param.function_param_get_identifiers():  # for each "a":
+            # For CallExpressions like `foo.bar((y) => { /* ... */ })`,
+            #   add a data flow from `foo` to `y`.
+            # Common examples for this would be Promises and Arrays:
+            # * `promise1.then((y) => { /* ... */ })`
+            # * `array1.forEach((element) => console.log(element));`
+            #
+            # However, there are many more functions of this form
+            #     (a lambda accessing all/some of an array's elements):
+            # * `array1.map((element) => console.log(element));`
+            # * `array1.filter((element) => {console.log(element); return true;});`
+            # * `array1.reduce(...);`
+            # * `array1.some(...);`
+            # * `array1.every(...);`
+            # * `array1.find(...);`
+            # * `array1.sort(...);`
+            #
+            # Note that instead of `foo.bar`, the MemberExpressions might be longer, too, e.g. `t.data.data.forEach`:
+            #   t.data.data.forEach(function(r) { /* ... */ })
+            #
+            # Note, however, that there might be many other function calls that look like this but where the
+            #   arguments are not references to functions, take the following example:
+            # * `Object.assign(target, source)` where both `target` and `source` are non-function objects!
+            # => Therefore, resolving identifiers to function declarations might easily "fail" here
+            #    w/o the need to worry:)
+            for argument in arguments:  # for each "([a,b], [c,d]) => console.log(a,b,c,d)":
+                if argument.name in ["FunctionExpression", "ArrowFunctionExpression"]:
+                    for arrow_function_param in argument.arrow_function_expression_get_params():  # for each "[a,b]":
+                        for identifier in arrow_function_param.function_param_get_identifiers():   # for each "a":
                             data_flow_edges_added += callee_leftmost_identifier.set_data_dependency(identifier)  # foo --data--> y
+                elif argument.name == "Identifier":
+                    function_declaration = argument.function_Identifier_get_FunctionDeclaration(False)
+                    if function_declaration is not None:
+                        assert function_declaration.name == "FunctionDeclaration"
+                        for arrow_function_param in function_declaration.function_declaration_get_params():  # for each "[a,b]":
+                            for identifier in arrow_function_param.function_param_get_identifiers():  # for each "a":
+                                data_flow_edges_added += callee_leftmost_identifier.set_data_dependency(identifier)  # foo --data--> y
 
     return data_flow_edges_added +\
         sum(add_missing_data_flow_edges_call_expressions(child) for child in pdg.children)

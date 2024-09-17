@@ -12,6 +12,7 @@ from remove_incorrect_data_flow_edges import remove_incorrect_data_flow_edges
 os.environ['PARSER'] = "espree"
 os.environ['SOURCE_TYPE'] = "module"
 os.environ['DEBUG'] = "yes"
+os.environ['TIMEOUT'] = "600"
 
 
 def generate_pdg(code):
@@ -565,18 +566,6 @@ class TestNodeClass2(unittest.TestCase):
         boos = [identifier for identifier in pdg.get_all_identifiers() if identifier.attributes['name'] == "boo"]
         function_identifier = [boo for boo in boos if boo.parent.name == "CallExpression"][0]
         function_declaration = [boo for boo in boos if boo.parent.name == "FunctionDeclaration"][0].parent
-        os.environ['DEBUG'] = "no"
-        self.assertEqual(
-            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
-                                                                            add_data_flow_edges=True),
-            function_declaration
-        )
-        self.assertEqual(
-            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
-                                                                            add_data_flow_edges=False),
-            function_declaration
-        )
-        os.environ['DEBUG'] = "yes"
         self.assertEqual(
             function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
                                                                             add_data_flow_edges=True),
