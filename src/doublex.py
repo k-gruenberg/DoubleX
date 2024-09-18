@@ -492,21 +492,21 @@ def main():
                     manifest['description'][:100].replace(",", "").replace("\n", "") \
                         if 'description' in manifest else ""
                 ext_permissions = \
-                    " | ".join(manifest['permissions']) \
+                    " | ".join(manifest['permissions']).replace(",", "").replace("\n", "")\
                         if 'permissions' in manifest else ""
                 ext_optional_permissions = \
-                    " | ".join(manifest['optional_permissions']) \
+                    " | ".join(manifest['optional_permissions']).replace(",", "").replace("\n", "")\
                         if 'optional_permissions' in manifest else ""
                 ext_host_permissions = \
-                    " | ".join(manifest['host_permissions']) \
+                    " | ".join(manifest['host_permissions']).replace(",", "").replace("\n", "")\
                         if 'host_permissions' in manifest else ""
                 ext_optional_host_permissions = \
-                    " | ".join(manifest['optional_host_permissions']) \
+                    " | ".join(manifest['optional_host_permissions']).replace(",", "").replace("\n", "")\
                         if 'optional_host_permissions' in manifest else ""
 
                 # (3): Analysis results:
                 content_script_injected_into = \
-                    " | ".join(analysis_result['content_script_injected_into']) \
+                    " | ".join(analysis_result['content_script_injected_into']).replace(",", "").replace("\n", "")\
                         if 'content_script_injected_into' in analysis_result else ""
                 crashes = analysis_result['benchmarks']['crashes']\
                         if 'benchmarks' in analysis_result and 'crashes' in analysis_result['benchmarks'] else []
@@ -516,7 +516,8 @@ def main():
                 crashes_cs = analysis_result['benchmarks']['cs']['crashes']\
                         if 'benchmarks' in analysis_result and 'cs' in analysis_result['benchmarks']\
                            and 'crashes' in analysis_result['benchmarks']['cs'] else []
-                crashes_all = " | ".join(crashes + crashes_bp + crashes_cs)
+                crashes_all = " | ".join(crashes + crashes_bp + crashes_cs)\
+                                .replace(",", "").replace("\n", "")
                 bp_exfiltration_dangers = len(analysis_result['bp']['exfiltration_dangers'])\
                     if 'bp' in analysis_result and 'exfiltration_dangers' in analysis_result['bp'] else "N/A"
                 bp_infiltration_dangers = len(analysis_result['bp']['infiltration_dangers'])\
