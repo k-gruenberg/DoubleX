@@ -858,7 +858,9 @@ class Node:
         assert self.name == "CallExpression"
         return self.children[1:]
 
-    DEFAULT_SENSITIVE_APIS = ["chrome.cookies", "chrome.scripting", "chrome.tabs.executeScript", "indexedDB", "fetch"]
+    DEFAULT_SENSITIVE_APIS = ["chrome.cookies", "chrome.scripting", "chrome.tabs.executeScript",
+                              "browser.cookies", "browser.scripting", "browser.tabs.executeScript",
+                              "indexedDB", "fetch"]
 
     # ADDED BY ME:
     def get_sensitive_apis_accessed(self, apis=DEFAULT_SENSITIVE_APIS) -> Set[Tuple[str, str]]:

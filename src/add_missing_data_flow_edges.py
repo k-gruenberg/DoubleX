@@ -847,7 +847,7 @@ def add_missing_data_flow_edges_chrome_apis(pdg: Node) -> int:
                     .child(
                         Node("MemberExpression")
                             .child(
-                                Node.identifier("chrome")
+                                Node.identifier_regex("browser|chrome")
                             )
                             .child(
                                 Node.identifier("scripting")
