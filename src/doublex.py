@@ -165,7 +165,7 @@ def analyze_extensions_in_sequence(process_idx: int,
                 # ...but don't forget to still put a result into the results_queue:
                 analysis_result = {
                     "benchmarks": {
-                        "crashes": [f"Python Exception: {e}"]
+                        "crashes": [f"Python Exception: {repr(e)}"]
                     }
                 }
                 info["analysis_time"] = time.time() - analysis_start
@@ -529,8 +529,9 @@ def main():
                     if 'cs' in analysis_result and 'exfiltration_dangers' in analysis_result['cs'] else "N/A"
                 cs_infiltration_dangers = len(analysis_result['cs']['infiltration_dangers'])\
                     if 'cs' in analysis_result and 'infiltration_dangers' in analysis_result['cs'] else "N/A"
-                total_no_of_dangers = sum([bp_exfiltration_dangers, bp_infiltration_dangers,
-                                           cs_exfiltration_dangers, cs_infiltration_dangers])
+                total_no_of_dangers = sum(0 if d == "N/A" else d
+                                          for d in [bp_exfiltration_dangers, bp_infiltration_dangers,
+                                                    cs_exfiltration_dangers, cs_infiltration_dangers])
                 files_and_line_numbers = ""  # ToDo: write once more types of vuln. are supported!
 
                 # (4): Write all of that information into a new line in the output CSV file (and flush afterward):
