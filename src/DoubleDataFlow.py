@@ -29,8 +29,8 @@ class DoubleDataFlow:
                  from_flow: DataFlow,
                  to_flow: DataFlow,
                  rendezvous_nodes: List[str]):
-        from_flow_final_expr = from_flow.last_node().get_ancestor(rendezvous_nodes)
-        to_flow_final_expr = to_flow.last_node().get_ancestor(rendezvous_nodes)
+        from_flow_final_expr = from_flow.last_node().get_ancestor_or_none(rendezvous_nodes)
+        to_flow_final_expr = to_flow.last_node().get_ancestor_or_none(rendezvous_nodes)
         if (from_flow_final_expr != to_flow_final_expr
                 or from_flow_final_expr is None
                 or to_flow_final_expr is None):
@@ -120,8 +120,8 @@ class DoubleDataFlow:
             for to_flow in data_flows_to:
                 # Check if both from_flow and to_flow end in the same rendezvous Node (e.g., a CallExpression or
                 #   AssignmentExpression); if so, append to result:
-                from_flow_final_expr = from_flow.last_node().get_ancestor(rendezvous_nodes)
-                to_flow_final_expr = to_flow.last_node().get_ancestor(rendezvous_nodes)
+                from_flow_final_expr = from_flow.last_node().get_ancestor_or_none(rendezvous_nodes)
+                to_flow_final_expr = to_flow.last_node().get_ancestor_or_none(rendezvous_nodes)
                 # ToDo: what if data flow continues beyond the CallExpression,
                 #       e.g., when the function's return value is used?!!!
                 #       => it's not enough to just check each last_node() then!!!

@@ -416,6 +416,10 @@ class Node:
 
     # ADDED BY ME:
     def get_ancestor(self, allowed_ancestor_names) -> Self:
+        """
+        WARNING: This method raises a LookupError if no ancestor is found!
+        Use get_ancestor_or_none() instead if you need a non-throwing variant of this method!!!
+        """
         parent = self.parent
         while parent is not None:
             if parent.name in allowed_ancestor_names:
