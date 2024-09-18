@@ -99,6 +99,7 @@ class Node:
         self.statement_dep_parents = []
         self.statement_dep_children = []  # Between Statement and their non-Statement descendants
         self.is_wildcard = False  # <== ADDED BY ME
+        self.is_identifier_regex = False  # <== ADDED BY ME
 
     # ADDED BY ME:
     def __eq__(self, other):
@@ -226,6 +227,20 @@ class Node:
     def identifier(cls, name: str) -> Self:
         n = cls("Identifier")
         n.attributes['name'] = name
+        return n
+
+    # ADDED BY ME:
+    @classmethod
+    def identifier_regex(cls, name_regex: str) -> Self:
+        """
+        Matches any Identifier whose name matches the given regex.
+        Cf. Node.wildcard().
+
+        Note: an `re.fullmatch` is performed.
+        """
+        n = cls("Identifier")
+        n.attributes['name'] = name_regex
+        n.is_identifier_regex = True
         return n
 
     # ADDED BY ME:
@@ -629,7 +644,9 @@ class Node:
             return True  # Note that the calls to all() below may also return True as all([]) is True!
         elif self.name != pattern.name:
             return False
-        elif match_identifier_names and self.name == "Identifier" and self.attributes['name'] != pattern.attributes['name']:
+        elif match_identifier_names and self.name == "Identifier" and not pattern.is_identifier_regex and pattern.attributes['name'] != self.attributes['name']:
+            return False
+        elif match_identifier_names and self.name == "Identifier" and pattern.is_identifier_regex and not re.fullmatch(pattern.attributes['name'], self.attributes['name']):
             return False
         elif match_literals and self.name == "Literal" and self.attributes['raw'] != pattern.attributes['raw']:
             return False
