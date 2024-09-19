@@ -789,6 +789,94 @@ class TestNodeClass2(unittest.TestCase):
         self.assertIsNone(object_expression.object_expression_get_property_value("d"))
         self.assertIsNone(object_expression.object_expression_get_property_value("e"))
 
+    def test_average_identifier_length(self):
+        code = ""
+        pdg = generate_pdg(code)
+        print(pdg)
+        self.assertEqual(pdg.average_identifier_length(), -1)
+
+        code = """a = bc + def"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        self.assertEqual(pdg.average_identifier_length(), 2.0)
+
+        code = """a = bc"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        self.assertEqual(pdg.average_identifier_length(), 1.5)
+
+    def test_average_declared_variable_name_length(self):
+        code = ""
+        pdg = generate_pdg(code)
+        print(pdg)
+        self.assertEqual(pdg.average_declared_variable_name_length(), -1)
+
+        code = """
+        var a = foobar();
+        let bc = foo_bar_baz();
+        const def = foo_bar_baz_boo();
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        self.assertEqual(pdg.average_declared_variable_name_length(), 2.0)
+
+        code = """
+        var a = foobar();
+        let bc = foo_bar_baz();
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        self.assertEqual(pdg.average_declared_variable_name_length(), 1.5)
+
+    def test_average_function_declaration_name_length(self):
+        code = ""
+        pdg = generate_pdg(code)
+        print(pdg)
+        self.assertEqual(pdg.average_function_declaration_name_length(), -1)
+
+        code = """
+        function a() {}
+        function bc() { function def() {} }
+        bawitdaba = diggy_diggy_diggy;
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        self.assertEqual(pdg.average_function_declaration_name_length(), 2.0)
+
+        code = """
+        function a() {}
+        function bc() {}
+        bawitdaba = diggy_diggy_diggy;
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        self.assertEqual(pdg.average_function_declaration_name_length(), 1.5)
+
+    def test_average_class_name_length(self):
+        code = ""
+        pdg = generate_pdg(code)
+        print(pdg)
+        self.assertEqual(pdg.average_class_name_length(), -1)
+
+        code = """
+        class A {}
+        class Bc {}
+        class Def {}
+        bawitdaba = diggy_diggy_diggy;
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        self.assertEqual(pdg.average_class_name_length(), 2.0)
+
+        code = """
+        class A {}
+        class Bc {}
+        bawitdaba = diggy_diggy_diggy;
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        self.assertEqual(pdg.average_class_name_length(), 1.5)
+
 
 if __name__ == '__main__':
     unittest.main()

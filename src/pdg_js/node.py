@@ -38,6 +38,7 @@ import random
 import itertools
 import os
 import re
+import statistics
 from functools import total_ordering
 from typing import Set, Tuple, Optional, Self, List, Any
 
@@ -1695,8 +1696,23 @@ class Node:
         return params[0]  # 1st non-declaration, non-block child = Identifier = the name of the function!
 
     # ADDED BY ME:
+    def class_declaration_get_class_identifier(self) -> Self:
+        # interface ClassDeclaration {
+        #     id: Identifier | null;
+        #     superClass: Identifier | null;
+        #     body: ClassBody;
+        # }
+        assert self.name == "ClassDeclaration"
+        assert self.children[0].name == "Identifier"
+        return self.children[0]
+
+    # ADDED BY ME:
     def function_declaration_get_name(self) -> str:
         return self.function_declaration_get_function_identifier().attributes['name']
+
+    # ADDED BY ME:
+    def class_declaration_get_name(self) -> str:
+        return self.class_declaration_get_class_identifier().attributes['name']
 
     # ADDED BY ME:
     def arrow_function_expression_get_params(self) -> List[Self]:
@@ -2037,6 +2053,72 @@ class Node:
                                           end_line: int, end_col: int) -> List[Self]:
         return [node for node in self.get_all_as_iter(None)
                 if node.lies_within_piece_of_code(start_line, start_col, end_line, end_col)]
+
+    # ADDED BY ME:
+    def average_identifier_length(self) -> float:
+        """
+        Returns the average length of each Identifier name.
+        """
+        identifier_lengths: List[int] = []
+        for identifier in self.get_all_as_iter("Identifier"):
+            identifier_lengths.append(len(identifier.attributes['name']))
+        if len(identifier_lengths) == 0:  # cannot compute the mean of an empty list!
+            return -1
+        else:
+            return statistics.mean(identifier_lengths)
+
+    # ADDED BY ME:
+    def average_declared_variable_name_length(self) -> float:
+        """
+        Returns the average length of each name of each declared variable.
+        """
+        variable_name_lengths: List[int] = []
+        for var_decl in self.get_all_as_iter("VariableDeclarator"):
+            # interface VariableDeclarator {
+            #     id: Identifier | BindingPattern;
+            #     init: Expression | null;
+            # }
+            # (ignore BindingPatterns for simplicity)
+            if len(var_decl.children) > 0:  # (just a safety check)
+                identifier_node: Node = var_decl.children[0]
+                if identifier_node.name == "Identifier":
+                    variable_name: str = identifier_node.attributes['name']
+                    variable_name_lengths.append(len(variable_name))
+        if len(variable_name_lengths) == 0:  # cannot compute the mean of an empty list!
+            return -1
+        else:
+            return statistics.mean(variable_name_lengths)
+
+    # ADDED BY ME:
+    def average_function_declaration_name_length(self) -> float:
+        """
+        Returns the average length of each name of each declared function.
+        """
+        function_name_lengths: List[int] = []
+        for func_decl in self.get_all_as_iter("FunctionDeclaration"):
+            function_name_lengths.append(len(func_decl.function_declaration_get_name()))
+        if len(function_name_lengths) == 0:  # cannot compute the mean of an empty list!
+            return -1
+        else:
+            return statistics.mean(function_name_lengths)
+
+    # ADDED BY ME:
+    def average_class_name_length(self) -> float:
+        """
+        Returns the average length of each name of each declared class.
+        """
+        # interface ClassDeclaration {
+        #     id: Identifier | null;
+        #     superClass: Identifier | null;
+        #     body: ClassBody;
+        # }
+        class_name_lengths: List[int] = []
+        for class_decl in self.get_all_as_iter("ClassDeclaration"):
+            class_name_lengths.append(len(class_decl.class_declaration_get_name()))
+        if len(class_name_lengths) == 0:  # cannot compute the mean of an empty list!
+            return -1
+        else:
+            return statistics.mean(class_name_lengths)
 
     def get_file(self) -> str:
         parent = self

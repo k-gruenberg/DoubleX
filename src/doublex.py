@@ -128,6 +128,7 @@ def analyze_extensions_in_sequence(process_idx: int,
                 "crx": crx,
                 "extension_size_unpacked": extension_size_unpacked,
                 "js_loc": js_loc,
+                "js_code_avg_lengths": "N/A",
                 "analysis_time": "N/A",
                 "unpacked_ext_dir": unpacked_ext_dir,
             }
@@ -420,6 +421,7 @@ def main():
             csv_out.write("Extension,name,browser action default title,version,manifest version,description,"
                           "permissions,optional permissions,host permissions,optional host permissions,"
                           "extension size (packed),extension size (unpacked),JS LoC,"
+                          "BP code stats,CS code stats,"
                           "CS injected into,crashes,analysis time in seconds,total dangers,"
                           "BP exfiltration dangers,BP infiltration dangers,BP 3.1 violations w/o API danger,"
                           "CS exfiltration dangers,CS infiltration dangers,files and line numbers\n")
@@ -459,6 +461,8 @@ def main():
             crx = info["crx"]
             extension_size_unpacked = info["extension_size_unpacked"]
             js_loc = info["js_loc"]
+            bp_code_stats: str = " | ".join([f"{k}:{v}" for k, v in analysis_result['bp']['code_stats'].items()])
+            cs_code_stats: str = " | ".join([f"{k}:{v}" for k, v in analysis_result['cs']['code_stats'].items()])
             analysis_time = info["analysis_time"]
             unpacked_ext_dir = info["unpacked_ext_dir"]
 
@@ -541,6 +545,7 @@ def main():
                               f"{ext_description},{ext_permissions},{ext_optional_permissions},"
                               f"{ext_host_permissions},{ext_optional_host_permissions},"
                               f"{extension_size_packed},{extension_size_unpacked},{js_loc},"
+                              f"{bp_code_stats},{cs_code_stats},"
                               f"{content_script_injected_into},{crashes_all},"
                               f"{analysis_time},{total_no_of_dangers},"
                               f"{bp_exfiltration_dangers},{bp_infiltration_dangers},"
