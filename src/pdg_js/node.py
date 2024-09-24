@@ -2257,7 +2257,8 @@ class Node:
             return_overshadowed_identifiers=allow_overshadowing,
             return_reassigned_identifiers=(allow_reassignment_after_decl or allow_reassignment_after_self)
         )
-        print(f"identifiers declared in scope @ other_node (line {other_node.get_line()}): {other_node_identifiers_declared_in_scope}") # todo: remove
+        # print(f"identifiers declared in scope @ other_node (line {other_node.get_line()}): "
+        #       f"{other_node_identifiers_declared_in_scope}")
 
         # Only if we set return_reassigned_identifiers=True above, do we need to handle
         #   allow_reassignment_after_decl/allow_reassignment_after_self at all:
