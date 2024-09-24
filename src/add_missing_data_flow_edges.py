@@ -1,5 +1,6 @@
 import os
-from typing import List
+import statistics
+from typing import List, Dict, Set, Tuple
 
 import utility
 from pdg_js.node import Node
@@ -49,6 +50,15 @@ def add_missing_data_flow_edges(pdg: Node) -> int:
 
     total_data_flow_edges_added = 0
 
+    # # The following is essentially an attempt at re-implementing DoubleX's data flow creation:
+    # edges_added_basic = add_basic_data_flow_edges(pdg, debug=(os.environ.get('DEBUG') == "yes"))
+    # print(f"[Adding data flows] {edges_added_basic} basic data flow edges added between identifiers with the same name.")
+    # total_data_flow_edges_added += edges_added_basic
+
+    edges_added_func_params = add_missing_data_flow_edges_function_parameters(pdg)
+    print(f"[Adding data flows] {edges_added_func_params} data flow edges added to function parameters.")
+    total_data_flow_edges_added += edges_added_func_params
+
     edges_added_declarations_and_assignments = add_missing_data_flow_edges_declarations_and_assignments(pdg)
     print(f"[Adding data flows] {edges_added_declarations_and_assignments} data flow edges added to declarations and "
           f"assignments.")
@@ -67,6 +77,290 @@ def add_missing_data_flow_edges(pdg: Node) -> int:
     total_data_flow_edges_added += edges_added_call_expressions
 
     return total_data_flow_edges_added
+
+
+def add_basic_data_flow_edges(pdg: Node, debug=False) -> int:
+    """
+    Adds the basic data flow edges from each usage of an identifier to each usage that follows:
+
+    [id1] --data--> [id2]
+
+    where [id2] directly refers to [id1], i.e.:
+
+        * both [id1] and [id2] are Identifier Nodes
+        * both [id1] and [id2] Identifiers have the same *name*
+          (note that changes in name will be handled later by add_missing_data_flow_edges_declarations_and_assignments)
+
+        * [id1] must stem from an (im- or explicit) declaration or an assignment, i.e., it must be
+          - the (or, *within* the) "id" (0th child) of a VariableDeclarator (let, var, const)
+          - the "id" (0th child, optional) of a ClassDeclaration
+          - the "id" (0th child, optional) or one of (or, *within* one of) the "params" of a FunctionDeclaration
+          => type Declaration = ClassDeclaration | FunctionDeclaration | VariableDeclaration;
+          - the "id" (0th child, optional) or one of (or, *within* one of) the "params" of a (Arrow)FunctionExpression
+          - the (or, *within* the) "left" part (0th child) of an AssignmentExpression
+
+        * [id1] or [id2] may occur in the Property of an ObjectPattern, but it must be on the RHS of the Property
+          (the LHS identifier of a Property is simply the name of the field being assigned)
+          => note: [id1] may occur in the Property of an ObjectPattern when a function argument is destructured!
+        * [id2] may appear in a MemberExpression, but it must be on the very left of it
+          (unless [id1] was defined using "var" within the global scope or via an implicit global variable creation
+           through a simple assignment, then it may also be referred to with a "this." in front of it because "this"
+           refers to the global object in non-strict mode) # todo
+           => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Assignment
+           => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/this
+
+        * [id2] occurs in code *after* [id1], or *might* occur after [id1]
+          because at least one of [id1] or [id2] is inside a function in which the other one is *not*
+          (the latter refers to these cases: "function foo() { [id1] = y } foo(); x = [id2];" vs.
+                                             "function foo() { [id1] = y } x = [id2]; foo();" and
+                                             "function foo() { x = [id2]; } [id1] = y; foo();" vs.
+                                             "function foo() { x = [id2]; } foo(); [id1] = y;")
+        * wherever [id2] is, [id1] is in scope and has *not* been overwritten by another Identifier with the same name
+          in a "closer"/"more inner" scope; it also hasn't been reassigned since(!)
+          (note that the scope will differ depending on how the Identifier [id1] was originally declared:
+           the scope = - the surrounding function for 'var' as well as function declarations
+                       - the surrounding block for 'let'/'const'
+                       - only the function itself for (arrow) function expressions
+                       - the global scope for any global variable implicitly created through a simple assignment)
+
+    Note that [id1] might be where the identifier is declared/defined:
+        let x = foo();  // [id1]
+        bar(x);         // [id2]
+
+    However, [id1] doesn't *have* to be where the identifier is declared:
+        let x = 42;
+        x = foo();   // [id1]
+        bar(x);      // [id2]
+
+    Examples:
+
+        * x = 1
+          y = x
+          => a flow from the first "x" to the second "x" is created
+
+        * function foo({x:a}) {
+              console.log(a);
+          }
+          => a flow from the first "a" to the second "a" is created
+
+        * function foo(x=1) {
+              console.log(x);
+          }
+          => a flow from the first "x" to the second "x" is created
+
+        * (function(t) {
+               !function t() {}
+               console.log(t);
+          })(42);
+          => a flow from the first "t" to the third "t" is created
+
+    *** Notes on time complexity: ***
+    In the worst case scenario, this function will run in O(n^2) where n = the total number of identifier nodes.
+    In reality however, this function will run much more efficiently under the following realistic assumptions:
+        * not all identifiers will have the same name; with k distinct identifier names, complexity will be reduced to
+          O(k * (n/k)^2) = O(n^2 / k) (under the assumption that all k identifier names occur equally often)
+        * a lot of identifiers can be thrown out because they...
+          - ...are inside the inner part of a MemberExpression,
+          - ...are on the LHS of a Property.
+          - ...do not stem from a declaration (or assignment).
+    Take the "Norton Password Manager" extension (ID admmjipmmciaobhojoghlmleefbicajg, v7.5.1.48) for example,
+    its background.js is 7.3MB large (making it the 4th largest background page out of the 44 Kim+Lee extensions),
+    has 298,000 lines of JavaScript code and its AST contains:
+      n = 424,695 identifier nodes, and
+      k =  25,809 distinct identifier names.
+    """
+    data_flow_edges_added: int = 0
+
+    # Collect *all* Identifier Nodes and group them by their name
+    #   (we'll only create DF edged between Identifiers with the same name in this function):
+    identifiers_by_name: Dict[str, List[Node]] = dict()
+    for identifier in pdg.get_all_as_iter("Identifier"):
+        identifier_name: str = identifier.attributes['name']
+        if identifier_name not in identifiers_by_name:
+            identifiers_by_name[identifier_name] = list()
+        identifiers_by_name[identifier_name].append(identifier)
+    # => O(n) where: n = the total number of identifier nodes
+
+    if debug:
+        print(f"Identifiers found: {sum(len(v) for v in identifiers_by_name.values())}")
+        print(f"Distinct identifier names found: {len(identifiers_by_name)}")
+        if len(identifiers_by_name.values()) > 0:
+            print(f"Min. no. of occurrences per identifier name: {min(len(v) for v in identifiers_by_name.values())}")
+            print(f"Avg. no. of occurrences per identifier name: {statistics.mean([len(v) for v in identifiers_by_name.values()])}")
+            print(f"Max. no. of occurrences per identifier name: {max(len(v) for v in identifiers_by_name.values())}")
+        print(f"Actual no. of loop iterations (upper limit): {sum(len(v)*len(v) for v in identifiers_by_name.values())}")
+
+    for identifier_name, identifiers in identifiers_by_name.items():
+        # => O(k) iterations where: k = the total number of distinct identifier names
+
+        # All [id1] candidates with name `identifier_name`:
+        identifiers1: List[Node] = [id1 for id1 in identifiers
+                                    if
+                                       # * [id1] must stem from an (im- or explicit) declaration or an assignment:
+                                       (id1.is_within_the_nth_child_of_a(0, ["VariableDeclarator"]) or  # todo: more efficient function: add forbidden_ancestor_names param?
+                                        id1.is_nth_child_of_a(0, ["ClassDeclaration"]) or
+                                        id1.is_nth_child_of_a(0, ["FunctionDeclaration"]) or
+                                        id1.is_or_is_inside_any_function_declaration_param() or
+                                        id1.is_id_of_arrow_function_expression() or
+                                        id1.is_or_is_inside_any_arrow_function_expression_param() or
+                                        id1.is_within_the_nth_child_of_a(0, ["AssignmentExpression"]))  # todo: more efficient function]
+                                       # * [id1] or [id2] may occur in the Property of an ObjectPattern, but it must be on the RHS of the Property:
+                                       and not id1.is_nth_child_of_a(0, ["Property"])
+                                    ]
+        if debug:
+            print(f"No. of [id1] candidates named '{identifier_name}': {len(identifiers1)}")
+
+        # All [id2] candidates with name `identifier_name`:
+        identifiers2: List[Node] = [id2 for id2 in identifiers
+                                    if
+                                       # * [id2] may appear in a MemberExpression, but it must be on the very left of it:
+                                       # ToDo: allow "this." in front for variables of global scope ("var" or "="):
+                                       not id2.is_nth_child_of_a(1, ["MemberExpression"]) and
+                                       # * [id1] or [id2] may occur in the Property of an ObjectPattern, but it must be on the RHS of the Property:
+                                       not id2.is_nth_child_of_a(0, ["Property"])
+                                    ]
+
+        if debug:
+            print(f"No. of [id2] candidates named '{identifier_name}': {len(identifiers2)}")
+            print(f"#[id1] x #[id2] = {len(identifiers1) * len(identifiers2)}")
+
+        # A note on Properties:
+        # Even though the grammar in the Esprima docs says that the LHS of a Property may be any kind of expression...:
+        #     interface Property {
+        #         key: Expression;
+        #         value: Expression | null;
+        #     }
+        # ...according to the Mozilla docs...:
+        #     "Each property name before colons is an identifier (either a name, a number, or a string literal),
+        #      and each valueN is an expression whose value is assigned to the property name."
+        # (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Working_with_objects)
+        # ...meaning that, in reality, `key` will always be either an Identifier or a Literal!
+        # The Mozilla docs give the following example:
+        #     const obj = {
+        #         property1: value1, // property name may be an identifier
+        #         2: value2, // or a number
+        #         "property n": value3, // or a string
+        #     };
+
+        for identifier1 in identifiers1:  # [id1] (name is identifier_name)
+            for identifier2 in identifiers2:  # [id2] (name is identifier_name)
+                if identifier1 != identifier2:  # do not add loops: [id1] --data--> [id1]
+                    # Now, shall we create an edge [id1] --data--> [id2]?!:
+
+                    # * [id2] occurs in code *after* [id1], or *might* occur after [id1]:
+                    if not (
+                        identifier2.occurs_in_code_after(identifier1) or
+                        identifier2.might_occur_after(identifier1)
+                    ):
+                        if debug:
+                            print(f"[id2] (line {identifier2.get_line()}) "
+                                  f"doesn't and may not occur after [id1] (line {identifier1.get_line()})")
+                        continue
+
+                    # * wherever [id2] is, [id1] is in scope and has *not* been overwritten/overshadowed
+                    #   by another Identifier with the same name in a "closer"/"more inner" scope; it also hasn't
+                    #   been reassigned since(!):
+                    if (
+                        not identifier1.identifier_is_in_scope_at(identifier2,
+                                                                  allow_overshadowing=False,
+                                                                  allow_reassignment=False)
+                    ):
+                        if debug:
+                            print(f"[id1] (line {identifier1.get_line()}) "
+                                  f"isn't in scope @ [id2] (line {identifier2.get_line()})")
+                        continue
+
+                    data_flow_edges_added += identifier1.set_data_dependency(identifier2)
+                    # includes call: identifier1.data_dep_children.append(extremity=identifier2)
+                    if debug:
+                        print(f"added DF edge from [id1] (line {identifier1.get_line()}) "
+                              f"to [id2] (line {identifier2.get_line()})")
+        # => worst case: O(n^2) where: n = the total number of identifier nodes
+
+    # => worst case: O(n^2) when k=1
+    # => O(k * (n/k)^2) = O(n^2 / k) where: k = the total number of distinct identifier names
+    #                                under the assumption that all identifier names appear equally often
+
+    return data_flow_edges_added
+
+
+def add_missing_data_flow_edges_function_parameters(pdg: Node) -> int:
+    """
+    Examples:
+
+        * function foo(z) {
+              console.log(z);
+          }
+          => a flow from the first "z" to the second "z" is created
+
+        * function foo({x:a}) {
+              console.log(a);
+          }
+          => a flow from the first "a" to the second "a" is created
+
+        * function foo(x=1) {
+              console.log(x);
+          }
+          => a flow from the first "x" to the second "x" is created
+
+        * (function(t) {
+               !function t() {}
+               console.log(t);
+          })(42);
+          => a flow from the first "t" to the third "t" is created
+
+        * function foo(w) { // ...and not this one!
+              function bar(w) { // ...refers to this x...
+                  console.log(w); // This x...
+              }
+          }
+          => a flow from the second "w" to the third "w" is created
+    """
+    data_flow_edges_added: int = 0
+
+    # Collect function parameters and function bodies for both FunctionDeclaration and (Arrow)FunctionExpressions:
+    func_params_and_bodies: List[Tuple[List[Node], Node]] = []
+    for func_decl in pdg.get_all_as_iter("FunctionDeclaration"):
+        func_params_and_bodies.append((
+            func_decl.function_declaration_get_params(),
+            func_decl.function_declaration_get_body()
+        ))
+    for func_expr in pdg.get_all_as_iter2(["ArrowFunctionExpression", "FunctionExpression"]):
+        func_params_and_bodies.append((
+            func_expr.arrow_function_expression_get_params(),
+            func_expr.arrow_function_expression_get_body()
+        ))
+
+    # Handle each (function parameters, function body) pair:
+    for func_params, func_body in func_params_and_bodies:
+        # For each parameter:
+        for func_param in func_params:
+            # For each identifier in the parameter:
+            for id1 in func_param.get_all_as_iter("Identifier"):
+                # If the identifier doesn't occur in the LHS of an ObjectPattern's Property (the LHS identifier of a
+                #   Property is simply the name of the field being assigned, it doesn't become an identifier in the
+                #   function that could be referenced!):
+                if not id1.is_nth_child_of_a(0, ["Property"]):
+                    # For each identifier [id2] within the Function body with the same name,
+                    #   add an edge [id1] --data--> [id2] if
+                    #   (a) [id1] is in scope where [id2] is, and
+                    #   (b) [id1] is *accessible* (i.e., not overwritten by another identifier) where [id2] is
+                    #       (the identifier [id1] might be in scope, theoretically, but it might also have already been
+                    #        overwritten because [id2] is within a function within the function and that function *also*
+                    #        has a parameter with the same name, or re-declares a variable with the same name)
+                    #   (c) [id1] hasn't been reassigned to before reaching [id2]
+                    #       (meaning that it hasn't been the LHS of any AssignmentExpression before reaching [id2])
+                    #   => the Node.identifier_is_in_scope_at() method takes care of (a), (b) and (c) !!!
+                    #      (when setting both the `allow_overshadowing` and `allow_reassignment` flags to False that is)
+                    for id2 in func_body.get_all_as_iter("Identifier"):
+                        if id1.attributes['name'] == id2.attributes['name']:
+                            if id1.identifier_is_in_scope_at(id2,
+                                                             allow_overshadowing=False,
+                                                             allow_reassignment=False):
+                                data_flow_edges_added += id1.set_data_dependency(id2)
+                                # includes call: id.data_dep_children.append(extremity=id2)
+
+    return data_flow_edges_added
 
 
 def add_missing_data_flow_edges_declarations_and_assignments(pdg: Node) -> int:
@@ -281,6 +575,10 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
     * y.then((x) => { /* ... */ })
 
     * y.forEach((x) => console.log(x));
+
+    Also handles data flows in IIFEs (Immediately Invoked Function Expressions) like from `a` to `x` in this one:
+
+    * !function(x,y){}(a,b)
 
     Note how this function heavily relies upon (the correct functioning of) the
     Node.function_Identifier_get_FunctionDeclaration() method for resolving identifiers referencing functions to

@@ -234,6 +234,8 @@ def main():
                         This is what the original DoubleX by Aurore Fass used.""")
     group2.add_argument('--src-type-commonjs', action='store_true',
                         help="""Sets the sourceType option to "commonjs" for the (Espree) parser.""")
+    # ToDo: add a --src-type-auto, first trying strict mode and then non-strict mode on parse failure !!! !!! !!!
+    #       (or vice-versa?)
 
     parser.add_argument("--display-edg", dest='display_edg', action='store_true',
                         help="Display the EDG (Extension Dependence Graph). "

@@ -39,5 +39,8 @@ def remove_incorrect_data_flow_edges(pdg: Node) -> int:
                         data_flow_edges_removed += func_expr_child.remove_data_dependency(
                             extremity=data_dep_child.extremity)
 
+    # Note that the DF edge from the LHS to the RHS in "x=x" might actually be needed when the "x=x" occurs inside a
+    #   loop or inside a function that is repeatedly executed!
+
     return data_flow_edges_removed +\
         sum(remove_incorrect_data_flow_edges(child) for child in pdg.children)

@@ -3,11 +3,13 @@
 import os
 import tempfile
 import unittest
+from typing import List
 
 from get_pdg import get_pdg
 from pdg_js.build_pdg import get_data_flow
 from add_missing_data_flow_edges import add_missing_data_flow_edges
 from remove_incorrect_data_flow_edges import remove_incorrect_data_flow_edges
+# from add_missing_data_flow_edges_unittest import generate_ast
 
 os.environ['PARSER'] = "espree"
 os.environ['SOURCE_TYPE'] = "module"
@@ -15,7 +17,9 @@ os.environ['DEBUG'] = "yes"
 os.environ['TIMEOUT'] = "600"
 
 
-def generate_pdg(code):
+def generate_pdg(code,
+                 do_remove_incorrect_data_flow_edges=True,
+                 do_add_missing_data_flow_edges=True):
     tmp_file = tempfile.NamedTemporaryFile()
     with open(tmp_file.name, 'w') as f:
         f.write(code)
@@ -32,14 +36,61 @@ def generate_pdg(code):
     # ...even though get_pdg() does nothing more than to call get_data_flow().
     # The reason for that is the isinstance(lhs, Identifier) check in add_missing_data_flow_edges(); isinstance()
     #     apparently somehow depends on how modules are imported, cf. https://bugs.python.org/issue1249615
-    no_removed_df_edges = remove_incorrect_data_flow_edges(pdg)
-    print(f"{no_removed_df_edges} incorrect data flows edges removed from PDG")
-    no_added_df_edges = add_missing_data_flow_edges(pdg)
-    print(f"{no_added_df_edges} missing data flows edges added to PDG")
+    if do_remove_incorrect_data_flow_edges:
+        no_removed_df_edges = remove_incorrect_data_flow_edges(pdg)
+        print(f"{no_removed_df_edges} incorrect data flows edges removed from PDG")
+    if do_add_missing_data_flow_edges:
+        no_added_df_edges = add_missing_data_flow_edges(pdg)
+        print(f"{no_added_df_edges} missing data flows edges added to PDG")
     return pdg
 
 
 class TestNodeClass2(unittest.TestCase):
+    def test_get(self):
+        # Examples from doc comment of Node.get():
+
+        # interface MemberExpression {
+        #     object: Expression;
+        #     property: Expression;
+        # }
+        pdg = generate_pdg("x.y")
+        print(pdg)
+        # [1] [Program] (1 child) <<< None
+        # 	[2] [ExpressionStatement] (1 child) <<< body
+        # 		[3] [MemberExpression:"False"] (2 children) <<< expression
+        # 			[4] [Identifier:"x"] (0 children) <<< object
+        # 			[5] [Identifier:"y"] (0 children) <<< property
+        member_expr = pdg.get_child("ExpressionStatement").get_child("MemberExpression")
+        self.assertEqual("x", member_expr.get("object")[0].attributes['name'])
+        self.assertEqual("y", member_expr.get("property")[0].attributes['name'])
+
+        # interface AssignmentExpression {
+        #     left: Expression;
+        #     right: Expression;
+        # }
+        pdg = generate_pdg("x=y")
+        print(pdg)
+        # [34] [Program] (1 child) <<< None
+        # 	[35] [ExpressionStatement] (1 child) <<< body
+        # 		[36] [AssignmentExpression:"="] (2 children) <<< expression
+        # 			[37] [Identifier:"x"] (0 children) <<< left
+        # 			[38] [Identifier:"y"] (0 children) <<< right --data--> [37]
+        assignment_expr = pdg.get_child("ExpressionStatement").get_child("AssignmentExpression")
+        self.assertEqual("x", assignment_expr.get("left")[0].attributes['name'])
+        self.assertEqual("y", assignment_expr.get("right")[0].attributes['name'])
+
+        # interface FunctionDeclaration {
+        #     id: Identifier | null;
+        #     params: FunctionParameter[];
+        #     body: BlockStatement;
+        # }
+        pdg = generate_pdg("function foo(x,y) {return x;}")
+        print(pdg)
+        func_decl = pdg.get_child("FunctionDeclaration")
+        self.assertEqual("foo", func_decl.get("id")[0].attributes['name'])
+        self.assertEqual(["x", "y"], [param.attributes['name'] for param in func_decl.get("params")])
+        self.assertEqual(["BlockStatement"], [body.name for body in func_decl.get("body")])
+
     def test_is_data_flow_equivalent_identifier(self):
         pdg = generate_pdg("x = y; if (x == 1 || x == 2) {}")
         print(pdg)
@@ -627,6 +678,36 @@ class TestNodeClass2(unittest.TestCase):
             correct_function_declaration
         )
 
+        # Test the fact that "[t]he scope of a function declaration is the function in which it is declared" and *not*
+        #   the block:
+        code = """
+        function foo() {return 1;}
+        function bar() {
+            {function foo() {return 2;}}
+            console.log(foo());
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        foos = [identifier for identifier in pdg.get_all_identifiers() if identifier.attributes['name'] == "foo"]
+        self.assertEqual(len(foos), 3)
+        function_identifier = [foo for foo in foos if foo.parent.name == "CallExpression"][0]
+        correct_function_declaration = [foo.parent for foo in foos if foo.parent.name == "FunctionDeclaration"
+                                        and foo.grandparent().name == "FunctionDeclaration"][0]
+        print(f"function_identifier = {function_identifier}")
+        print(f"correct_function_declaration = {correct_function_declaration}")
+
+        self.assertEqual(
+            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
+                                                                            add_data_flow_edges=True),
+            correct_function_declaration
+        )
+        self.assertEqual(
+            function_identifier.function_Identifier_get_FunctionDeclaration(print_warning_if_not_found=True,
+                                                                            add_data_flow_edges=False),
+            correct_function_declaration
+        )
+
         # Test a (simplified) real-world example from content script of the "Binance Wallet" extension
         #   (extension ID fhbohimaelbohpjbbldcngcnapndodjp, version 2.12.2)
         #   which, for some reason, caused trouble for DoubleX's data flow creation:
@@ -734,6 +815,34 @@ class TestNodeClass2(unittest.TestCase):
         all_identifiers2 = [identifier for identifier in pdg.get_all_as_iter("Identifier")]
         self.assertEqual(len(all_identifiers2), 5)
         self.assertEqual(set(all_identifiers1), set(all_identifiers2))
+
+    def test_get_all_as_iter2(self):
+        # Test whether get_all_as_iter2() behaves just like get_all_as_iter() when the list contains just 1 string:
+        code = """a + b + c + d + e"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [55] [Program] (1 child)
+        # 	[56] [ExpressionStatement] (1 child)
+        # 		[57] [BinaryExpression:"+"] (2 children)
+        # 			[58] [BinaryExpression:"+"] (2 children)
+        # 				[59] [BinaryExpression:"+"] (2 children)
+        # 					[60] [BinaryExpression:"+"] (2 children)
+        # 						[61] [Identifier:"a"] (0 children)
+        # 						[62] [Identifier:"b"] (0 children)
+        # 					[63] [Identifier:"c"] (0 children)
+        # 				[64] [Identifier:"d"] (0 children)
+        # 			[65] [Identifier:"e"] (0 children)
+        all_identifiers1 = pdg.get_all("Identifier")
+        self.assertEqual(len(all_identifiers1), 5)
+        all_identifiers2 = [identifier for identifier in pdg.get_all_as_iter2(["Identifier"])]
+        self.assertEqual(len(all_identifiers2), 5)
+        self.assertEqual(set(all_identifiers1), set(all_identifiers2))
+
+        # Test get_all_as_iter2() with a list of two elements (["Identifier", "Literal"]):
+        code = """one + 1"""
+        pdg = generate_pdg(code)
+        print(pdg)
+        self.assertEqual(2, len([identifier for identifier in pdg.get_all_as_iter2(["Identifier", "Literal"])]))
 
     def test_object_expression_get_property(self):
         code = """foo({a: 1, b: 2, c: 3})"""
@@ -876,6 +985,494 @@ class TestNodeClass2(unittest.TestCase):
         pdg = generate_pdg(code)
         print(pdg)
         self.assertEqual(pdg.average_class_name_length(), 1.5)
+
+    def test_is_function_declaration_param(self):
+        code = """
+        function foo(x,y) {
+            z();
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        x = pdg.get_identifier_by_name("x")
+        y = pdg.get_identifier_by_name("y")
+        z = pdg.get_identifier_by_name("z")
+        self.assertTrue(x.is_function_declaration_param())
+        self.assertTrue(y.is_function_declaration_param())
+        self.assertFalse(z.is_function_declaration_param())
+
+    def test_is_inside_any_function_declaration_param(self):
+        code = """
+        function foo(x=1,{a:y}) {
+            z();
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        x = pdg.get_identifier_by_name("x")
+        y = pdg.get_identifier_by_name("y")
+        z = pdg.get_identifier_by_name("z")
+        self.assertTrue(x.is_inside_any_function_declaration_param())
+        self.assertTrue(y.is_inside_any_function_declaration_param())
+        self.assertFalse(z.is_inside_any_function_declaration_param())
+
+    def test_is_or_is_inside_any_function_declaration_param(self):
+        code = """
+        function foo(x,{a:y}) {
+            z();
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        x = pdg.get_identifier_by_name("x")
+        y = pdg.get_identifier_by_name("y")
+        z = pdg.get_identifier_by_name("z")
+        self.assertTrue(x.is_or_is_inside_any_function_declaration_param())
+        self.assertTrue(y.is_or_is_inside_any_function_declaration_param())
+        self.assertFalse(z.is_or_is_inside_any_function_declaration_param())
+
+    def test_arrow_function_expression_get_nth_param(self):
+        for code in ["!function(x,y,z) {}", "!function foo(x,y,z) {}"]:
+            pdg = generate_pdg(code)
+            print(pdg)
+            function_expression = (pdg
+                                   .get_child("ExpressionStatement")
+                                   .get_child("UnaryExpression")
+                                   .get_child("FunctionExpression"))
+            x = pdg.get_identifier_by_name("x")
+            y = pdg.get_identifier_by_name("y")
+            z = pdg.get_identifier_by_name("z")
+            self.assertEqual(x, function_expression.arrow_function_expression_get_nth_param(0))
+            self.assertEqual(y, function_expression.arrow_function_expression_get_nth_param(1))
+            self.assertEqual(z, function_expression.arrow_function_expression_get_nth_param(2))
+
+    def test_resolve_identifier(self):
+        # Tests the examples given in the doc comment of resolve_identifier():
+
+        # Returns this very Node again, when this is already where the Identifier is being defined, e.g., for this 'x':
+        code = """
+        let x = foo()
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        x = pdg.get_identifier_by_name("x")
+        self.assertEqual(x.resolve_identifier(), x)
+
+        # Returns None on failure, for example for the following piece of code:
+        code = """
+        foo(x)
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        x = pdg.get_identifier_by_name("x")
+        self.assertEqual(x.resolve_identifier(), None)
+
+        # Also works when there is overshadowing going on:
+        code = """
+        let x = foo1();
+        {
+            let x = foo2();
+            bar(x);          // resolving this 'x' will return the 'x' from the declaration one line above!
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        xs = [identifier for identifier in pdg.get_all_identifiers() if identifier.attributes['name'] == "x"]
+        xs.sort(key=lambda identifier: identifier.code_occurrence())
+        self.assertEqual(len(xs), 3)
+        self.assertEqual(xs[2].resolve_identifier(), xs[1])
+
+    def test_function_declaration_is_called_anywhere(self):
+        # Negative examples:
+        negative_examples: List[str] = [
+            """
+            function foo() {}
+            """,
+            """
+            function bar() { function foo() {} }
+            foo(); // must refer to some other 'foo'
+            """
+        ]
+        for negative_example in negative_examples:
+            pdg = generate_pdg(negative_example)
+            func_decl =\
+                [fd for fd in pdg.get_all("FunctionDeclaration") if fd.function_declaration_get_name() == "foo"][0]
+            self.assertFalse(func_decl.function_declaration_is_called_anywhere())
+
+        # Positive examples:
+        positive_examples: List[str] = [
+            """
+            function foo() {}
+            foo();
+            """,
+            # Hoisting #1:
+            """
+            foo();
+            function foo() {}
+            """,
+            # Hoisting #2:
+            """
+            function bar() {
+                foo();
+                function foo() {}
+            }
+            """,
+            # Recursion:
+            """
+            function foo() { foo(); }
+            """
+        ]
+        for positive_example in positive_examples:
+            pdg = generate_pdg(positive_example)
+            func_decl = \
+                [fd for fd in pdg.get_all("FunctionDeclaration") if fd.function_declaration_get_name() == "foo"][0]
+            self.assertTrue(func_decl.function_declaration_is_called_anywhere())
+
+    def test_function_expression_get_name(self):
+        for code in ["!function foo() {}", "!function foo(x) {}", "!function foo(x,y) {}"]:
+            pdg = generate_pdg(code)
+            print(pdg)
+            func_expr = pdg.get_all("FunctionExpression")[0]
+            self.assertEqual(func_expr.function_expression_get_name(), "foo")
+
+        for code in ["!function () {}", "!function (foo) {}", "!function (foo,x) {}", "!function (foo,x,y) {}"]:
+            pdg = generate_pdg(code)
+            print(pdg)
+            func_expr = pdg.get_all("FunctionExpression")[0]
+            self.assertIsNone(func_expr.function_expression_get_name())
+
+    def test_function_expression_get_id_node(self):
+        for code in ["!function foo() {}", "!function foo(x) {}", "!function foo(x,y) {}"]:
+            pdg = generate_pdg(code)
+            print(pdg)
+            func_expr = pdg.get_all("FunctionExpression")[0]
+            id_node = func_expr.function_expression_get_id_node()
+            self.assertIsNotNone(id_node)
+            self.assertEqual(id_node.name, "Identifier")
+
+        for code in ["!function () {}", "!function (foo) {}", "!function (foo,x) {}", "!function (foo,x,y) {}"]:
+            pdg = generate_pdg(code)
+            print(pdg)
+            func_expr = pdg.get_all("FunctionExpression")[0]
+            self.assertIsNone(func_expr.function_expression_get_id_node())
+
+    def test_function_expression_calls_itself_recursively(self):
+        # Examples from https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/arguments/callee:
+
+        code = """
+        [1, 2, 3, 4, 5].map(function factorial(n) {
+            return n <= 1 ? 1 : factorial(n - 1) * n;
+        });
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        func_expr = pdg.get_all("FunctionExpression")[0]
+        self.assertTrue(func_expr.function_expression_calls_itself_recursively())
+
+        code = """
+        [1, 2, 3, 4, 5].map(function (n) {
+            return n <= 1 ? 1 : arguments.callee(n - 1) * n;
+        });
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        func_expr = pdg.get_all("FunctionExpression")[0]
+        self.assertTrue(func_expr.function_expression_calls_itself_recursively())
+
+        # Negative examples:
+
+        code = """
+        [1, 2, 3, 4, 5].map(function factorial(n) {
+            
+        });
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        func_expr = pdg.get_all("FunctionExpression")[0]
+        self.assertFalse(func_expr.function_expression_calls_itself_recursively())
+
+        code = """
+        [1, 2, 3, 4, 5].map(function (n) {
+            
+        });
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        func_expr = pdg.get_all("FunctionExpression")[0]
+        self.assertFalse(func_expr.function_expression_calls_itself_recursively())
+
+    def test_identifier_is_assigned_to_before(self):
+        # A simple negative example:
+        code = """
+        let x = 1;
+        foo(x);
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [33] [Program] (2 children)
+        # 	[34] [VariableDeclaration:"let"] (1 child)
+        # 		[35] [VariableDeclarator] (2 children)
+        # 			[36] [Identifier:"x"] (0 children) --data--> [41]
+        # 			[37] [Literal::{'raw': '1', 'value': 1}] (0 children)
+        # 	[38] [ExpressionStatement] (1 child)
+        # 		[39] [CallExpression] (2 children)
+        # 			[40] [Identifier:"foo"] (0 children)
+        # 			[41] [Identifier:"x"] (0 children)
+        x1 = pdg.get_child("VariableDeclaration").get_child("VariableDeclarator").get_child("Identifier")
+        x2 = pdg.get_child("ExpressionStatement").get_child("CallExpression").children[1]
+        self.assertFalse(x1.identifier_is_assigned_to_before(x2, scope=pdg))
+
+        # A simple positive example:
+        code = """
+        let x = 1;
+        x = 2;
+        foo(x);
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [77] [Program] (3 children)
+        # 	[78] [VariableDeclaration:"let"] (1 child)
+        # 		[79] [VariableDeclarator] (2 children)
+        # 			[80] [Identifier:"x"] (0 children)
+        # 			[81] [Literal::{'raw': '1', 'value': 1}] (0 children)
+        # 	[82] [ExpressionStatement] (1 child)
+        # 		[83] [AssignmentExpression:"="] (2 children)
+        # 			[84] [Identifier:"x"] (0 children) --data--> [89]
+        # 			[85] [Literal::{'raw': '2', 'value': 2}] (0 children)
+        # 	[86] [ExpressionStatement] (1 child)
+        # 		[87] [CallExpression] (2 children)
+        # 			[88] [Identifier:"foo"] (0 children)
+        # 			[89] [Identifier:"x"] (0 children)
+        x1 = pdg.get_child("VariableDeclaration").get_child("VariableDeclarator").get_child("Identifier")
+        x3 = pdg.children[2].get_child("CallExpression").children[1]
+        self.assertTrue(x1.identifier_is_assigned_to_before(x3, scope=pdg))
+
+        # A positive example with 2 scopes:
+        code = """
+        let x = 1;
+        {
+            x = 2;
+            foo(x);
+        }
+        """
+        # [114] [Program] (2 children)
+        # 	[115] [VariableDeclaration:"let"] (1 child)
+        # 		[116] [VariableDeclarator] (2 children)
+        # 			[117] [Identifier:"x"] (0 children)
+        # 			[118] [Literal::{'raw': '1', 'value': 1}] (0 children)
+        # 	[119] [BlockStatement] (2 children) --e--> [120] --e--> [124]
+        # 		[120] [ExpressionStatement] (1 child)
+        # 			[121] [AssignmentExpression:"="] (2 children)
+        # 				[122] [Identifier:"x"] (0 children) --data--> [127]
+        # 				[123] [Literal::{'raw': '2', 'value': 2}] (0 children)
+        # 		[124] [ExpressionStatement] (1 child)
+        # 			[125] [CallExpression] (2 children)
+        # 				[126] [Identifier:"foo"] (0 children)
+        # 				[127] [Identifier:"x"] (0 children)
+        pdg = generate_pdg(code)
+        print(pdg)
+        x1 = pdg.get_child("VariableDeclaration").get_child("VariableDeclarator").get_child("Identifier")
+        x3 = pdg.get_child("BlockStatement").children[1].get_child("CallExpression").children[1]
+        self.assertTrue(x1.identifier_is_assigned_to_before(x3, scope=pdg))
+
+    def test_get_identifiers_declared_in_scope(self):
+        code = """
+        let a = 1;
+        const b = 2;
+        var c = 3;
+        function d(e) { foo(); }
+        class f {}
+        here;
+        """
+        pdg = generate_pdg(code, do_remove_incorrect_data_flow_edges=False, do_add_missing_data_flow_edges=False)
+        print(pdg)
+        here = pdg.get_identifier_by_name("here")
+        for return_overshadowed_identifiers, return_reassigned_identifiers\
+                in [(False, False), (False, True), (True, False), (True, True)]:
+            print(f"{return_overshadowed_identifiers}, {return_reassigned_identifiers}")
+
+            # At `here;`, "a", "b", "c", "d" and "f" are all identifiers declared in scope:
+            ids = here.get_identifiers_declared_in_scope(
+                return_overshadowed_identifiers=return_overshadowed_identifiers,
+                return_reassigned_identifiers=return_reassigned_identifiers,
+            )
+            self.assertEqual(5, len(ids))
+            self.assertEqual({"a", "b", "c", "d", "f"}, set(id_.attributes['name'] for id_ in ids))
+
+            # At `foo();`, "a", "b", "c", "d", "e" and "f" are all identifiers declared in scope:
+            func_call = pdg.get_all("CallExpression")[0]
+            self.assertEqual("foo", func_call.call_expression_get_full_function_name())
+            self.assertEqual(
+                {"a", "b", "c", "d", "e", "f"},
+                set(
+                    id_.attributes['name']
+                    for id_ in
+                    func_call.get_identifiers_declared_in_scope(
+                        return_overshadowed_identifiers=return_overshadowed_identifiers,
+                        return_reassigned_identifiers=return_reassigned_identifiers
+                    )
+                )
+            )
+
+        code = """
+        function foo() { // Don't forget that 'foo' is in scope, too :)
+            let x = 11;
+            {
+                let x = 22;
+                var y = x;
+                bar();
+            }
+            return x + y;  // returns 33 (not 44)
+        }
+        """
+        pdg = generate_pdg(code, do_remove_incorrect_data_flow_edges=False, do_add_missing_data_flow_edges=False)
+        print(pdg)
+        # [78] [Program] (1 child)
+        # 	[79] [FunctionDeclaration] (2 children) --e--> [81]
+        # 		[80] [Identifier:"foo"] (0 children)
+        # 		[81] [BlockStatement] (3 children) --e--> [82] --e--> [86] --e--> [95]
+        # 			[82] [VariableDeclaration:"let"] (1 child)
+        # 				[83] [VariableDeclarator] (2 children)
+        # 					[84] [Identifier:"x"] (0 children) --data--> [97]
+        # 					[85] [Literal::{'raw': '11', 'value': 11}] (0 children)
+        # 			[86] [BlockStatement] (2 children) --e--> [87] --e--> [91]
+        # 				[87] [VariableDeclaration:"let"] (1 child)
+        # 					[88] [VariableDeclarator] (2 children)
+        # 						[89] [Identifier:"x"] (0 children) --data--> [94]
+        # 						[90] [Literal::{'raw': '22', 'value': 22}] (0 children)
+        # 				[91] [VariableDeclaration:"var"] (1 child)
+        # 					[92] [VariableDeclarator] (2 children)
+        # 						[93] [Identifier:"y"] (0 children)
+        # 						[94] [Identifier:"x"] (0 children)
+        # 			[95] [ReturnStatement] (1 child)
+        # 				[96] [BinaryExpression:"+"] (2 children)
+        # 					[97] [Identifier:"x"] (0 children)
+        # 					[98] [Identifier:"y"] (0 children)
+        foo = pdg.get_identifier_by_name("foo")
+        xs = sorted([x for x in pdg.get_all_identifiers() if x.attributes['name'] == "x"], key=lambda x: x.id)
+        ys = sorted([y for y in pdg.get_all_identifiers() if y.attributes['name'] == "y"], key=lambda y: y.id)
+
+        # "foo", "let x = 11;" and "var y" should be in scope @ "return x + y;":
+        return_statement = pdg.get_all("ReturnStatement")[0]
+        identifiers_declared_in_scope =\
+            return_statement.get_identifiers_declared_in_scope(
+                return_overshadowed_identifiers=False,
+                return_reassigned_identifiers=False
+            )
+        self.assertEqual(3, len(identifiers_declared_in_scope))
+        self.assertEqual({"foo", "x", "y"}, set(id_.attributes['name'] for id_ in identifiers_declared_in_scope))
+        self.assertEqual({foo, xs[0], ys[0]}, set(identifiers_declared_in_scope))
+
+        # "foo", "let x = 22;" and "var y" should be in scope @ "bar();":
+        bar = pdg.get_identifier_by_name("bar")
+        identifiers_declared_in_scope = \
+            bar.get_identifiers_declared_in_scope(
+                return_overshadowed_identifiers=False,
+                return_reassigned_identifiers=False
+            )
+        self.assertEqual(3, len(identifiers_declared_in_scope))
+        self.assertEqual({"foo", "x", "y"}, set(id_.attributes['name'] for id_ in identifiers_declared_in_scope))
+        self.assertEqual({foo, xs[1], ys[0]}, set(identifiers_declared_in_scope))
+
+        # All 4, "foo", "let x = 11;", "let x = 22;" and "var y" should be in scope @ "bar();"
+        #   when setting return_overshadowed_identifiers=True:
+        identifiers_declared_in_scope = \
+            bar.get_identifiers_declared_in_scope(
+                return_overshadowed_identifiers=True,
+                return_reassigned_identifiers=False
+            )
+        self.assertEqual(4, len(identifiers_declared_in_scope))
+        self.assertEqual({"foo", "x", "y"}, set(id_.attributes['name'] for id_ in identifiers_declared_in_scope))
+        self.assertEqual({foo, xs[0], xs[1], ys[0]}, set(identifiers_declared_in_scope))
+
+        code = """
+        function a() {
+            function b() {
+                function c() {
+                    function d() {
+                        function e() {
+                            function f() {
+                                function g() {
+                                    function h() {
+                                        foo();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        bar();
+        """
+        pdg = generate_pdg(code, do_remove_incorrect_data_flow_edges=False, do_add_missing_data_flow_edges=False)
+        print(pdg)
+        foo = pdg.get_identifier_by_name("foo")
+        bar = pdg.get_identifier_by_name("bar")
+
+        # "a", "b", "c", "d", "e", "f", "g", "h" should be in scope @ "foo();":
+        identifiers_declared_in_scope = \
+            foo.get_identifiers_declared_in_scope(
+                return_overshadowed_identifiers=False,
+                return_reassigned_identifiers=False
+            )
+        self.assertEqual(8, len(identifiers_declared_in_scope))
+        self.assertEqual(
+            {"a", "b", "c", "d", "e", "f", "g", "h"},
+            set(id_.attributes['name'] for id_ in identifiers_declared_in_scope)
+        )
+
+        # Only "a" should be in scope @ "bar();":
+        identifiers_declared_in_scope = \
+            bar.get_identifiers_declared_in_scope(
+                return_overshadowed_identifiers=False,
+                return_reassigned_identifiers=False
+            )
+        self.assertEqual(1, len(identifiers_declared_in_scope))
+        self.assertEqual(
+            {"a"},
+            set(id_.attributes['name'] for id_ in identifiers_declared_in_scope)
+        )
+
+        code = """
+        (function(t) {
+            !function t() {}
+            console.log(t);
+        })(42);
+        """
+        # => this example is inspired by real-world code from the "ClassLink OneClick Extension", version 10.6,
+        #    extension ID jgfbgkjjlonelmpenhpfeeljjlcgnkpe
+        pdg = generate_pdg(code, do_remove_incorrect_data_flow_edges=False, do_add_missing_data_flow_edges=False)
+        print(pdg)
+        # [142] [Program] (1 child)
+        # 	[143] [ExpressionStatement] (1 child)
+        # 		[144] [CallExpression] (2 children)
+        # 			[145] [FunctionExpression::{'generator': False, 'async': False, 'expression': False}] (2 children)
+        # 				[146] [Identifier:"t"] (0 children)
+        # 				[147] [BlockStatement] (2 children) --e--> [148] --e--> [153]
+        # 					[148] [ExpressionStatement] (1 child)
+        # 						[149] [UnaryExpression:"!"] (1 child)
+        # 							[150] [FunctionExpression::{...}] (2 children)
+        # 								[151] [Identifier:"t"] (0 children) --data--> [158]
+        # 								[152] [BlockStatement] (0 children)
+        # 					[153] [ExpressionStatement] (1 child)
+        # 						[154] [CallExpression] (2 children)
+        # 							[155] [MemberExpression:"False"] (2 children)
+        # 								[156] [Identifier:"console"] (0 children)
+        # 								[157] [Identifier:"log"] (0 children)
+        # 							[158] [Identifier:"t"] (0 children)
+        # 			[159] [Literal::{'raw': '42', 'value': 42}] (0 children)
+        ts = sorted([t for t in pdg.get_all_identifiers() if t.attributes['name'] == "t"], key=lambda t: t.id)
+        self.assertEqual(3, len(ts))
+        [t1, t2, t3] = ts
+        identifiers_declared_in_scope = \
+            t3.get_identifiers_declared_in_scope(
+                return_overshadowed_identifiers=False,
+                return_reassigned_identifiers=False
+            )
+        self.assertEqual(1, len(identifiers_declared_in_scope))
+        self.assertEqual("t", identifiers_declared_in_scope[0].attributes['name'])
+        self.assertEqual([t1], identifiers_declared_in_scope)
 
 
 if __name__ == '__main__':

@@ -13,10 +13,13 @@ from remove_incorrect_data_flow_edges import remove_incorrect_data_flow_edges
 from add_missing_data_flow_edges import add_missing_data_flow_edges
 from pdg_js.tokenizer_espree import tokenize
 from pdg_js.node import Node
+import pdg_js.build_ast as build_ast
+from pdg_js.build_pdg import function_hoisting
 from DataFlow import DataFlow
 
 REMOVE_INCORRECT_DATA_FLOW_EDGES = True
 ADD_MISSING_DATA_FLOW_EDGES = True
+BUILD_AST_ONLY = False
 
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
@@ -51,11 +54,26 @@ def main():
 
             res_dict = dict()
             benchmarks = res_dict['benchmarks'] = dict()
-            pdg = get_pdg.get_pdg(file_path=tmp_file.name, res_dict=benchmarks)
+            if BUILD_AST_ONLY:
+                # cf. get_data_flow() in build_pdg.py:
+                if tmp_file.name.endswith('.js'):
+                    esprima_json = tmp_file.name.replace('.js', '.json')
+                else:
+                    esprima_json = tmp_file.name + '.json'
+                extended_ast = build_ast.get_extended_ast(tmp_file.name, esprima_json)
+                ast = extended_ast.get_ast()
+                ast = build_ast.ast_to_ast_nodes(ast, ast_nodes=Node('Program'))
+                function_hoisting(ast, ast)  # Hoists FunDecl at a basic block's beginning
+                pdg = ast
+            else:
+                pdg = get_pdg.get_pdg(file_path=tmp_file.name, res_dict=benchmarks)
+            print(f"Generated AST/PDG with {len(pdg.get_all('Identifier'))} Identifier Nodes.")
             if REMOVE_INCORRECT_DATA_FLOW_EDGES:
+                print("Removing incorrect data flow edges...")
                 no_removed_df_edges: int = remove_incorrect_data_flow_edges(pdg)
                 print(f"{no_removed_df_edges} incorrect data flows edges removed from DoubleX-generated PDG")
             if ADD_MISSING_DATA_FLOW_EDGES:
+                print("Adding missing data flow edges...")
                 no_added_df_edges: int = add_missing_data_flow_edges(pdg)
                 print(f"{no_added_df_edges} missing data flows edges added to PDG")
 

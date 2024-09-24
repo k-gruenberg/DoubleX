@@ -39,8 +39,9 @@ import itertools
 import os
 import re
 import statistics
+from collections import defaultdict
 from functools import total_ordering
-from typing import Set, Tuple, Optional, Self, List, Any
+from typing import Set, Tuple, Optional, Self, List, Any, Dict, DefaultDict
 
 from . import utility_df
 
@@ -93,7 +94,7 @@ class Node:
         Node.id += 1
         self.filename = ''
         self.attributes = {} if attributes is None else attributes
-        self.body = None
+        self.body = None  # ADDED BY ME: e.g., "id", "params", "left", "right", etc.
         self.body_list = False
         self.parent = parent
         self.children = []
@@ -119,6 +120,29 @@ class Node:
             return self
         else:
             return self.parent.root()
+
+    # ADDED BY ME:
+    def get(self, child_role: str) -> List[Self]: # todo: write test # todo: refactor code everywhere to use this method where applicable!
+        """
+        Example #1: `node` is a MemberExpression representing "x.y":
+            node.get("object") yields the Node for "x"
+            node.get("property") yields the Node for "y"
+
+        Example #2: `node` is an AssignmentExpression representing "x=y":
+            node.get("left") yields the Node for "x"
+            node.get("right") yields the Node for "y"
+
+        Example #3: `node` is a FunctionDeclaration representing "function foo(x,y) {return x;}":
+            node.get("id") yields the Node for "foo"
+            node.get("params") yields a list of 2 Nodes: ["x", "y"]
+            node.get("body") yields the BlockStatement representing the function's body
+
+        Cf. Esprima docs for all such namings!
+
+        Note that this function always returns a list for consistency
+        (which may be empty, have just 1, or any number of elements).
+        """
+        return [child for child in self.children if child.body == child_role]
 
     # ADDED BY ME:
     def all_nodes_iter(self):
@@ -150,6 +174,44 @@ class Node:
             return self.children[1]
         else:
             raise TypeError(f"calling Node.rhs() on a Node with {len(self.children)} != 2 children")
+
+    # ADDED BY ME:
+    def diff(self, other: Self):
+        """
+        A function for debugging purposes.
+        Prints differences it finds between `self` and `other` to console.
+        Prints nothing when no differences are found!
+        """
+        if self.name != other.name:
+            print(f"[Diff] self.name == '{self.name}' != '{other.name}' == other.name")
+        elif len(self.children) != len(other.children):
+            print(f"[Diff] "
+                  f"len(self.children) == '{len(self.children)}' != '{len(other.children)}' == len(other.children)")
+            return
+        elif ({k: v for k,v in self.attributes.items() if k != 'filename'}
+              != {k: v for k,v in other.attributes.items() if k != 'filename'}):
+            print(f"[Diff] self.attributes == {self.attributes} != {other.attributes} == other.attributes")
+        elif len(vars(self)) != len(vars(other)):
+            print(f"[Diff] len(vars(self)) == {len(vars(self))} != {len(vars(other))} == len(vars(other))")
+            self_keys = set(vars(self).keys())
+            other_keys = set(vars(other).keys())
+            if self_keys.issubset(other_keys):
+                print(f"[Diff] other has keys that self doesn't have: {other_keys.difference(self_keys)}")
+            elif other_keys.issubset(self_keys):
+                print(f"[Diff] self has keys that other doesn't have: {self_keys.difference(other_keys)}")
+
+        for key, value in vars(self).items():
+            if key not in vars(other):
+                print(f"[Diff] self has key '{self}' but other doesn't")
+            elif isinstance(value, list):
+                value_other = vars(other)[key]
+                if not isinstance(value_other, list):
+                    print(f"[Diff] self has key '{self}', which is a list, but for other it's not a list: {value_other}")
+                elif len(value) != len(value_other):
+                    print(f"[Diff] self.{key} == {value} != {value_other} == other.{key}")
+
+        for i in range(len(self.children)):
+            self.children[i].diff(other.children[i])
 
     # ADDED BY ME:
     def equivalent(self, other: Self) -> bool:
@@ -260,6 +322,19 @@ class Node:
         n = cls("*")
         n.is_wildcard = True
         return n
+
+    # ADDED BY ME:
+    @classmethod
+    def lower(cls, node1: Self, node2: Self) -> Self:
+        """
+        Given two Nodes, this class method returns the one which is lower in the tree.
+        Returns `node1` when both nodes are equally low in the tree, i.e., when both have the same height,
+        as returned by `.get_height()`.
+        """
+        if node1.get_height() <= node2.get_height():  # Height will be 1 for leaf nodes.
+            return node1
+        else:
+            return node2
 
     # ADDED BY ME:
     def child(self, c: Self) -> Self:
@@ -401,6 +476,10 @@ class Node:
         return other in self.get_parents()
 
     # ADDED BY ME:
+    def is_inside_or_is(self, other: Self) -> bool:
+        return self == other or self.is_inside(other)
+
+    # ADDED BY ME:
     def get_parent(self, allowed_parent_names) -> Self:
         """
         Returns `self.parent` but only if `self.parent.name in allowed_parent_names`, otherwise this function raises
@@ -419,6 +498,13 @@ class Node:
             return self.parent
         else:
             raise LookupError(f"parent of [{self.id}] has name '{self.parent.name}' but none of: {allowed_parent_names}")
+
+    # ADDED BY ME:
+    def get_parent_or_none(self, allowed_parent_names) -> Optional[Self]:
+        if self.parent.name in allowed_parent_names:
+            return self.parent
+        else:
+            return None
 
     # ADDED BY ME:
     def get_parent_or_grandparent(self, allowed_ancestor_names) -> Self:
@@ -453,6 +539,28 @@ class Node:
         return None
 
     # ADDED BY ME:
+    def get_ancestor_or_self(self, allowed_ancestor_names) -> Self: # todo
+        """
+        WARNING: This method raises a LookupError if neither self nor any ancestor has one of the given names!
+        Use get_ancestor_or_self_or_none() instead if you need a non-throwing variant of this method!!!
+        """
+        node = self
+        while node is not None:
+            if node.name in allowed_ancestor_names:
+                return node
+            node = node.parent
+        raise LookupError(f"no ancestor (or self) named '{allowed_ancestor_names}' found for node [{self.id}]")
+
+    # ADDED BY ME:
+    def get_ancestor_or_self_or_none(self, allowed_ancestor_names) -> Optional[Self]: # todo
+        node = self
+        while node is not None:
+            if node.name in allowed_ancestor_names:
+                return node
+            node = node.parent
+        return None
+
+    # ADDED BY ME:
     def has_ancestor(self, allowed_ancestor_names) -> bool:
         parent = self.parent
         while parent is not None:
@@ -478,7 +586,8 @@ class Node:
             "UnaryExpression": 'operator',       # '+' | '-' | '~' | '!' | 'delete' | 'void' | 'typeof'
             "UpdateExpression": 'operator',      # '++' or '--'
             "MemberExpression": 'computed',      # (boolean)  # ToDo: handle True/False cases differently in code (x.y vs. x[y])
-            "FunctionExpression": ['generator', 'async', 'expression']  # (all booleans)
+            "FunctionExpression": ['generator', 'async', 'expression'],  # (all booleans)
+            "VariableDeclaration": 'kind',       # 'var' | 'const' | 'let'
         }
 
         if self.name in attributes_of_interest.keys():
@@ -488,6 +597,8 @@ class Node:
                 str_repr = f"[{self.id}] [{self.name}:\"{self.attributes[attributes_of_interest[self.name]]}\"] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
         else:
             str_repr = f"[{self.id}] [{self.name}] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
+
+        str_repr += f" <<< {self.body}"  # e.g., "body", "expression", "argument", "params", "left", "right", ...
 
         # cf. display_extension.py:
         if self.name in STATEMENTS:
@@ -504,6 +615,10 @@ class Node:
         for child in self.children:
             str_repr += "\n".join(["\t" + line for line in child.__str__().splitlines()]) + "\n"
         return str_repr
+
+    # ADDED BY ME:
+    def mini_str(self) -> str:
+        return f"[{self.id}] [{self.name}] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
 
     # ADDED BY ME:
     def contains_literal(self) -> bool:
@@ -551,11 +666,52 @@ class Node:
         Unlike get_all(), which returns a list, this function returns an iterator.
 
         When `node_name` is `None`, returns *all* nodes!
+
+        Performs a **pre-order** tree traversal:
+            "foo(a+b, x+y)", or,
+            [1] [Program] (1 child)
+                [2] [ExpressionStatement] (1 child)
+                    [3] [CallExpression] (3 children)
+                        [4] [Identifier:"foo"] (0 children)
+                        [5] [BinaryExpression:"+"] (2 children)
+                            [6] [Identifier:"a"] (0 children)
+                            [7] [Identifier:"b"] (0 children)
+                        [8] [BinaryExpression:"+"] (2 children)
+                            [9] [Identifier:"x"] (0 children)
+                            [10] [Identifier:"y"] (0 children)
+        ...becomes, in order (when calling `root.get_all_as_iter(None)`):
+            [1] [Program]
+            [2] [ExpressionStatement]
+            [3] [CallExpression]
+            [4] [Identifier:"foo"]
+            [5] [BinaryExpression:"+"]
+            [6] [Identifier:"a"]
+            [7] [Identifier:"b"]
+            [8] [BinaryExpression:"+"]
+            [9] [Identifier:"x"]
+            [10] [Identifier:"y"]
         """
         if node_name is None or self.name == node_name:
             yield self
         for child in self.children:
             yield from child.get_all_as_iter(node_name)
+
+    # ADDED BY ME:
+    def get_all_as_iter2(self, node_names: List[str]):
+        """
+        Like get_all_as_iter() but allows for retrieving multiple node names at once!
+
+        Performs a **pre-order** tree traversal.
+
+        Parameters:
+            node_names: the list of Node names to retrieve, e.g., ["Identifier", "Literal"];
+                        supplying the empty list `[]` will result in an empty generator being returned;
+                        supplying `None` will result in an error.
+        """
+        if self.name in node_names:
+            yield self
+        for child in self.children:
+            yield from child.get_all_as_iter2(node_names)
 
     # ADDED BY ME:
     def get_all_identifiers(self) -> List[Self]:
@@ -619,6 +775,31 @@ class Node:
     def is_nth_child_of_parent(self, n: int) -> bool:
         sibling_ids = [sibling.id for sibling in self.parent.children]
         return self.id == sibling_ids[n]
+
+    # ADDED BY ME:
+    def is_nth_child_of_a(self, n: int, allowed_parent_names: List[str]) -> bool:
+        if self.parent is None:
+            return False
+        if self.parent.name not in allowed_parent_names:
+            return False
+        sibling_ids = [sibling.id for sibling in self.parent.children]
+        return self.id == sibling_ids[n]
+
+    # ADDED BY ME:
+    def is_within_the_nth_child_of_a(self, n: int, allowed_ancestor_names: List[str]) -> bool:
+        if self.parent is None:
+            return False
+
+        prev_ancestor: Node = self
+        ancestor: Node = self.parent
+        while ancestor.name not in allowed_ancestor_names:
+            prev_ancestor = ancestor
+            ancestor = ancestor.parent
+            if ancestor is None:
+                return False
+        assert ancestor.name in allowed_ancestor_names
+
+        return prev_ancestor.is_nth_child_of_parent(n=n)
 
     # ADDED BY ME:
     def is_nth_child_of_parent_ignoring_certain_siblings(self, n: int, siblings_names_to_ignore: List[str]) -> bool:
@@ -1087,6 +1268,54 @@ class Node:
             (self_start_line == other_start_line and self_start_column > other_start_column)
 
     # ADDED BY ME:
+    def might_occur_after(self, other_node: Self) -> bool:
+        """
+        Take a look at the following piece of JavaScript code:
+            function foo() { x = [id2]; } [id1] = y; foo();
+        Even though "[id1] = y" occurs after "x = [id2];" *in code*, it happens *before* it during execution.
+
+        Other examples of this include:
+            function foo() { x = [id2]; [id1] = y; } foo(); foo();
+
+        This method is intended to allow for handling such cases.
+        It returns True if `self` *might* occur after `other_node`, because...
+        (a) `self` occurs inside a declared function that is called after `other_node`
+        (b) `self` and `other_node` occur within the same function declaration/expression body (not talking about
+            nested functions here but in the very *same* function!) and that function is called somewhere
+            (in case of function expressions that has to be recursively)
+
+        *** BEWARE: ***
+        This method does NOT(!) check/do anything about Identifiers!
+        It is more to be seen as an addition to Node.occurs_in_code_after()!
+        For handling Identifiers, you likely have to check Node.identifier_is_in_scope_at() as well!
+        """
+        # (a) `self` occurs inside a declared function that is called after `other_node`:
+        self_func_decl: Optional[Node] = self.get_ancestor_or_none(["FunctionDeclaration"])
+        if self_func_decl is not None:
+            self_func_decl_scope: Node = self_func_decl.function_declaration_get_scope()
+            # Look for CallExpressions calling the function declared by `self_func_decl`:
+            for call_expr in self_func_decl_scope.get_all_as_iter("CallExpression"):
+                if (call_expr.children[0].name == "Identifier" and
+                        call_expr.children[0].attributes['name'] == self_func_decl.function_declaration_get_name()):
+                    if call_expr.occurs_in_code_after(other_node):
+                        return True
+
+        # (b) `self` and `other_node` occur within the same function declaration/expression body (not talking about
+        #     nested functions here but in the very *same* function!) and that function is called somewhere
+        #     (in case of function expressions that has to be recursively; note that ArrowFuncExpr cannot do that!):
+        self_func: Optional[Node] = self.get_ancestor_or_none(
+            ["FunctionDeclaration", "FunctionExpression"])
+        other_func: Optional[Node] = other_node.get_ancestor_or_none(
+            ["FunctionDeclaration", "FunctionExpression"])
+        if self_func is not None and self_func == other_func:
+            if self_func.name == "FunctionDeclaration":
+                return self_func.function_declaration_is_called_anywhere()
+            elif self_func.name == "FunctionExpression":
+                return self_func.function_expression_calls_itself_recursively()
+
+        return False
+
+    # ADDED BY ME:
     def code_occurrence(self):
         """
         Returns a `CodeOccurrence` object that can be compared to other `CodeOccurrence` objects returned by this
@@ -1244,6 +1473,9 @@ class Node:
 
     # ADDED BY ME:
     def get_height(self) -> int:
+        """
+        Height will be 1 for leaf nodes.
+        """
         if len(self.children) == 0:
             return 1
         else:
@@ -1547,9 +1779,394 @@ class Node:
         while p.name not in ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression", "Program"]:
             p = p.parent
         return p
-        # Don't forget that functions might be declared inside ArrowFunctionExpressions as well, there scope is going
+        # Don't forget that functions might be declared inside ArrowFunctionExpressions as well, the scope is going
         # to be that very ArrowFunctionExpression then:
         #     (() => {function foo() {return 42;} console.log(foo());})();
+
+    # ADDED BY ME:
+    def variable_declaration_get_scope(self) -> Self:
+        """
+        For a given VariableDeclaration (self), returns the entire subtree in which said VariableDeclaration is
+        accessible/in scope.
+
+        Note that the result depends on whether the VariableDeclaration is of kind 'var', 'const' or 'let':
+
+        * for 'var' VariableDeclaration, the scope is either the function in which it is declared, or the entire
+          program (cf. function_declaration_get_scope())
+          => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/var
+        * 'let' and 'const' VariableDeclarations, on the other hand, both declare "block-scoped local variables"
+          => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/let
+          => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/const
+        """
+        # interface VariableDeclaration {
+        #     declarations: VariableDeclarator[];
+        #     kind: 'var' | 'const' | 'let';
+        # }
+        assert self.name == "VariableDeclaration"
+
+        if self.attributes['kind'] == 'var':
+            parent_names = ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression", "Program"]
+            # => cf. function_declaration_get_scope()
+        elif self.attributes['kind'] in ['const', 'let']:
+            parent_names = ["BlockStatement", "Program"]
+        else:
+            raise AssertionError("'kind' of VariableDeclaration not in ['var', 'const', 'let']")
+
+        p = self.parent
+        while p.name not in parent_names:
+            p = p.parent
+        return p
+
+    # ADDED BY ME:
+    def class_declaration_get_scope(self) -> Self:
+        """
+        For a given ClassDeclaration (self), returns the entire subtree in which said ClassDeclaration is
+        accessible/in scope.
+
+        Notes (taken from https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/class):
+            * "The class declaration is very similar to let"
+            * "class declarations are commonly regarded as non-hoisted (unlike function declarations)"
+            * "class declarations cannot be redeclared by any other declaration in the same scope."
+
+        The following, for example, will *not* work:
+            {class Bar {}}
+            new Bar()       // raises: "Uncaught ReferenceError: Bar is not defined"
+        """
+        # interface ClassDeclaration {
+        #     id: Identifier | null;
+        #     superClass: Identifier | null;
+        #     body: ClassBody;
+        # }
+        assert self.name == "ClassDeclaration"
+        p = self.parent
+        while p.name not in ["BlockStatement", "Program"]:
+            p = p.parent
+        return p
+
+    # ADDED BY ME:
+    def identifier_is_assigned_to_before(self, other: Self, scope: Self) -> bool:
+        """
+        Whether the Identifier represented by `self` is assigned to (i.e., is within the LHS of an AssignmentExpression)
+        between `self` and `other`.
+
+        *** IMPORTANT: ***
+        This method does *not* use data flow edges as it'll be used *during* data flow edge creation!
+        Instead, it assumes that there's no overshadowing of the Identifier name between `self` and `other`!
+
+        Parameters:
+            other: the `other` Node
+            scope: the scope of the Identifier `self`; `other` has to be inside this scope as well
+        """
+        assert self.name == "Identifier"
+        if not self.is_inside(scope):
+            raise AssertionError(f"self ([{self.mini_str()}) is not inside scope ({scope.mini_str()})")
+        if not other.is_inside(scope):
+            raise AssertionError(f"other ({other.mini_str()}) is not inside scope ({scope.mini_str()})")
+
+        # [1] scope (of self)
+        #     [2] A
+        #     [3] B
+        #     [4] Identifier: self (e.g., where it is declared)
+        #     [5] C
+        #     [6] AssignmentExpression: self = ...
+        #     [7] D
+        #     [8] Node: other
+        #     [9] E
+
+        encountered_self: bool = False
+
+        for node in scope.get_all_as_iter(None):
+            if node == self:
+                encountered_self = True
+            elif not encountered_self:
+                continue
+            elif node == other:
+                return False
+            elif node.name == "AssignmentExpression":
+                # interface AssignmentExpression {
+                #     operator: '=' | '*=' | '**=' | '/=' | '%=' | '+=' | '-=' |
+                #               '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|=';
+                #     left: Expression;
+                #     right: Expression;
+                # }
+                for identifier in node.lhs().get_all_identifiers():
+                    if identifier.attributes['name'] == self.attributes['name']:
+                        return True
+
+        # never encountered `other` => `other` comes before `self`
+        #   => `self` can't possibly be assigned to before `other` => return False
+        return False
+
+    # ADDED BY ME:
+    def get_identifiers_declared_in_scope(self,
+                                          return_overshadowed_identifiers: bool,
+                                          return_reassigned_identifiers: bool) -> List[Self]:
+        """
+        Returns all Identifiers that are in scope as seen from this Node.
+        These may be Identifiers referring to variables, functions, function parameters, or classes.
+        Returns the Identifier Nodes from each identifier's respective point of declaration.
+        That point of declaration may be one of the following:
+        * explicit declarations:
+          - variables declared using "let" or "const" (scope=block)
+          - variables declared using "var" (scope=function)
+          - functions declared using "function" (scope=function)
+          - classes declared using "class" (scope=block, same as "let")
+          - parameters of declared functions (scope=only within the function itself)
+          - named FunctionExpressions (scope=only within themselves)
+          - parameters of FunctionExpressions and ArrowFunctionExpressions (scope=only within the function expr itself)
+        * implicit declarations:
+          - assignments to previously undeclared identifiers, implicitly creating a global variable with that name
+            (scope=global)
+
+        If this Node is an Identifier and you want to know what Identifier (declaration) it refers to,
+        simply set return_overshadowed_identifiers=False and return_reassigned_identifiers=True and
+        filter the output for all Identifiers with the same name.
+        The Node.resolve_identifier() method does exactly that for you!
+        ===> A note on this:
+        Note that the declaration might be in scope but occur after this Node; this doesn't matter however
+        because of hoisting (cf. https://developer.mozilla.org/en-US/docs/Glossary/Hoisting):
+        (Example 1) FunctionDeclarations exhibit hoisting with type 1 behavior ("Value hoisting"):
+            hoisted(); // Logs "foo"
+            function hoisted() {
+              console.log("foo");
+            }
+            // => Source: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/function
+        (Example 2) "var" declarations exhibit hoisting with type 2 behavior ("Declaration hoisting"):
+            bla = 2;
+            var bla;
+            // => Source: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/var
+        (Example 3) "let", "const" & "class" declarations exhibit hoisting with type 3 behavior ("temporal dead zone"):
+            const x = 1;
+            {
+              console.log(x); // ReferenceError
+              const x = 2;
+            }
+            // => Source: https://developer.mozilla.org/en-US/docs/Glossary/Hoisting
+
+        Parameters:
+            return_overshadowed_identifiers: whether to return Identifiers whose declaration *is* in scope but that
+                                             have been overshadowed by other Identifiers with the same name
+            return_reassigned_identifiers: whether to return Identifiers whose declaration *is* in scope but that
+                                           have been reassigned since (this has nothing to do with the actual scope
+                                           but is useful for handling data flows nonetheless)
+        """
+        # Note that we *have* to go through the *entire* AST/PDG tree for this!!!
+        #   (even if we're deep into the tree, stuff from way *up* the tree might be in scope!)
+        root: Node = self.root()
+        if self == root:
+            raise Exception("get_identifiers_declared_in_scope() may not be called on the root node, "
+                            "it has to be some position in code of which you want to retrieve the identifiers in scope")
+
+        declared_identifiers: DefaultDict[str, List[Tuple[Node, Node]]] = defaultdict(list)
+        # => shall map all declared Identifiers that are in scope at `self` to the scopes that they're available in
+        #    (for each such scope, `self.is_inside_or_is(scope)`); grouped by Identifier name
+        # => todo: cache within `self` for better performance of repeated calls!!!
+
+        # Go once through the *entire* AST/PDG and look for all declarations whose scope includes `self`:
+        for node in root.get_all_as_iter(None):  # => performs a pre-order tree traversal
+            match node.name:
+
+                # - variables declared using "let" or "const" (scope=block):
+                # - variables declared using "var" (scope=function):
+                case "VariableDeclaration":
+                    # interface VariableDeclaration {
+                    #     declarations: VariableDeclarator[];
+                    #     kind: 'var' | 'const' | 'let';
+                    # }
+                    scope: Node = node.variable_declaration_get_scope()  # handles "let", "const" *and* "var"!
+                    if self.is_inside_or_is(scope):
+                        for variable_declarator in node.get_all_as_iter("VariableDeclarator"):
+                            # interface VariableDeclarator {
+                            #     id: Identifier | BindingPattern;
+                            #     init: Expression | null;
+                            # }
+                            for identifier in variable_declarator.children[0].get_all_as_iter("Identifier"):
+                                declared_identifiers[identifier.attributes['name']].append((identifier, scope))
+
+                # - functions declared using "function" (scope=function):
+                # - parameters of declared functions (scope=only within the function itself):
+                case "FunctionDeclaration":
+                    # interface FunctionDeclaration {
+                    #     id: Identifier | null;
+                    #     params: FunctionParameter[];
+                    #     body: BlockStatement;
+                    # }
+                    function_identifier_scope: Node = node.function_declaration_get_scope()
+                    if self.is_inside_or_is(function_identifier_scope):
+                        function_identifier: Node = node.function_declaration_get_function_identifier()
+                        declared_identifiers[function_identifier.attributes['name']]\
+                            .append((function_identifier, function_identifier_scope))
+                    function_parameters_scope: Node = node
+                    if self.is_inside_or_is(function_parameters_scope):
+                        for param in node.function_declaration_get_params():
+                            for identifier in param.function_param_get_identifiers():
+                                declared_identifiers[identifier.attributes['name']]\
+                                    .append((identifier, function_parameters_scope))
+
+                # - classes declared using "class" (scope=block, same as "let"):
+                case "ClassDeclaration":
+                    # interface ClassDeclaration {
+                    #     id: Identifier | null;
+                    #     superClass: Identifier | null;
+                    #     body: ClassBody;
+                    # }
+                    scope: Node = node.class_declaration_get_scope()
+                    if self.is_inside_or_is(scope):
+                        identifier: Node = node.class_declaration_get_class_identifier()
+                        declared_identifiers[identifier.attributes['name']].append((identifier, scope))
+
+                # - named FunctionExpressions (scope=only within themselves):
+                # - parameters of FunctionExpressions (scope=only within the function expr itself):
+                case "FunctionExpression":
+                    # interface FunctionExpression {
+                    #     id: Identifier | null;
+                    #     params: FunctionParameter[];
+                    #     body: BlockStatement;
+                    #     generator: boolean;
+                    #     async: boolean;
+                    #     expression: boolean;
+                    # }
+                    scope: Node = node
+                    if self.is_inside_or_is(scope):
+                        func_expr_id: Optional[Node] = node.function_expression_get_id_node()
+                        if func_expr_id is not None:
+                            declared_identifiers[func_expr_id.attributes['name']].append((func_expr_id, scope))
+                        for param in node.arrow_function_expression_get_params():
+                            for identifier in param.function_param_get_identifiers():
+                                declared_identifiers[identifier.attributes['name']].append((identifier, scope))
+
+                # - parameters of ArrowFunctionExpressions (scope=only within the function expr itself)
+                case "ArrowFunctionExpression":
+                    # interface ArrowFunctionExpression {
+                    #     id: Identifier | null;
+                    #     params: FunctionParameter[];
+                    #     body: BlockStatement | Expression;
+                    #     generator: boolean;
+                    #     async: boolean;
+                    #     expression: false;
+                    # }
+                    scope: Node = node
+                    if self.is_inside_or_is(scope):
+                        for param in node.arrow_function_expression_get_params():
+                            for identifier in param.function_param_get_identifiers():
+                                declared_identifiers[identifier.attributes['name']].append((identifier, scope))
+
+                # - assignments to previously undeclared identifiers,
+                #   implicitly creating a **global** variable with that name (scope=global);
+                #   note that this behavior is only exhibited in non-strict mode(!) (which is the default however):
+                case "AssignmentExpression":  # todo: add a strict_mode parameter / a Node.strict_mode attribute?!
+                    # interface AssignmentExpression {
+                    #     operator: '=' | '*=' | '**=' | '/=' | '%=' | '+=' | '-=' |
+                    #               '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|=';
+                    #     left: Expression;
+                    #     right: Expression;
+                    # }
+                    for identifier in node.lhs().get_all_identifiers():
+                        # "If y is not a pre-existing variable, a global variable y is implicitly created in
+                        #  non-strict mode, or a ReferenceError is thrown in strict mode."
+                        # => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Assignment
+                        identifier_name: str = identifier.attributes['name']
+                        if identifier_name not in declared_identifiers:
+                            # => this check works because of the pre-order tree traversal!
+                            scope: Node = root  # scope=global !!!
+                            declared_identifiers[identifier_name].append((identifier, scope))
+
+                # all other nodes: skip...
+
+        # declared_identifiers: DefaultDict[str, List[Tuple[Node, Node]]]
+        #                                        now maps all declared Identifiers that are in scope at `self` to the
+        #                                        scopes that they're available in (for each such scope,
+        #                                        `self.is_inside_or_is(scope)`); grouped by Identifier name
+
+        # Parameters:
+        #     return_overshadowed_identifiers: whether to return Identifiers whose declaration *is* in scope but that
+        #                                      have been overshadowed by other Identifiers with the same name
+        #     return_reassigned_identifiers: whether to return Identifiers whose declaration *is* in scope but that
+        #                                    have been reassigned since (this has nothing to do with the actual scope
+        #                                    but is useful for handling data flows nonetheless)
+
+        if return_overshadowed_identifiers:
+            # Extract & return all the Identifier Nodes (0th tuple elements)
+            #   from the DefaultDict[str, List[Tuple[Node, Node]]]:
+            identifiers: List[Tuple[Node, Node]] =\
+                [(identifier, scope)
+                 for list_ in declared_identifiers.values()
+                 for identifier, scope in list_]
+        else:
+            # Group all the identifiers in scope by their name (in fact, they already *are* grouped by their name)
+            #   and for all identifiers in declared_identifiers with
+            #   the same name, only keep the one from the innermost scope:
+            identifiers: List[Tuple[Node, Node]] =\
+                [min([(id_, scope) for id_, scope in list_], key=lambda id_scope: id_scope[1].get_height())
+                 for identifier_name, list_ in declared_identifiers.items()]
+
+        if not return_reassigned_identifiers:
+            # For each identifier in scope, remove all those that have been in the LHS of an AssignmentExpression
+            #   between their declaration and `self` (note that all identifiers in the list already *are* from their
+            #   respective declarations):
+            identifiers: List[Tuple[Node, Node]] =\
+                [(identifier, scope)
+                 for identifier, scope in identifiers
+                 if not identifier.identifier_is_assigned_to_before(self, scope=scope)]
+
+        return [identifier for identifier, scope in identifiers]
+
+    # ADDED BY ME:
+    def resolve_identifier(self) -> Optional[Self]:
+        """
+        Resolves this Identifier to its point of (explicit, or maybe implicit) declaration.
+        Returns another Identifier Node again.
+
+        Returns this very Node again, when this is already where the Identifier is being defined, e.g., for this 'x':
+            let x = foo()
+
+        Returns None on failure, for example for the following piece of code:
+            foo(x)  // where is 'x' declared?! we don't know.
+
+        Also works when there is overshadowing going on:
+            let x = foo1();
+            {
+                let x = foo2();
+                bar(x);          // resolving this 'x' will return the 'x' from the declaration one line above!
+            }
+        """
+        assert self.name == "Identifier"
+        identifiers_declared_in_scope_with_same_name: List[Self] =\
+            [identifier_declared_in_scope for identifier_declared_in_scope
+             in self.get_identifiers_declared_in_scope(return_overshadowed_identifiers=False,
+                                                       return_reassigned_identifiers=True)
+             if identifier_declared_in_scope.attributes['name'] == self.attributes['name']]
+        if len(identifiers_declared_in_scope_with_same_name) == 0:
+            return None
+        elif len(identifiers_declared_in_scope_with_same_name) == 1:
+            return identifiers_declared_in_scope_with_same_name[0]
+        else:
+            raise AssertionError(f"Node.get_identifiers_declared_in_scope() returned more than 1 Identifier with the "
+                                 f"same name ('{self.attributes['name']}'), "
+                                 f"even though return_overshadowed_identifiers=False! "
+                                 f"An name may not be declared more than once within the same scope!")
+
+    # ADDED BY ME:
+    def identifier_is_in_scope_at(self, other_node: Self, allow_overshadowing: bool, allow_reassignment: bool) -> bool:
+        """
+        Is this Identifier in scope at the given `other_node`, i.e., if `other_node` were an Identifier having the same
+        name as this Identifier, would it also refer to this Identifier?
+
+        Parameters:
+            other_node: the place in the AST/PDG where we ask ourselves:
+                        Is the Identifier represented by `self` in scope?
+            allow_overshadowing: if True, this function will completely ignore the fact that identifiers may be
+                                 overshadowed and will instead return whether this Identifier is *theoretically* in
+                                 scope and not whether it is actually accessible at `other node`
+            allow_reassignment: if False, this function will return False even *if* this Identifier is in scope at
+                                `other_node` if there was a reassignment to this Identifier beforehand; technically
+                                this doesn't have to do anything with scope but more with data flow.
+        """
+        assert self.name == "Identifier"
+        return self in other_node.get_identifiers_declared_in_scope(
+            return_overshadowed_identifiers=allow_overshadowing,
+            return_reassigned_identifiers=allow_reassignment
+        )
 
     # ADDED BY ME:
     def function_param_get_identifier(self) -> Optional[Self]:
@@ -1681,6 +2298,57 @@ class Node:
         return params[1:]  # ignore 1st Identifier as that's not a parameter but rather the name of the function!
 
     # ADDED BY ME:
+    def function_declaration_get_nth_param(self, n: int) -> Self:
+        assert self.name == "FunctionDeclaration"
+        return self.function_declaration_get_params()[n]
+
+    # ADDED BY ME:
+    def function_declaration_get_nth_param_or_none(self, n: int) -> Optional[Self]:
+        assert self.name == "FunctionDeclaration"
+        params = self.function_declaration_get_params()
+        if n < len(params):
+            return params[n]
+        else:
+            return None
+
+    # ADDED BY ME:
+    def is_function_declaration_param(self) -> bool:
+        """
+        Returns True if and only if
+        there exists a FunctionDeclaration `f` such that `self in f.function_declaration_get_params()`.
+        """
+        func_decl_parent: Optional[Node] = self.get_parent_or_none(["FunctionDeclaration"])
+        if func_decl_parent is None:
+            return False
+        return self in func_decl_parent.function_declaration_get_params()
+
+    # ADDED BY ME:
+    def is_inside_any_function_declaration_param(self) -> bool:
+        """
+        Returns True if and only if there is a Node `p` such that
+        `self.is_inside(p)` and
+        there exists a FunctionDeclaration `f` such that `p in f.function_declaration_get_params()`.
+        """
+        func_decl_ancestor: Optional[Node] = self.get_ancestor_or_none(["FunctionDeclaration"])
+        if func_decl_ancestor is None:
+            return False
+        return any(self.is_inside(param) for param in func_decl_ancestor.function_declaration_get_params())
+        # Note how this assumes that parameters of FunctionDeclarations may not contain FunctionDeclarations themselves.
+
+    # ADDED BY ME:
+    def is_or_is_inside_any_function_declaration_param(self) -> bool:
+        """
+        Returns True if and only if there is a Node `p` such that
+        `self.is_inside(p)` or `self == p` and
+        there exists a FunctionDeclaration `f` such that `p in f.function_declaration_get_params()`.
+        """
+        func_decl_ancestor: Optional[Node] = self.get_ancestor_or_none(["FunctionDeclaration"])
+        if func_decl_ancestor is None:
+            return False
+        return any(self.is_inside(param) or self == param for param in func_decl_ancestor.function_declaration_get_params())
+        # Note how this assumes that parameters of FunctionDeclarations may not contain FunctionDeclarations themselves.
+
+    # ADDED BY ME:
     def function_declaration_get_function_identifier(self) -> Self:
         # interface FunctionDeclaration {
         #     id: Identifier | null;
@@ -1696,6 +2364,18 @@ class Node:
         return params[0]  # 1st non-declaration, non-block child = Identifier = the name of the function!
 
     # ADDED BY ME:
+    def function_declaration_get_body(self) -> Self:
+        # interface FunctionDeclaration {
+        #     id: Identifier | null;
+        #     params: FunctionParameter[];
+        #     body: BlockStatement;
+        # }
+        # where:
+        # type FunctionParameter = AssignmentPattern | Identifier | BindingPattern;
+        assert self.name == "FunctionDeclaration"
+        return self.get_child("BlockStatement")
+
+    # ADDED BY ME:
     def class_declaration_get_class_identifier(self) -> Self:
         # interface ClassDeclaration {
         #     id: Identifier | null;
@@ -1709,6 +2389,16 @@ class Node:
     # ADDED BY ME:
     def function_declaration_get_name(self) -> str:
         return self.function_declaration_get_function_identifier().attributes['name']
+
+    # ADDED BY ME:
+    def function_declaration_is_called_anywhere(self) -> bool:
+        assert self.name == "FunctionDeclaration"
+        name: str = self.function_declaration_get_name()
+        scope: Node = self.function_declaration_get_scope()
+        for call_expr in scope.get_all_as_iter("CallExpression"):
+            if call_expr.call_expression_get_full_function_name() == name:
+                return True
+        return False
 
     # ADDED BY ME:
     def class_declaration_get_name(self) -> str:
@@ -1730,7 +2420,7 @@ class Node:
         # interface FunctionExpression {
         #     id: Identifier | null;
         #     params: FunctionParameter[];
-        #     body: BlockStatement; generator: boolean;
+        #     body: BlockStatement;
         # }
         #
         # An example where id is null:
@@ -1740,25 +2430,156 @@ class Node:
         #   !function foo(x,y){}(a,b)
 
         assert self.name in ["FunctionExpression", "ArrowFunctionExpression"]
-        return self.fun_params  # set by DoubleX; return self.children[:-1] will only work as long as id is null (!!!)
+        # return self.children[:-1] will only work as long as id is null (!!!)
+        # *** WARNING *** WARNING *** WARNING *** WARNING *** WARNING ***
+        # While `self.fun_params` *is* set by DoubleX, counter-intuitively, it is only set during PDG generation.
+        # The information however is obviously available as soon as the AST is available; the latter will work even
+        #   when only working with the AST instead of the PDG (and hence also when I generate my *own* PDG):
+        return self.get("params")
 
     # ADDED BY ME:
     def arrow_function_expression_get_nth_param(self, n: int) -> Self:
         assert self.name in ["FunctionExpression", "ArrowFunctionExpression"]
-        return self.fun_params[n]
+        params: List[Node] = self.arrow_function_expression_get_params()
+        return params[n]
 
     # ADDED BY ME:
     def arrow_function_expression_get_nth_param_or_none(self, n: int) -> Optional[Self]:
         assert self.name in ["FunctionExpression", "ArrowFunctionExpression"]
-        if n < len(self.fun_params):
-            return self.fun_params[n]
+        params: List[Node] = self.arrow_function_expression_get_params()
+        if n < len(params):
+            return params[n]
         else:
             return None
 
     # ADDED BY ME:
-    def function_declaration_get_nth_param(self, n: int) -> Self:
-        assert self.name == "FunctionDeclaration"
-        return self.function_declaration_get_params()[n]
+    def arrow_function_expression_get_body(self) -> Self:
+        assert self.name in ["FunctionExpression", "ArrowFunctionExpression"]
+        # From the Esprima docs:
+        # interface ArrowFunctionExpression {
+        #     id: Identifier | null;
+        #     params: FunctionParameter[];
+        #     body: BlockStatement | Expression;
+        # }
+        # interface FunctionExpression {
+        #     id: Identifier | null;
+        #     params: FunctionParameter[];
+        #     body: BlockStatement;
+        # }
+        return self.children[-1]
+
+    # ADDED BY ME:
+    def function_expression_get_id_node(self) -> Optional[Self]:
+        assert self.name == "FunctionExpression"
+        # Note that ArrowFunctionExpressions cannot have a name!
+        # interface FunctionExpression {
+        #     id: Identifier | null;
+        #     params: FunctionParameter[];
+        #     body: BlockStatement;
+        # }
+        id_ = self.get("id")
+        if len(id_) == 0:
+            return None
+        elif len(id_) == 1:
+            assert id_[0].name == "Identifier"
+            return id_[0]
+        else:
+            raise AssertionError(f"{self.name} in line {self.get_line()} has more than one 'id', this cannot be!")
+
+    # ADDED BY ME:
+    def function_expression_get_name(self) -> Optional[str]:
+        id_node: Node = self.function_expression_get_id_node()
+        if id_node is None:
+            return None
+        else:
+            return id_node.attributes['name']
+
+    # ADDED BY ME:
+    def function_expression_calls_itself_recursively(self) -> bool:
+        assert self.name == "FunctionExpression"
+
+        # There are two ways a FunctionExpression may call itself recursively:
+        #   (a) using a "Named function expression" and then simply referring to itself, just like a regular function
+        #       => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/function
+        #   (b) deprecated: using "arguments.callee"
+        #       => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/arguments/callee
+        #       => Note that "arguments.callee" may be used, even when the FunctionExpression is named!
+        #
+        # Note that ArrowFunctionExpressions cannot call themselves recursively!
+        #   (not even using "arguments.callee", cf.
+        #    https://stackoverflow.com/questions/44676474/access-to-callee-in-arrow-functions)
+
+        # Examples from https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/arguments/callee:
+        #
+        # (a):
+        #     [1, 2, 3, 4, 5].map(function factorial(n) {
+        #         return n <= 1 ? 1 : factorial(n - 1) * n;
+        #     });
+        #
+        # (b):
+        #     [1, 2, 3, 4, 5].map(function (n) {
+        #         return n <= 1 ? 1 : arguments.callee(n - 1) * n;
+        #     });
+
+        name: str = self.function_expression_get_name()
+        body: Node = self.arrow_function_expression_get_body()
+
+        for call_expr in body.get_all_as_iter("CallExpression"):
+            if call_expr.call_expression_get_full_function_name() in [name, "arguments.callee"]:
+                return True
+
+        return False
+
+    # ADDED BY ME:
+    def is_id_of_arrow_function_expression(self) -> bool:
+        # interface FunctionExpression {
+        #     id: Identifier | null;        <----- is `self` this?
+        #     params: FunctionParameter[];
+        #     body: BlockStatement;
+        # }
+        return (self.name == "Identifier"
+                and self.parent is not None
+                and self.parent.name in ["FunctionExpression", "ArrowFunctionExpression"]
+                and self.is_nth_child_of_parent(0)
+                and len(self.parent.get("id")) == 1
+                and self == self.parent.get("id")[0])
+
+    # ADDED BY ME:
+    def is_arrow_function_expression_param(self) -> bool:
+        """
+        Returns True if and only if
+        there exists an (Arrow)FunctionExpression `f` such that `self in f.arrow_function_expression_get_params()`.
+        """
+        func_expr_parent: Optional[Node] = self.get_parent_or_none(["FunctionExpression", "ArrowFunctionExpression"])
+        if func_expr_parent is None:
+            return False
+        return self in func_expr_parent.arrow_function_expression_get_params()
+
+    # ADDED BY ME:
+    def is_inside_any_arrow_function_expression_param(self) -> bool:
+        """
+        Returns True if and only if there is a Node `p` such that
+        `self.is_inside(p)` and
+        there exists an (Arrow)FunctionExpression `f` such that `p in f.arrow_function_expression_get_params()`.
+        """
+        func_expr_ancestor: Optional[Node] = self.get_ancestor_or_none(["FunctionExpression", "ArrowFunctionExpression"])
+        if func_expr_ancestor is None:
+            return False
+        return any(self.is_inside(param) for param in func_expr_ancestor.arrow_function_expression_get_params())
+        # Note how this assumes that parameters of FunctionExpressions may not contain FunctionExpressions themselves.
+
+    # ADDED BY ME:
+    def is_or_is_inside_any_arrow_function_expression_param(self) -> bool:
+        """
+        Returns True if and only if there is a Node `p` such that
+        `self.is_inside(p)` or `self == p` and
+        there exists an (Arrow)FunctionExpression `f` such that `p in f.arrow_function_expression_get_params()`.
+        """
+        func_expr_ancestor: Optional[Node] = self.get_ancestor_or_none(["FunctionExpression", "ArrowFunctionExpression"])
+        if func_expr_ancestor is None:
+            return False
+        return any(self.is_inside(param) or self == param for param in func_expr_ancestor.arrow_function_expression_get_params())
+        # Note how this assumes that parameters of FunctionExpressions may not contain FunctionExpressions themselves.
 
     # ADDED BY ME:
     def then_call_get_param_identifiers(self) -> List[Self]:

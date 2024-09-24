@@ -361,6 +361,85 @@ class TestNodeClass(unittest.TestCase):
         self.assertFalse(expression.is_inside(literal1))
         self.assertFalse(expression.is_inside(literal2))
 
+    def test_is_nth_child_of_a(self):
+        expression = Node("BinaryExpression", attributes={"operator": "+"}) \
+            .child(Node("Literal", attributes={"raw": "'x'", "value": "x"})) \
+            .child(Node("Literal", attributes={"raw": "'y'", "value": "y"}))
+        print(expression)
+        [literal1, literal2] = expression.children
+
+        self.assertTrue(literal1.is_nth_child_of_a(0, ["BinaryExpression"]))
+        self.assertTrue(literal2.is_nth_child_of_a(1, ["BinaryExpression"]))
+        self.assertTrue(literal1.is_nth_child_of_a(0, ["CallExpression", "BinaryExpression", "AssignmentExpression"]))
+        self.assertTrue(literal2.is_nth_child_of_a(1, ["CallExpression", "BinaryExpression", "AssignmentExpression"]))
+
+        self.assertFalse(literal1.is_nth_child_of_a(1, ["BinaryExpression"]))
+        self.assertFalse(literal2.is_nth_child_of_a(0, ["BinaryExpression"]))
+        self.assertFalse(expression.is_nth_child_of_a(0, ["Literal"]))
+        self.assertFalse(expression.is_nth_child_of_a(1, ["Literal"]))
+
+    def test1_is_within_the_nth_child_of_a(self):
+        expression = Node("BinaryExpression", attributes={"operator": "+"}) \
+            .child(Node("Literal", attributes={"raw": "'x'", "value": "x"})) \
+            .child(Node("Literal", attributes={"raw": "'y'", "value": "y"}))
+        print(expression)
+        [literal1, literal2] = expression.children
+
+        self.assertTrue(literal1.is_within_the_nth_child_of_a(0, ["BinaryExpression"]))
+        self.assertTrue(literal2.is_within_the_nth_child_of_a(1, ["BinaryExpression"]))
+        self.assertTrue(literal1.is_within_the_nth_child_of_a(0, ["CallExpression", "BinaryExpression", "AssignmentExpression"]))
+        self.assertTrue(literal2.is_within_the_nth_child_of_a(1, ["CallExpression", "BinaryExpression", "AssignmentExpression"]))
+
+        self.assertFalse(literal1.is_within_the_nth_child_of_a(1, ["BinaryExpression"]))
+        self.assertFalse(literal2.is_within_the_nth_child_of_a(0, ["BinaryExpression"]))
+        self.assertFalse(expression.is_within_the_nth_child_of_a(0, ["Literal"]))
+        self.assertFalse(expression.is_within_the_nth_child_of_a(1, ["Literal"]))
+
+    def test2_is_within_the_nth_child_of_a(self):
+        # (a+b)||(x+y)
+        expression: Node = Node("LogicalExpression", attributes={"operator": "||"})\
+            .child(
+                Node("BinaryExpression", attributes={"operator": "+"})
+                    .child(Node("Identifier", attributes={"name": "a"}))
+                    .child(Node("Identifier", attributes={"name": "b"}))
+            )\
+            .child(
+                Node("BinaryExpression", attributes={"operator": "+"})
+                    .child(Node("Identifier", attributes={"name": "x"}))
+                    .child(Node("Identifier", attributes={"name": "y"}))
+            )
+        # print(expression) # will raise an AttributeError as data_dep_children is None for the Identifiers!
+        a = expression.get_identifier_by_name("a")
+        b = expression.get_identifier_by_name("b")
+        x = expression.get_identifier_by_name("x")
+        y = expression.get_identifier_by_name("y")
+
+        self.assertTrue(a.is_within_the_nth_child_of_a(0, ["LogicalExpression"]))
+        self.assertTrue(b.is_within_the_nth_child_of_a(0, ["LogicalExpression"]))
+        self.assertFalse(a.is_within_the_nth_child_of_a(1, ["LogicalExpression"]))
+        self.assertFalse(b.is_within_the_nth_child_of_a(1, ["LogicalExpression"]))
+
+        self.assertFalse(x.is_within_the_nth_child_of_a(0, ["LogicalExpression"]))
+        self.assertFalse(y.is_within_the_nth_child_of_a(0, ["LogicalExpression"]))
+        self.assertTrue(x.is_within_the_nth_child_of_a(1, ["LogicalExpression"]))
+        self.assertTrue(y.is_within_the_nth_child_of_a(1, ["LogicalExpression"]))
+
+    def test_lower(self):
+        expression = Node("BinaryExpression", attributes={"operator": "+"}) \
+            .child(Node("Literal", attributes={"raw": "'x'", "value": "x"})) \
+            .child(Node("Literal", attributes={"raw": "'y'", "value": "y"}))
+        print(expression)
+        [literal1, literal2] = expression.children
+
+        self.assertEqual(Node.lower(expression, literal1), literal1)
+        self.assertEqual(Node.lower(literal1, expression), literal1)
+
+        self.assertEqual(Node.lower(expression, literal2), literal2)
+        self.assertEqual(Node.lower(literal2, expression), literal2)
+
+        # Check if it returns `node1` when both nodes are equally low in the tree:
+        self.assertEqual(Node.lower(literal1, literal2), literal1)
+        self.assertEqual(Node.lower(literal2, literal1), literal2)
 
 if __name__ == '__main__':
     unittest.main()
