@@ -57,7 +57,7 @@ class TestAddMissingDataFlowEdges(unittest.TestCase):
         """
         ast = generate_ast(code)
         print(ast)
-        self.assertEqual(1, add_basic_data_flow_edges(ast, debug=True)) # todo: fix
+        self.assertEqual(1, add_basic_data_flow_edges(ast, debug=True))
 
         code = """
         x = 1

@@ -1763,6 +1763,40 @@ class Node:
             return innermost_func_decl
 
     # ADDED BY ME:
+    def declaration_get_scope(self) -> Self:
+        """
+        When this Node is a Node acting as a declaration, namely one of the following...:
+            - FunctionDeclaration
+            - VariableDeclaration
+            - ClassDeclaration
+            - FunctionExpression
+            - ArrowFunctionExpression
+            - AssignmentExpression (note that this function does *not* check whether the given AssignmentExpression
+              actually *does* act as an (implicit global) assignment!)
+        ...returns the scope of said declaration.
+
+        Cf.:
+            - Node.function_declaration_get_scope()
+            - Node.variable_declaration_get_scope()
+            - Node.class_declaration_get_scope()
+        """
+        if self.name == "FunctionDeclaration":
+            return self.function_declaration_get_scope()
+        elif self.name == "VariableDeclaration":
+            return self.variable_declaration_get_scope()
+        elif self.name == "ClassDeclaration":
+            return self.class_declaration_get_scope()
+        elif self.name in ["FunctionExpression", "ArrowFunctionExpression"]:
+            # Both names of FunctionExpressions and parameters of (Arrow)FunctionExpressions
+            #   are in scope only within themselves(!):
+            return self
+        elif self.name == "AssignmentExpression":
+            # If an AssignmentExpression acts as a *declaration*, it's an implicit declaration of a global variable(!):
+            return self.root()
+        else:
+            raise AssertionError("Node.declaration_get_scope(self): self is not a declaration!")
+
+    # ADDED BY ME:
     def function_declaration_get_scope(self) -> Self:
         """
         For a given FunctionDeclaration (self), returns the entire subtree in which said FunctionDeclaration is
@@ -1849,9 +1883,22 @@ class Node:
         Whether the Identifier represented by `self` is assigned to (i.e., is within the LHS of an AssignmentExpression)
         between `self` and `other`.
 
+        *** IMPLEMENTATION DETAILS: ***
+        Note that this function will also return True if `other` *itself* is part of such an AssignmentExpression
+        (and `other` is an Identifier with the same name as `self`) !!!
+        This function will return False however, if `other` itself *is* such an AssignmentExpression
+        (i.e., `other.name == "AssignmentExpression"`) !!!
+
+        Note that AssignmentExpressions that `self` is a part of will be ignored !!!
+        If `self` itself is an AssignmentExpression, it will also be ignored !!!
+
         *** IMPORTANT: ***
         This method does *not* use data flow edges as it'll be used *during* data flow edge creation!
         Instead, it assumes that there's no overshadowing of the Identifier name between `self` and `other`!
+
+        Edge cases:
+        * when `self == other`, the entire `scope`, beginning at `self`, will be analyzed for AssignmentExpressions
+          (i.e., `other` will be practically ignored)
 
         Parameters:
             other: the `other` Node
@@ -1875,12 +1922,14 @@ class Node:
 
         encountered_self: bool = False
 
-        for node in scope.get_all_as_iter(None):
+        for node in scope.get_all_as_iter(None):  # <= performs a pre-order tree traversal
             if node == self:
                 encountered_self = True
             elif not encountered_self:
                 continue
             elif node == other:
+                # This check has to occur before the next check, otherwise the loop would continue if
+                #     other.name == "AssignmentExpression"!
                 return False
             elif node.name == "AssignmentExpression":
                 # interface AssignmentExpression {
@@ -2147,10 +2196,26 @@ class Node:
                                  f"An name may not be declared more than once within the same scope!")
 
     # ADDED BY ME:
-    def identifier_is_in_scope_at(self, other_node: Self, allow_overshadowing: bool, allow_reassignment: bool) -> bool:
-        """
+    def identifier_is_in_scope_at(self,
+                                  other_node: Self,
+                                  allow_overshadowing: bool,
+                                  allow_reassignment_after_decl: bool,
+                                  allow_reassignment_after_self: bool) -> bool:
+        r"""
         Is this Identifier in scope at the given `other_node`, i.e., if `other_node` were an Identifier having the same
         name as this Identifier, would it also refer to this Identifier?
+
+        declaration ..... ..... ..... self ..... ..... ..... other_node
+                           /|\                    /|\
+                            |                      |
+            reassignments allowed                 reassignments allowed
+            if allow_reassignment_after_decl      if allow_reassignment_after_self
+
+        *** Performance notes: ***
+        Note that this function will take a little bit longer to run if
+            allow_reassignment_after_decl != allow_reassignment_after_self,
+        so try to avoid this if you can!
+        This function will run the fastest if all three boolean parameters are set to True!
 
         Parameters:
             other_node: the place in the AST/PDG where we ask ourselves:
@@ -2158,15 +2223,57 @@ class Node:
             allow_overshadowing: if True, this function will completely ignore the fact that identifiers may be
                                  overshadowed and will instead return whether this Identifier is *theoretically* in
                                  scope and not whether it is actually accessible at `other node`
-            allow_reassignment: if False, this function will return False even *if* this Identifier is in scope at
-                                `other_node` if there was a reassignment to this Identifier beforehand; technically
-                                this doesn't have to do anything with scope but more with data flow.
+            allow_reassignment_after_decl: if False, this function will return False even *if* this Identifier is in
+                                           scope at `other_node` if there was any reassignment to this Identifier
+                                           between its declaration and `other_node`; technically this doesn't have to
+                                           do anything with scope but more with data flow.
+            allow_reassignment_after_self: if False, this function will return False even *if* this Identifier is in
+                                           scope at `other_node` if there was any reassignment to this Identifier
+                                           between `self` and `other_node`; technically this doesn't have to
+                                           do anything with scope but more with data flow.
         """
         assert self.name == "Identifier"
-        return self in other_node.get_identifiers_declared_in_scope(
-            return_overshadowed_identifiers=allow_overshadowing,
-            return_reassigned_identifiers=allow_reassignment
+
+        declaration_identifier: Node = self.resolve_identifier()  # = the same as `self` but where it's declared
+        declaration: Node = declaration_identifier.get_ancestor(
+            ["FunctionDeclaration", "VariableDeclaration", "ClassDeclaration",
+             "FunctionExpression", "ArrowFunctionExpression", "AssignmentExpression"]
         )
+        declaration_scope: Node = declaration.declaration_get_scope()
+
+        if not other_node.is_inside(declaration_scope):
+            # No matter the values of allow_overshadowing, allow_reassignment_after_decl and
+            #   allow_reassignment_after_self, the identifier isn't in scope @ other_node at all(!):
+            return False
+
+        if allow_overshadowing and allow_reassignment_after_decl and allow_reassignment_after_self:
+            # If we do not care about possible overshadowing or reassignments at all, the question
+            #     self.identifier_is_in_scope_at(other_node)?
+            # ...has already been answered with:
+            #    other_node.is_inside(declaration_scope) == True
+            return True
+
+        other_node_identifiers_declared_in_scope: List[Node] = other_node.get_identifiers_declared_in_scope(
+            return_overshadowed_identifiers=allow_overshadowing,
+            return_reassigned_identifiers=(allow_reassignment_after_decl or allow_reassignment_after_self)
+        )
+        print(f"identifiers declared in scope @ other_node (line {other_node.get_line()}): {other_node_identifiers_declared_in_scope}") # todo: remove
+
+        # Only if we set return_reassigned_identifiers=True above, do we need to handle
+        #   allow_reassignment_after_decl/allow_reassignment_after_self at all:
+        if allow_reassignment_after_decl or allow_reassignment_after_self:
+            if not allow_reassignment_after_decl:
+                other_node_identifiers_declared_in_scope =\
+                    [id_in_scope
+                     for id_in_scope in other_node_identifiers_declared_in_scope
+                     if not declaration_identifier.identifier_is_assigned_to_before(self, scope=declaration_scope)]
+            if not allow_reassignment_after_self:
+                other_node_identifiers_declared_in_scope = \
+                    [id_in_scope
+                     for id_in_scope in other_node_identifiers_declared_in_scope
+                     if not self.identifier_is_assigned_to_before(other_node, scope=declaration_scope)]
+
+        return declaration_identifier in other_node_identifiers_declared_in_scope
 
     # ADDED BY ME:
     def function_param_get_identifier(self) -> Optional[Self]:

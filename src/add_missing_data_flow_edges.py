@@ -263,11 +263,17 @@ def add_basic_data_flow_edges(pdg: Node, debug=False) -> int:
                     if (
                         not identifier1.identifier_is_in_scope_at(identifier2,
                                                                   allow_overshadowing=False,
-                                                                  allow_reassignment=False)
+                                                                  allow_reassignment_after_decl=True,
+                                                                  allow_reassignment_after_self=False)
+                        # *** Notes: ***
+                        # * [id1] may have been reassigned beforehand (i.e., between declaration and [id1])
+                        #   but *not* between [id1] and [id2] !!!
+                        # * allow_reassignment_after_self=False also forbids that `identifier2` *itself* is part of a
+                        #   reassignment to `identifier1` !!! (i.e., no flow in "function foo(x) { x = 1 }")
                     ):
                         if debug:
                             print(f"[id1] (line {identifier1.get_line()}) "
-                                  f"isn't in scope @ [id2] (line {identifier2.get_line()})")
+                                  f"isn't in scope (or re-assigned) @ [id2] (line {identifier2.get_line()})")
                         continue
 
                     data_flow_edges_added += identifier1.set_data_dependency(identifier2)
@@ -356,9 +362,16 @@ def add_missing_data_flow_edges_function_parameters(pdg: Node) -> int:
                         if id1.attributes['name'] == id2.attributes['name']:
                             if id1.identifier_is_in_scope_at(id2,
                                                              allow_overshadowing=False,
-                                                             allow_reassignment=False):
+                                                             allow_reassignment_after_decl=False,
+                                                             allow_reassignment_after_self=False):
                                 data_flow_edges_added += id1.set_data_dependency(id2)
                                 # includes call: id.data_dep_children.append(extremity=id2)
+                                # *** Note: ***
+                                # * Since [id1] here is always where the identifier is defined, the
+                                #   `allow_reassignment_after_decl` and `allow_reassignment_after_self` parameters
+                                #   are equivalent!
+                                # * allow_reassignment=False also forbids that `id2` *itself* is part of a reassignment
+                                #   to `id1` !!! (i.e., no flow in "function foo(x) { x = 1 }")
 
     return data_flow_edges_added
 
