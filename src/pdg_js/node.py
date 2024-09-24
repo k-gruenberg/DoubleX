@@ -122,7 +122,7 @@ class Node:
             return self.parent.root()
 
     # ADDED BY ME:
-    def get(self, child_role: str) -> List[Self]: # todo: write test # todo: refactor code everywhere to use this method where applicable!
+    def get(self, child_role: str) -> List[Self]: # todo: refactor code everywhere to use this method where applicable!
         """
         Example #1: `node` is a MemberExpression representing "x.y":
             node.get("object") yields the Node for "x"
