@@ -3064,6 +3064,24 @@ class Node:
         else:
             return statistics.mean(class_name_lengths)
 
+    # ADDED BY ME:
+    def one_character_identifier_percentage(self) -> int:
+        """
+        Returns the percentage of Identifiers whose name is just 1 character long.
+        """
+        total_no_of_identifiers: int = 0
+        no_of_identifiers_with_1_char_name: int = 0
+
+        for identifier in self.get_all_as_iter("Identifier"):
+            total_no_of_identifiers += 1
+            if len(identifier.attributes['name']) == 1:
+                no_of_identifiers_with_1_char_name += 1
+
+        if total_no_of_identifiers > 0:
+            return (100 * no_of_identifiers_with_1_char_name) // total_no_of_identifiers
+        else:
+            return -1
+
     def get_file(self) -> str:
         parent = self
         while True:
