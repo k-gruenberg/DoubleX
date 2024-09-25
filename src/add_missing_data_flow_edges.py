@@ -76,6 +76,13 @@ def add_missing_data_flow_edges(pdg: Node) -> int:
     print(f"[Adding data flows] {edges_added_call_expressions} edges added to call expressions.")
     total_data_flow_edges_added += edges_added_call_expressions
 
+    # ToDo: handle "this" flows somehow (problem: "this" becomes a ThisExpression and not an Identifier...):
+    #       Example #1: let x=42; (function(){ console.log("This is: " + this); }.bind(x))();  // prints: "This is: 42"
+    #       Example #2: x = this;  // should add a data flow from right to left!
+    #       Example #3: this.forEach((x) => { ... })  // should add a data flow from 'this' to 'x'
+    #       => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind
+    #
+
     return total_data_flow_edges_added
 
 
