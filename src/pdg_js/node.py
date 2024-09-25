@@ -857,17 +857,24 @@ class Node:
                            for i in range(len(self.children)))
                            for permutation in permutations)
         else:  # allow_additional_children == True:
+            assert len(self.children) >= len(pattern.children)  # (cf. elif check above)
+
             # Fill pattern up with wildcards:
             pattern_children_plus_wildcards = pattern.children + [Node.wildcard()] * (len(self.children) - len(pattern.children))
+            assert len(pattern_children_plus_wildcards) == len(self.children)
+            # IMPORTANT: Note that some wildcards might have already been present in the supplied pattern!!!
 
             permutations = itertools.permutations(pattern_children_plus_wildcards)
 
-            # Same as above:
+            # Cf. above:
             return any(all(self.children[i].matches(permutation[i], match_identifier_names, match_literals, match_operators, allow_additional_children, allow_different_child_order)
                            for i in range(len(self.children)))
                            for permutation in permutations
-                           if allow_different_child_order or all([[el for el in permutation if not el.is_wildcard][i] == pattern.children[i] for i in range(len(pattern.children))]))
-            # The last line skips permutations that changed the order of the non-wildcard nodes if allow_different_child_order=False.
+                           if allow_different_child_order
+                              or    [el for el in permutation      if not el.is_wildcard]
+                                 == [el for el in pattern.children if not el.is_wildcard]
+                       )
+            # The last check skips permutations that changed the order of the non-wildcard nodes if allow_different_child_order=False.
 
         # Note:
         #
@@ -954,6 +961,14 @@ class Node:
             raise TypeError(f"member_expression_to_string(): LHS of MemberExpression in line {self.get_line()} "
                             f"is neither a ThisExpression "
                             f"nor an Identifier nor a MemberExpression: {self.lhs()}")
+
+    # ADDED BY ME:
+    def find_member_expressions_ending_in(self, suffix: str) -> List[Self]:
+        result = []
+        for member_expr in self.get_all_as_iter("MemberExpression"):
+            if member_expr.member_expression_to_string().endswith(suffix):
+                result.append(member_expr)
+        return result
 
     # ADDED BY ME:
     def member_expression_get_leftmost_identifier(self) -> Self:

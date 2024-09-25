@@ -1474,6 +1474,23 @@ class TestNodeClass2(unittest.TestCase):
         self.assertEqual("t", identifiers_declared_in_scope[0].attributes['name'])
         self.assertEqual([t1], identifiers_declared_in_scope)
 
+    def test_find_member_expressions_ending_in(self):
+        code = """
+        let a = foo.bar.baz;
+        let b = foo.bar;
+        let c = bar.baz;
+        let d = bar.baz();
+        let e = foo.bar.baz();
+        let f = hello.world.foo.bar.baz();
+        let g = foo.bar.x.baz;
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        member_expressions1 = pdg.find_member_expressions_ending_in("bar.baz")
+        self.assertEqual(5, len(member_expressions1))
+        member_expressions2 = pdg.find_member_expressions_ending_in(".bar.baz")
+        self.assertEqual(3, len(member_expressions2))
+
 
 if __name__ == '__main__':
     unittest.main()
