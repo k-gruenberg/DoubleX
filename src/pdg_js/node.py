@@ -2777,6 +2777,47 @@ class Node:
             right: Node = self.get("right")[0]
             return right.static_eval(allow_partial_eval=allow_partial_eval)
 
+        elif self.name == "MemberExpression":
+            # interface MemberExpression {
+            #      computed: boolean;     <----- True for "[1,2,3][1]"; False for "[1,2,3].one"
+            #      object: Expression;
+            #      property: Expression;
+            # }
+            # (1) "[1,2,3][1]"
+            #     -> computed: True
+            #     -> property: Literal (int)
+            # (2) "[1,2,3].length"
+            #     -> computed: False
+            #     -> property: Identifier
+            # (3) "[1,2,3]['length']"
+            #     -> computed: True
+            #     -> property: Literal (string)
+            object_: Node = self.get("object")[0]
+            property_: Node = self.get("property")[0]
+            computed: bool = self.attributes['computed']
+            object_evaluated = object_.static_eval(allow_partial_eval=allow_partial_eval)
+            if isinstance(object_evaluated, list):
+                if computed:
+                    property_evaluated = property_.static_eval(allow_partial_eval=allow_partial_eval)
+                    if (isinstance(property_evaluated, int)
+                            or (isinstance(property_evaluated, float)
+                                and property_evaluated == int(property_evaluated))):
+                        return object_evaluated[int(property_evaluated)]  # "[1,2,3][1]" or "[1,2,3][1.0]"
+                    elif isinstance(property_evaluated, str) and property_evaluated == "length":
+                        return len(object_evaluated)  # "[1,2,3]['length']"
+                    else:
+                        raise StaticEvalException(f"static eval failed: unsupported type of MemberExpression; "
+                                                  f"only supporting RHS=integer or RHS='length'")
+                else:
+                    if property_.name == "Identifier" and property_.attributes['name'] == "length":
+                        return len(object_evaluated)  # "[1,2,3].length"
+                    else:
+                        raise StaticEvalException(f"static eval failed: unsupported type of MemberExpression; "
+                                                  f"only supporting <array>.length non-computed MemberExpressions")
+            else:
+                raise StaticEvalException(f"static eval failed: unsupported type of MemberExpression; "
+                                          f"only supporting LHS=array")
+
         else:
             raise StaticEvalException(f"static eval failed: unsupported type of Expression: {self.name}")
 
