@@ -2443,7 +2443,104 @@ class Node:
                         # Uncaught TypeError: right-hand side of 'in' should be an object, got null
                         raise StaticEvalException(f"static eval failed: right-hand side of 'in' should be an object")
                 case '+':
-                    return left.static_eval(allow_partial_eval) + right.static_eval(allow_partial_eval)
+                    # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Addition:
+                    # "The addition (+) operator produces the sum of numeric operands or string concatenation.":
+                    #
+                    #                   | JavaScript            | Python
+                    # ------------------|-----------------------|-----------
+                    # "foo" + 42        | "foo42"               | TypeError: can only concatenate str (not "int") to str
+                    # 42 + "foo"        | "42foo"               | TypeError: unsupported operand type(s) for +: 'int' and 'str'
+                    # "foo" + 3.14      | "foo3.14"             | TypeError: can only concatenate str (not "float") to str
+                    # 3.14 + "foo"      | "3.14foo"             | TypeError: unsupported operand type(s) for +: 'float' and 'str'
+                    # "foo" + false     | "foofalse"            | TypeError: can only concatenate str (not "bool") to str
+                    # "foo" + true      | "footrue"             | TypeError: can only concatenate str (not "bool") to str
+                    # false + "foo"     | "falsefoo"            | TypeError: unsupported operand type(s) for +: 'bool' and 'str'
+                    # true + "foo"      | "truefoo"             | TypeError: unsupported operand type(s) for +: 'bool' and 'str'
+                    # 42 + false        | 42                    | 42
+                    # 42 + true         | 43                    | 43
+                    # false + 42        | 42                    | 42
+                    # true + 42         | 43                    | 43
+                    # false + false     | 0                     | 0
+                    # false + true      | 1                     | 1
+                    # true + false      | 1                     | 1
+                    # true + true       | 2                     | 2
+                    # "foo" + [1,2,3]   | "foo1,2,3"            | TypeError: can only concatenate str (not "list") to str
+                    # [1,2,3] + "foo"   | "1,2,3foo"            | TypeError: can only concatenate list (not "str") to list
+                    # "foo" + {}        | "foo[object Object]"  | TypeError: can only concatenate str (not "dict") to str
+                    # "foo" + {"a":1}   | "foo[object Object]"  | TypeError: can only concatenate str (not "dict") to str
+                    # {} + "foo"        | NaN                   | TypeError: unsupported operand type(s) for +: 'dict' and 'str'
+                    # ({} + "foo")      | "[object Object]foo"  | TypeError: unsupported operand type(s) for +: 'dict' and 'str'
+                    # x={} + "foo"      | "[object Object]foo"  | TypeError: unsupported operand type(s) for +: 'dict' and 'str'
+                    # ({"a":1} + "foo") | "[object Object]foo"  | TypeError: unsupported operand type(s) for +: 'dict' and 'str'
+                    # 42 + [1,2,3]      | "421,2,3"             | TypeError: unsupported operand type(s) for +: 'int' and 'list'
+                    # [1,2,3] + 42      | "1,2,342"             | TypeError: can only concatenate list (not "int") to list
+                    # 42 + [1]          | "421"                 | TypeError: unsupported operand type(s) for +: 'int' and 'list'
+                    # [1]+42            | "142"                 | TypeError: can only concatenate list (not "int") to list
+                    # 42 + []           | "42"                  | TypeError: unsupported operand type(s) for +: 'int' and 'list'
+                    # [] + 42           | "42"                  | TypeError: can only concatenate list (not "int") to list
+                    # [1,2]+[3,4]       | "1,23,4"              | [1, 2, 3, 4]
+                    # [1,2]+{}          | "1,2[object Object]"  | TypeError: can only concatenate list (not "dict") to list
+                    # [1,2]+{"a":1}     | "1,2[object Object]"  | TypeError: can only concatenate list (not "dict") to list
+                    # ({}+[1,2])        | "[object Object]1,2"  | TypeError: unsupported operand type(s) for +: 'dict' and 'list'
+                    # ({"a":1}+[1,2])   | "[object Object]1,2"  | TypeError: unsupported operand type(s) for +: 'dict' and 'list'
+                    # null + null       | 0                     | TypeError: unsupported operand type(s) for +: 'NoneType' and 'NoneType'
+                    # "foo" + null      | "foonull"             | TypeError: can only concatenate str (not "NoneType") to str
+                    # 42 + null         | 42                    | TypeError: unsupported operand type(s) for +: 'int' and 'NoneType'
+                    # false + null      | 0                     | TypeError: unsupported operand type(s) for +: 'bool' and 'NoneType'
+                    # true + null       | 1                     | TypeError: unsupported operand type(s) for +: 'bool' and 'NoneType'
+                    # 3.14 + null       | 3.14                  | TypeError: unsupported operand type(s) for +: 'float' and 'NoneType'
+                    # [1,2] + null      | "1,2null"             | TypeError: can only concatenate list (not "NoneType") to list
+                    # ({}+null)         | "[object Object]null" | TypeError: unsupported operand type(s) for +: 'dict' and 'NoneType'
+                    # ({"a":1}+null)    | "[object Object]null" | TypeError: unsupported operand type(s) for +: 'dict' and 'NoneType'
+                    # null + "foo"      | "nullfoo"             | TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'
+                    left_evaluated = left.static_eval(allow_partial_eval)
+                    print(f"left_evaluated = {left_evaluated} (type: {type(left_evaluated)})") # todo: remove
+                    right_evaluated = right.static_eval(allow_partial_eval)
+                    print(f"right_evaluated = {right_evaluated} (type: {type(right_evaluated)})")  # todo: remove
+                    if (
+                            isinstance(left_evaluated, (int, float, bool, type(None)))
+                        and isinstance(right_evaluated, (int, float, bool, type(None)))
+                    ):
+                        # Sum of numeric operands (treating null as 0):
+                        return ((left_evaluated if left_evaluated is not None else 0)
+                                + (right_evaluated if right_evaluated is not None else 0))
+                    else:
+                        # String concatenation:
+                        left_as_str: str
+                        if isinstance(left_evaluated, bool):
+                            # => has to happen first because isinstance(True, int) returns True!!!
+                            left_as_str = "true" if left_evaluated else "false"
+                        elif isinstance(left_evaluated, (str, int, float)):
+                            left_as_str = str(left_evaluated)
+                        elif isinstance(left_evaluated, list):
+                            left_as_str = ",".join([str(item) for item in left_evaluated])
+                            # => todo: handle bools correctly
+                        elif isinstance(left_evaluated, dict):
+                            left_as_str = "[object Object]"
+                        elif isinstance(left_evaluated, type(None)):
+                            left_as_str = "null"
+                        else:
+                            raise StaticEvalException(f"static eval failed: "
+                                                      f"LHS evaluated to unknown type: {left_evaluated}")
+
+                        right_as_str: str
+                        if isinstance(right_evaluated, bool):
+                            # => has to happen first because isinstance(True, int) returns True!!!
+                            right_as_str = "true" if right_evaluated else "false"
+                        elif isinstance(right_evaluated, (str, int, float)):
+                            right_as_str = str(right_evaluated)
+                        elif isinstance(right_evaluated, list):
+                            right_as_str = ",".join([str(item) for item in right_evaluated])
+                            # => todo: handle bools correctly
+                        elif isinstance(right_evaluated, dict):
+                            right_as_str = "[object Object]"
+                        elif isinstance(right_evaluated, type(None)):
+                            right_as_str = "null"
+                        else:
+                            raise StaticEvalException(f"static eval failed: "
+                                                      f"RHS evaluated to unknown type: {right_evaluated}")
+
+                        return left_as_str + right_as_str
                 case '-':
                     return left.static_eval(allow_partial_eval) - right.static_eval(allow_partial_eval)
                 case '*':

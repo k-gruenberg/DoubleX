@@ -1523,15 +1523,37 @@ class TestNodeClass2(unittest.TestCase):
             self.assertTrue(math.isnan(expr("0/0").static_eval(allow_partial_eval)))
             self.assertTrue(math.isinf(expr("1/0").static_eval(allow_partial_eval)))
             self.assertTrue(math.isinf(expr("-1/0").static_eval(allow_partial_eval)))
+
+            # Test the fact that null is treated as 0 for numeric additions using '+':
+            self.assertEqual(0, expr("null+null").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("42+null").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("null+42").static_eval(allow_partial_eval))
+            self.assertEqual(0, expr("false+null").static_eval(allow_partial_eval))
+            self.assertEqual(0, expr("null+false").static_eval(allow_partial_eval))
+            self.assertEqual(1, expr("true+null").static_eval(allow_partial_eval))
+            self.assertEqual(1, expr("null+true").static_eval(allow_partial_eval))
+            self.assertEqual(3.14, expr("3.14+null").static_eval(allow_partial_eval))
+            self.assertEqual(3.14, expr("null+3.14").static_eval(allow_partial_eval))
+
+            # Test other special cases for the '+' binary operator:
+            self.assertEqual("1,23,4", expr("[1,2]+[3,4]").static_eval(allow_partial_eval))
+            self.assertEqual("1,2null", expr("[1,2]+null").static_eval(allow_partial_eval))
+            self.assertEqual("1.1,2.2null", expr("[1.1,2.2]+null").static_eval(allow_partial_eval))
+            self.assertEqual("1,2null", expr("['1','2']+null").static_eval(allow_partial_eval))
+            self.assertEqual("1,2false", expr("[1,2]+false").static_eval(allow_partial_eval))
+            self.assertEqual("1,2true", expr("[1,2]+true").static_eval(allow_partial_eval))
+            self.assertEqual("1,2[object Object]", expr("[1,2]+{'a':1}").static_eval(allow_partial_eval))
     
             # Test arithmetic:
-            self.assertEqual(3, expr("1+2").static_eval(allow_partial_eval))
-            self.assertEqual(333, expr("111+222").static_eval(allow_partial_eval))
-            self.assertAlmostEqual(3.3, expr("1.1+2.2").static_eval(allow_partial_eval))
-            self.assertEqual(60, expr("70-10").static_eval(allow_partial_eval))
-            self.assertEqual(30, expr("5*6").static_eval(allow_partial_eval))
-            self.assertEqual(25, expr("100/4").static_eval(allow_partial_eval))
-            self.assertEqual(1024, expr("2**10").static_eval(allow_partial_eval))
+            self.assertEqual(3, expr("1+2").static_eval(allow_partial_eval))  # int + int
+            self.assertEqual(333, expr("111+222").static_eval(allow_partial_eval))  # int + int
+            self.assertAlmostEqual(3.3, expr("1.1+2.2").static_eval(allow_partial_eval))  # float + float
+            self.assertAlmostEqual(3.2, expr("1+2.2").static_eval(allow_partial_eval))  # int + float
+            self.assertEqual(60, expr("70-10").static_eval(allow_partial_eval))  # int - int
+            self.assertAlmostEqual(6.6, expr("7.7-1.1").static_eval(allow_partial_eval))  # float - float
+            self.assertEqual(30, expr("5*6").static_eval(allow_partial_eval))  # int * int
+            self.assertEqual(25, expr("100/4").static_eval(allow_partial_eval))  # int / int
+            self.assertEqual(1024, expr("2**10").static_eval(allow_partial_eval))  # int ** int
     
             # Test string concatenation:
             self.assertEqual("foobar", expr("'foo' + 'bar'").static_eval(allow_partial_eval))
@@ -1539,6 +1561,10 @@ class TestNodeClass2(unittest.TestCase):
             self.assertEqual("foobarbaz", expr("'foo' + 'bar' + 'baz'").static_eval(allow_partial_eval))
             self.assertEqual("foobarbaz", expr("\"foo\" + \"bar\" + \"baz\"").static_eval(allow_partial_eval))
             self.assertEqual("foobarbaz", expr("\"foo\" + 'bar' + \"baz\"").static_eval(allow_partial_eval))
+
+            # Test string concatenation + casting:
+            self.assertEqual("foo1", expr("'foo' + 1").static_eval(allow_partial_eval))
+            self.assertEqual("foo1", expr("\"foo\" + 1").static_eval(allow_partial_eval))
     
             # Test lists/arrays:
             self.assertEqual([], expr("[]").static_eval(allow_partial_eval))
