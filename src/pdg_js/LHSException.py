@@ -1,0 +1,2 @@
+class LHSException(TypeError):
+    pass

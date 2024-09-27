@@ -1,0 +1,2 @@
+class RHSException(TypeError):
+    pass

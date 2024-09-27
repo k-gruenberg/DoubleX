@@ -45,6 +45,8 @@ from functools import total_ordering
 from typing import Set, Tuple, Optional, Self, List, Any, Dict, DefaultDict
 
 from . import utility_df
+from .LHSException import LHSException
+from .RHSException import RHSException
 from .StaticEvalException import StaticEvalException
 
 EXPRESSIONS = ['AssignmentExpression', 'ArrayExpression', 'ArrowFunctionExpression',
@@ -159,23 +161,23 @@ class Node:
     def lhs(self) -> Self:
         """
         Returns the left of the 2 children of this Node (i.e., the LHS child).
-        Raises an Exception (more specifically a TypeError) when this Node has != 2 children!
+        Raises an LHSException when this Node has != 2 children!
         """
         if len(self.children) == 2:
             return self.children[0]
         else:
-            raise TypeError(f"calling Node.lhs() on a Node with {len(self.children)} != 2 children")
+            raise LHSException(f"calling Node.lhs() on a Node with {len(self.children)} != 2 children")
 
     # ADDED BY ME:
     def rhs(self) -> Self:
         """
         Returns the right of the 2 children of this Node (i.e., the RHS child).
-        Raises an Exception (more specifically a TypeError) when this Node has != 2 children!
+        Raises an RHSException when this Node has != 2 children!
         """
         if len(self.children) == 2:
             return self.children[1]
         else:
-            raise TypeError(f"calling Node.rhs() on a Node with {len(self.children)} != 2 children")
+            raise RHSException(f"calling Node.rhs() on a Node with {len(self.children)} != 2 children")
 
     # ADDED BY ME:
     def diff(self, other: Self):
