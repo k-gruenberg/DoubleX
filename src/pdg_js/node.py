@@ -34,6 +34,7 @@
 
 
 import logging
+import math
 import random
 import itertools
 import os
@@ -44,6 +45,7 @@ from functools import total_ordering
 from typing import Set, Tuple, Optional, Self, List, Any, Dict, DefaultDict
 
 from . import utility_df
+from .StaticEvalException import StaticEvalException
 
 EXPRESSIONS = ['AssignmentExpression', 'ArrayExpression', 'ArrowFunctionExpression',
                'AwaitExpression', 'BinaryExpression', 'CallExpression', 'ClassExpression',
@@ -157,7 +159,7 @@ class Node:
     def lhs(self) -> Self:
         """
         Returns the left of the 2 children of this Node (i.e., the LHS child).
-        Raises an Exception when this Node has != 2 children!
+        Raises an Exception (more specifically a TypeError) when this Node has != 2 children!
         """
         if len(self.children) == 2:
             return self.children[0]
@@ -168,7 +170,7 @@ class Node:
     def rhs(self) -> Self:
         """
         Returns the right of the 2 children of this Node (i.e., the RHS child).
-        Raises an Exception when this Node has != 2 children!
+        Raises an Exception (more specifically a TypeError) when this Node has != 2 children!
         """
         if len(self.children) == 2:
             return self.children[1]
@@ -575,7 +577,7 @@ class Node:
 
         attributes_of_interest = {
             "Identifier": 'name',
-            "Literal": ['raw', 'value'],
+            "Literal": ['raw', 'value', 'regex'],  # note that 'regex' is an optional attribute of a Literal!
             "TemplateElement": ['value'],
             "BinaryExpression": 'operator',      # 'instanceof' | 'in' | '+' | '-' | '*' | '/' | '%' | '**' |
                                                  # '|' | '^' | '&' | '==' | '!=' | '===' | '!==' |
@@ -588,11 +590,12 @@ class Node:
             "MemberExpression": 'computed',      # (boolean)  # ToDo: handle True/False cases differently in code (x.y vs. x[y])
             "FunctionExpression": ['generator', 'async', 'expression'],  # (all booleans)
             "VariableDeclaration": 'kind',       # 'var' | 'const' | 'let'
+            "Property": ['computed', 'method', 'shorthand'],
         }
 
         if self.name in attributes_of_interest.keys():
             if isinstance(attributes_of_interest[self.name], list):
-                str_repr = f"[{self.id}] [{self.name}::{str({attr: self.attributes[attr] for attr in attributes_of_interest[self.name]})}] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
+                str_repr = f"[{self.id}] [{self.name}::{str({attr: self.attributes[attr] for attr in attributes_of_interest[self.name] if attr in self.attributes})}] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
             else:
                 str_repr = f"[{self.id}] [{self.name}:\"{self.attributes[attributes_of_interest[self.name]]}\"] ({len(self.children)} child{'ren' if len(self.children) != 1 else ''})"
         else:
@@ -2290,6 +2293,490 @@ class Node:
                      if not self.identifier_is_assigned_to_before(other_node, scope=declaration_scope)]
 
         return declaration_identifier in other_node_identifiers_declared_in_scope
+
+    # ADDED BY ME:
+    def static_eval(self, allow_partial_eval: bool) -> str | int | float | bool | list | dict | None:  # todo: can I find other use cases for this function?!
+        """
+        Attempts to statically evaluate the value of this JavaScript expression.
+        Returns the Python equivalent of the JavaScript value, which may be a string, an integer, a float, a boolean,
+        a list, a dictionary or `None`.
+        Note that `None` signifies that this JavaScript expression statically evaluates to JavaScript "null"!
+        When static evaluation fails on the other hand, this method raises a (Python) StaticEvalException; so be sure
+        to catch that!
+        This method also raises a StaticEvalException when...
+        (a) ...trying to statically evaluate a JavaScript regex literal!
+        (b) ...trying to evaluate a "void ..." expression (which evaluates to undefined)!
+
+        Parameters:
+            allow_partial_eval: when this parameter is set to True, the returned Python object may be the result of an
+                                incomplete evaluation, most notably it may be a dictionary where some keys, whose value
+                                couldn't be statically evaluated, are mapped to `None`, or an array/list where some
+                                items, whose value couldn't be statically evaluated, are mapped to `None`.
+
+        Returns:
+            the Python equivalent of this statically evaluated JavaScript expression
+        """
+        # From the Esprima docs:
+        # type Expression = ThisExpression | Identifier | Literal |
+        #                   ArrayExpression | ObjectExpression | FunctionExpression | ArrowFunctionExpression |
+        #                   ClassExpression |
+        #                   TaggedTemplateExpression | MemberExpression | Super | MetaProperty |
+        #                   NewExpression | CallExpression | UpdateExpression | AwaitExpression |
+        #                   UnaryExpression |
+        #                   BinaryExpression | LogicalExpression | ConditionalExpression |
+        #                   YieldExpression | AssignmentExpression | SequenceExpression;
+
+        if self.name == "Literal":
+            # interface Literal {
+            #     value: boolean | number | string | RegExp | null;
+            #     raw: string;
+            #     regex?: { pattern: string, flags: string };
+            # }
+            if "regex" in self.attributes:
+                raise StaticEvalException(f"static eval failed: cannot statically evaluate JavaScript RegEx literals!")
+            return self.attributes['value']  # note that a JavaScript "null" will return `None` here!
+
+        elif self.name == "ObjectExpression":
+            # interface ObjectExpression {
+            #     properties: Property[];
+            # }
+            result_dict = dict()
+            for property_ in self.get("properties"):
+                # interface Property {
+                #     key: Expression; <--- Mozilla docs: "an identifier (either a name, a number, or a string literal)"
+                #     computed: boolean;
+                #     value: Expression | null;
+                #     kind: 'get' | 'set' | 'init';
+                #     method: false;
+                #     shorthand: boolean;
+                # }
+                if property_.attributes['method']:
+                    raise StaticEvalException(f"static eval failed: ObjectExpressions with methods not supported")
+                key: Node = property_.get("key")[0]
+                value: Node = property_.get("value")[0]
+                try:
+                    if key.name == "Identifier":  # e.g.: "{key: value}"
+                        result_dict[key.attributes['name']] = None
+                        result_dict[key.attributes['name']] = value.static_eval(allow_partial_eval=allow_partial_eval)
+                    elif key.name == "Literal":  # e.g.: "{'key': value}" or "{1: value}"
+                        result_dict[key.attributes['value']] = None
+                        result_dict[key.attributes['value']] = value.static_eval(allow_partial_eval=allow_partial_eval)
+                except StaticEvalException:
+                    if allow_partial_eval:
+                        continue
+                    else:
+                        raise
+            return result_dict
+
+        elif self.name == "ArrayExpression":
+            # interface ArrayExpression {
+            #     elements: ArrayExpressionElement[];
+            # }
+            # where:
+            # type ArrayExpressionElement = Expression | SpreadElement;
+            # and:
+            # interface SpreadElement {
+            #     argument: Expression;
+            # }
+            result: list = []
+            for array_expr_el in self.get("elements"):
+                if array_expr_el.name == "SpreadElement":
+                    raise StaticEvalException(f"static eval failed: spread syntax is not supported")
+                try:
+                    result.append(array_expr_el.static_eval(allow_partial_eval=allow_partial_eval))
+                except StaticEvalException:
+                    if allow_partial_eval:
+                        result.append(None)
+                    else:
+                        raise
+            return result
+
+        elif self.name == "BinaryExpression":
+            # interface BinaryExpression {
+            #     operator: 'instanceof' | 'in' | '+' | '-' | '*' | '/' | '%' | '**' |
+            #               '|' | '^' | '&' | '==' | '!=' | '===' | '!==' |
+            #               '<' | '>' | '<=' | '<<' | '>>' | '>>>';
+            #     left: Expression;
+            #     right: Expression;
+            # }
+            left: Node = self.get("left")[0]
+            right: Node = self.get("right")[0]
+            match self.attributes['operator']:
+                case 'instanceof':
+                    # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/instanceof:
+                    # "The instanceof operator tests to see if the prototype property of a constructor appears
+                    #  anywhere in the prototype chain of an object. The return value is a boolean value. Its
+                    #  behavior can be customized with Symbol.hasInstance."
+                    # Examples:
+                    #     * console.log(auto instanceof Car); // Expected output: true
+                    #     * console.log(auto instanceof Object); // Expected output: true
+                    raise StaticEvalException(f"static eval failed: cannot handle 'instanceof' statically")
+                case 'in':
+                    # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/in:
+                    # "The in operator returns true if the specified property is in the specified object or its
+                    #  prototype chain. The in operator cannot be used to search for values in other collections.
+                    #  To test if a certain value exists in an array, use Array.prototype.includes().
+                    #  For sets, use Set.prototype.has()."
+                    # Example:
+                    #     const car = { make: 'Honda', model: 'Accord', year: 1998 };
+                    #     console.log('make' in car); // Expected output: true
+                    right_evaluated = right.static_eval(allow_partial_eval=allow_partial_eval)
+                    if isinstance(right_evaluated, dict):
+                        # >> 'make' in {'make':1}
+                        # true
+                        # >> 1 in {1:2}
+                        # true
+                        left_evaluated = left.static_eval(allow_partial_eval=allow_partial_eval)
+                        return left_evaluated in right_evaluated
+                    elif isinstance(right_evaluated, list):
+                        # >> 'make' in []
+                        # false
+                        # >> 'make' in ['make']
+                        # false
+                        return False
+                    else:
+                        # >> 'make' in 1
+                        # Uncaught TypeError: right-hand side of 'in' should be an object, got number
+                        # >> 'make' in null
+                        # Uncaught TypeError: right-hand side of 'in' should be an object, got null
+                        raise StaticEvalException(f"static eval failed: right-hand side of 'in' should be an object")
+                case '+':
+                    return left.static_eval(allow_partial_eval) + right.static_eval(allow_partial_eval)
+                case '-':
+                    return left.static_eval(allow_partial_eval) - right.static_eval(allow_partial_eval)
+                case '*':
+                    return left.static_eval(allow_partial_eval) * right.static_eval(allow_partial_eval)
+                case '/':
+                    left_evaluated = left.static_eval(allow_partial_eval)
+                    right_evaluated = right.static_eval(allow_partial_eval)
+                    try:
+                        return left_evaluated / right_evaluated
+                    except ZeroDivisionError:
+                        # In JavaScript:
+                        # >> 1/0
+                        # Infinity
+                        # >> -1/0
+                        # -Infinity
+                        # >> 0/0
+                        # NaN
+                        if left_evaluated < 0:
+                            return float('-inf')
+                        elif left_evaluated == 0:
+                            return float('nan')
+                        elif left_evaluated > 0:
+                            return float('inf')
+                case '%':
+                    return left.static_eval(allow_partial_eval) % right.static_eval(allow_partial_eval)
+                case '**':  # Exponentiation (**)
+                    return left.static_eval(allow_partial_eval) ** right.static_eval(allow_partial_eval)
+                case '|':
+                    return left.static_eval(allow_partial_eval) | right.static_eval(allow_partial_eval)
+                case '^':
+                    return left.static_eval(allow_partial_eval) ^ right.static_eval(allow_partial_eval)
+                case '&':
+                    return left.static_eval(allow_partial_eval) & right.static_eval(allow_partial_eval)
+                case '==':
+                    return left.static_eval(allow_partial_eval) == right.static_eval(allow_partial_eval)
+                case '!=':
+                    return left.static_eval(allow_partial_eval) != right.static_eval(allow_partial_eval)
+                case '===':
+                    return left.static_eval(allow_partial_eval) == right.static_eval(allow_partial_eval)
+                case '!==':
+                    return left.static_eval(allow_partial_eval) != right.static_eval(allow_partial_eval)
+                case '<':
+                    return left.static_eval(allow_partial_eval) < right.static_eval(allow_partial_eval)
+                case '>':
+                    return left.static_eval(allow_partial_eval) > right.static_eval(allow_partial_eval)
+                case '<=':  # todo: handle cases like '"" <= 1' that raise a TypeError in Python but work in JS !!!
+                    return left.static_eval(allow_partial_eval) <= right.static_eval(allow_partial_eval)
+                case '>=':  # (missing in Esprima docs)
+                    return left.static_eval(allow_partial_eval) >= right.static_eval(allow_partial_eval)
+                case '<<':
+                    return left.static_eval(allow_partial_eval) << right.static_eval(allow_partial_eval)
+                case '>>':
+                    return left.static_eval(allow_partial_eval) >> right.static_eval(allow_partial_eval)
+                case '>>>':  # Unsigned right shift (>>>)
+                    # https://stackoverflow.com/questions/11418112/python-unsigned-right-shift:
+                    # "Integers in Java have a fixed number of bits, but those in Python don't, so an unsigned right
+                    #   shift would be meaningless in Python."
+                    # Note that, in JavaScript, all numbers are in double-precision 64-bit binary format IEEE 754.
+                    #   => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number
+                    raise StaticEvalException(f"static eval failed: >>> operator not supported")  # todo: simulate
+                case op:
+                    raise StaticEvalException(f"static eval failed: unsupported operator in BinaryExpression: {op}")
+
+        elif self.name == "LogicalExpression":
+            # interface LogicalExpression {
+            #     operator: '||' | '&&';
+            #     left: Expression;
+            #     right: Expression;
+            # }
+            left: Node = self.get("left")[0]
+            right: Node = self.get("right")[0]
+            match self.attributes['operator']:
+                case '||':
+                    return left.static_eval(allow_partial_eval) or right.static_eval(allow_partial_eval)
+                case '&&':
+                    return left.static_eval(allow_partial_eval) and right.static_eval(allow_partial_eval)
+                case op:
+                    raise StaticEvalException(f"static eval failed: unsupported operator in LogicalExpression: {op}")
+
+        elif self.name == "ConditionalExpression":
+            # interface ConditionalExpression {
+            #     test: Expression;
+            #     consequent: Expression;
+            #     alternate: Expression;
+            # }
+            # => JavaScript: test ? consequent : alternate;
+            # => Python:     consequent if test else alternate
+            test: Node = self.get("test")[0]
+            consequent: Node = self.get("consequent")[0]
+            alternate: Node = self.get("alternate")[0]
+            return (consequent.static_eval(allow_partial_eval=allow_partial_eval)
+                    if test.static_eval(allow_partial_eval=allow_partial_eval)
+                    else alternate.static_eval(allow_partial_eval=allow_partial_eval))
+            # Note: this lazy evaluation allows statically evaluating ConditionalExpressions even if one of
+            #       "consequent" / "alternate" cannot be statically evaluated!
+
+        elif self.name == "UnaryExpression":
+            # interface UnaryExpression {
+            #     operator: '+' | '-' | '~' | '!' | 'delete' | 'void' | 'typeof';
+            #     argument: Expression;
+            #     prefix: true;
+            # }
+            argument: Node = self.get("argument")[0]
+            argument_evaluated = argument.static_eval(allow_partial_eval=allow_partial_eval)
+            match self.attributes['operator']:
+                case '+':
+                    # PLUS:
+                    #           | JavaScript |             | Python
+                    # ----------|------------|-------------|--------
+                    #  +0       |            | +0          |
+                    #  +1       |            | +1          |
+                    #  +2       |            | +2          |
+                    #  +'x'     | NaN        | +'x'        | TypeError: bad operand type for unary +: 'str'
+                    #  +''      | 0          | +''         | TypeError: bad operand type for unary +: 'str'
+                    #  +0.0     |            | +0.0        |
+                    #  +0.1     |            | +0.1        |
+                    #  +{}      | NaN        | +{}         | TypeError: bad operand type for unary +: 'dict'
+                    #  +{"a":1} | NaN        | +{"a":1}    | TypeError: bad operand type for unary +: 'dict'
+                    #  +[]      | 0          | +[]         | TypeError: bad operand type for unary +: 'list'
+                    #  +[42]    | 42         | +[42]       | TypeError: bad operand type for unary +: 'list'
+                    #  +['']    | 0          | +['']       | TypeError: bad operand type for unary +: 'list'
+                    #  +['x']   | NaN        | +['x']      | TypeError: bad operand type for unary +: 'list'
+                    #  +false   | 0          | +False      | 0
+                    #  +true    | 1          | +True       | 1
+                    if argument_evaluated == "":
+                        return 0  # Yes, "+''" evaluates to "0" in JavaScript...
+                    elif isinstance(argument_evaluated, str) or isinstance(argument_evaluated, dict):
+                        return float('nan')
+                    elif isinstance(argument_evaluated, list):
+                        if len(argument_evaluated) == 0:
+                            return 0  # "+[]" evaluates to "0" in JavaScript...
+                        elif argument_evaluated == [""]:
+                            return 0  # "+['']" evaluates to "0" in JavaScript...
+                        elif len(argument_evaluated) == 1 and isinstance(argument_evaluated[0], (int, float)):
+                            return +argument_evaluated[0]  # "+[42]" evaluates to "42" in JavaScript...
+                        else:
+                            return float('nan')
+                    else:
+                        return +argument_evaluated
+                case '-':
+                    # MINUS:
+                    #           | JavaScript |             | Python
+                    # ----------|------------|-------------|--------
+                    #  -0       |            | -0          |
+                    #  -1       |            | -1          |
+                    #  -2       |            | -2          |
+                    #  -'x'     | NaN        | -'x'        | TypeError: bad operand type for unary -: 'str'
+                    #  -''      | 0          | -''         | TypeError: bad operand type for unary -: 'str'
+                    #  -0.0     |            | -0.0        |
+                    #  -0.1     |            | -0.1        |
+                    #  -{}      | NaN        | -{}         | TypeError: bad operand type for unary -: 'dict'
+                    #  -{"a":1} | NaN        | -{"a":1}    | TypeError: bad operand type for unary -: 'dict'
+                    #  -[]      | -0         | -[]         | TypeError: bad operand type for unary -: 'list'
+                    #  -[42]    | -42        | -[42]       | TypeError: bad operand type for unary -: 'list'
+                    #  -['']    | -0         | -['']       | TypeError: bad operand type for unary -: 'list'
+                    #  -['x']   | NaN        | -['x']      | TypeError: bad operand type for unary -: 'list'
+                    #  -false   | -0         | -False      | 0
+                    #  -true    | -1         | -True       | -1
+                    if argument_evaluated == "":
+                        return 0  # Yes, "-''" evaluates to "0" in JavaScript... ("-0" actually...)
+                    elif isinstance(argument_evaluated, str) or isinstance(argument_evaluated, dict):
+                        return float('nan')
+                    elif isinstance(argument_evaluated, list):
+                        if len(argument_evaluated) == 0:
+                            return 0  # "-[]" evaluates to "-0" in JavaScript...
+                        elif argument_evaluated == [""]:
+                            return 0  # "-['']" evaluates to "-0" in JavaScript...
+                        elif len(argument_evaluated) == 1 and isinstance(argument_evaluated[0], (int, float)):
+                            return -argument_evaluated[0]  # "-[42]" evaluates to "-42" in JavaScript...
+                        else:
+                            return float('nan')
+                    else:
+                        return -argument_evaluated
+                case '~':  # tilde = bitwise flip, both in JavaScript and in Python!
+                    # TILDE:
+                    #           | JavaScript |             | Python
+                    # ----------|------------|-------------|--------
+                    #  ~0       | -1         | ~0          | -1
+                    #  ~1       | -2         | ~1          | -2
+                    #  ~2       | -3         | ~2          | -3
+                    #  ~'x'     | -1         | ~'x'        | TypeError: bad operand type for unary ~: 'str'
+                    #  ~'foo'   | -1         | ~'foo'      | TypeError: bad operand type for unary ~: 'str'
+                    #  ~''      | -1         | ~''         | TypeError: bad operand type for unary ~: 'str'
+                    #  ~0.0     | -1         | ~0.0        | TypeError: bad operand type for unary ~: 'float'
+                    #  ~0.1     | -1         | ~0.1        | TypeError: bad operand type for unary ~: 'float'
+                    #  ~1.1     | -2         | ~1.1        | TypeError: bad operand type for unary ~: 'float'
+                    #  ~1.9     | -2         | ~1.9        | TypeError: bad operand type for unary ~: 'float'
+                    #  ~2.0     | -3         | ~2.0        | TypeError: bad operand type for unary ~: 'float'
+                    #  ~(-42.0) | 41         | ~(-42.0)    | TypeError: bad operand type for unary ~: 'float'
+                    #  ~(-42.5) | 41         | ~(-42.5)    | TypeError: bad operand type for unary ~: 'float'
+                    #  ~{}      | -1         | ~{}         | TypeError: bad operand type for unary ~: 'dict'
+                    #  ~{"a":1} | -1         | ~{"a":1}    | TypeError: bad operand type for unary ~: 'dict'
+                    #  ~[]      | -1         | ~[]         | TypeError: bad operand type for unary ~: 'list'
+                    #  ~[42]    | -43        | ~[42]       | TypeError: bad operand type for unary ~: 'list'
+                    #  ~['']    | -1         | ~['']       | TypeError: bad operand type for unary ~: 'list'
+                    #  ~['x']   | -1         | ~['x']      | TypeError: bad operand type for unary ~: 'list'
+                    #  ~false   | -1         | ~False      | -1
+                    #  ~true    | -2         | ~True       | -2
+                    if isinstance(argument_evaluated, (int, bool)):
+                        return ~argument_evaluated
+                    elif isinstance(argument_evaluated, float):
+                        return ~math.floor(argument_evaluated)  # todo: fix, doesn't give correct result for ~(-42.5)
+                    else:
+                        return -1
+                case '!':
+                    # NOT:
+                    #           | JavaScript |             | Python
+                    # ----------|------------|-------------|--------
+                    #  !0       | true       | not 0       | True
+                    #  !1       | false      | not 1       | False
+                    #  !2       | false      | not 2       | False
+                    #  !'x'     | false      | not 'x'     | False
+                    #  !''      | true       | not ''      | True
+                    #  !0.0     | true       | not 0.0     | True
+                    #  !0.1     | false      | not 0.1     | False
+                    #  !{}      | false      | not {}      | True     <---- difference #1
+                    #  !{"a":1} | false      | not {"a":1} | False
+                    #  ![]      | false      | not []      | True     <---- difference #2
+                    #  ![42]    | false      | not [42]    | False
+                    #  !['']    | false      | not ['']    | False
+                    #  !['x']   | false      | not ['x']   | False
+                    #  !false   | true       | not False   | True
+                    #  !true    | false      | not True    | False
+                    if argument_evaluated == {} or argument_evaluated == []:
+                        return False  # "not {}" would be True in Python but "!{}" is false in JavaScript!!!
+                    else:
+                        return not argument_evaluated
+                case 'delete':
+                    # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/delete:
+                    # "The delete operator removes a property from an object. If the property's value is an object
+                    #  and there are no more references to the object, the object held by that property is
+                    #  eventually released automatically."
+                    # Return value:
+                    # "true for all cases except when the property is an own non-configurable property, in which case
+                    #  false is returned in non-strict mode."
+                    return True
+                case 'void':
+                    # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/void:
+                    # "The void operator evaluates the given expression and then returns undefined."
+                    raise StaticEvalException(f"static eval failed: expression evaluates to undefined.")
+                case 'typeof':
+                    # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/typeof:
+                    # "The typeof operator returns a string indicating the type of the operand's value."
+                    # Examples:
+                    #     typeof 42                 == "number"
+                    #     typeof 3.14               == "number"
+                    #     typeof ""                 == "string"
+                    #     typeof 'blubber'          == "string"
+                    #     typeof true               == "boolean"
+                    #     typeof false              == "boolean"
+                    #     typeof undeclaredVariable == "undefined"
+                    #     typeof {}                 == "object"
+                    #     typeof {1:2}              == "object"
+                    #     typeof {"a":2}            == "object"
+                    #     typeof []                 == "object"
+                    #     typeof [1,2,3]            == "object"
+                    #     typeof null               == "object"
+                    #     typeof (0/0)              == "number"
+                    if isinstance(argument_evaluated, (int, float)):
+                        return "number"
+                    elif isinstance(argument_evaluated, str):
+                        return "string"
+                    elif isinstance(argument_evaluated, bool):
+                        return "boolean"
+                    elif isinstance(argument_evaluated, (list, dict)):
+                        return "object"
+                    elif argument_evaluated is None:  # JavaScript "null" becomes "None" in Python
+                        return "object"
+                    else:
+                        raise StaticEvalException(f"static eval failed: static_eval() returned something "
+                                                  f"of an unexpected type: {argument_evaluated}")
+                case op:
+                    raise StaticEvalException(f"static eval failed: unsupported operator in UnaryExpression: {op}")
+
+        elif self.name == "Identifier":
+            # Check if the Identifier refers to a constant in scope:
+            identifier_at_declaration: Optional[Node] = self.resolve_identifier()
+            # print(f"static_eval(): resolved Identifier '{self.attributes['name']}' in line {self.get_line()} to "
+            #       f"'{identifier_at_declaration.attributes['name'] if identifier_at_declaration is not None else ''}'"
+            #       f" in line {identifier_at_declaration.get_line() if identifier_at_declaration is not None else ''}")
+            if identifier_at_declaration is None:
+                raise StaticEvalException(f"static eval failed: "
+                                          f"couldn't resolve identifier '{self.attributes['name']}' "
+                                          f"in line {self.get_line()}")
+            else:
+                # interface VariableDeclaration {
+                #     declarations: VariableDeclarator[];
+                #     kind: 'var' | 'const' | 'let';
+                # }
+                # with:
+                # interface VariableDeclarator {
+                #     id: Identifier | BindingPattern; <----- is `identifier_at_declaration` this?!
+                #     init: Expression | null;
+                # }
+                variable_declarator: Node = identifier_at_declaration.parent
+                if (variable_declarator is None or variable_declarator.name != "VariableDeclarator"
+                        or [identifier_at_declaration] != variable_declarator.get("id")):
+                    raise StaticEvalException(f"static eval failed: resolved identifier "
+                                              f"'{identifier_at_declaration.attributes['name']}' "
+                                              f"(line {identifier_at_declaration.get_line()}) "
+                                              f"isn't the 'id' of a VariableDeclarator")
+                else:
+                    var_declaration: Node = variable_declarator.parent
+                    assert var_declaration is not None and var_declaration.name == "VariableDeclaration"
+                    if var_declaration.attributes['kind'] == 'const':
+                        init_expr: List[Node] = variable_declarator.get("init")
+                        if len(init_expr) == 0:
+                            raise StaticEvalException(f"static eval failed: JavaScript SyntaxError: "
+                                                      f"missing = in const declaration in line "
+                                                      f"{variable_declarator.get_line()}")
+                        else:
+                            return init_expr[0].static_eval(allow_partial_eval=allow_partial_eval)
+                    else:
+                        raise StaticEvalException(f"static eval failed: identifier '{self.attributes['name']}' "
+                                                  f"in line {self.get_line()} "
+                                                  f"doesn't refer to a constant")
+
+        elif self.name == "AssignmentExpression":
+            # interface AssignmentExpression {
+            #     operator: '=' | '*=' | '**=' | '/=' | '%=' | '+=' | '-=' |
+            #               '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|=';
+            #     left: Expression;
+            #     right: Expression;
+            # }
+            # From the Mozilla JavaScript docs:
+            #     "The assignment expression itself has a value, which is the assigned value."
+            #     Examples:
+            #     console.log((x = y + 1));
+            #     console.log((x = x * y));
+            # => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Assignment
+            right: Node = self.get("right")[0]
+            return right.static_eval(allow_partial_eval=allow_partial_eval)
+
+        else:
+            raise StaticEvalException(f"static eval failed: unsupported type of Expression: {self.name}")
 
     # ADDED BY ME:
     def function_param_get_identifier(self) -> Optional[Self]:

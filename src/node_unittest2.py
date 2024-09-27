@@ -1,8 +1,8 @@
 # Some unit tests of the "Node" class can't be done inside "node_unittest.py" because of import difficulties.
-
 import os
 import tempfile
 import unittest
+import math
 from typing import List
 
 from get_pdg import get_pdg
@@ -1082,6 +1082,17 @@ class TestNodeClass2(unittest.TestCase):
         self.assertEqual(len(xs), 3)
         self.assertEqual(xs[2].resolve_identifier(), xs[1])
 
+        code = """
+        const x = 42;
+        foo(x);
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        xs = [identifier for identifier in pdg.get_all_identifiers() if identifier.attributes['name'] == "x"]
+        xs.sort(key=lambda identifier: identifier.code_occurrence())
+        self.assertEqual(len(xs), 2)
+        self.assertEqual(xs[1].resolve_identifier(), xs[0])
+
     def test_function_declaration_is_called_anywhere(self):
         # Negative examples:
         negative_examples: List[str] = [
@@ -1490,6 +1501,176 @@ class TestNodeClass2(unittest.TestCase):
         self.assertEqual(5, len(member_expressions1))
         member_expressions2 = pdg.find_member_expressions_ending_in(".bar.baz")
         self.assertEqual(3, len(member_expressions2))
+
+    def test_static_eval(self):
+        def expr(expr_code):
+            return generate_pdg(expr_code).get_child("ExpressionStatement").get("expression")[0]
+        
+        for allow_partial_eval in [True, False]:
+            self.assertEqual(42, expr("42").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("+42").static_eval(allow_partial_eval))
+            self.assertEqual(-42, expr("-42").static_eval(allow_partial_eval))
+            self.assertEqual(0, expr("0").static_eval(allow_partial_eval))
+            self.assertEqual(3.14, expr("3.14").static_eval(allow_partial_eval))
+            self.assertEqual(-3.14, expr("-3.14").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("true").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("false").static_eval(allow_partial_eval))
+            self.assertEqual("foo", expr("'foo'").static_eval(allow_partial_eval))
+            self.assertEqual("foo", expr("\"foo\"").static_eval(allow_partial_eval))
+    
+            # Test special values:
+            self.assertEqual(None, expr("null").static_eval(allow_partial_eval))
+            self.assertTrue(math.isnan(expr("0/0").static_eval(allow_partial_eval)))
+            self.assertTrue(math.isinf(expr("1/0").static_eval(allow_partial_eval)))
+            self.assertTrue(math.isinf(expr("-1/0").static_eval(allow_partial_eval)))
+    
+            # Test arithmetic:
+            self.assertEqual(3, expr("1+2").static_eval(allow_partial_eval))
+            self.assertEqual(333, expr("111+222").static_eval(allow_partial_eval))
+            self.assertAlmostEqual(3.3, expr("1.1+2.2").static_eval(allow_partial_eval))
+            self.assertEqual(60, expr("70-10").static_eval(allow_partial_eval))
+            self.assertEqual(30, expr("5*6").static_eval(allow_partial_eval))
+            self.assertEqual(25, expr("100/4").static_eval(allow_partial_eval))
+            self.assertEqual(1024, expr("2**10").static_eval(allow_partial_eval))
+    
+            # Test string concatenation:
+            self.assertEqual("foobar", expr("'foo' + 'bar'").static_eval(allow_partial_eval))
+            self.assertEqual("foobar", expr("\"foo\" + \"bar\"").static_eval(allow_partial_eval))
+            self.assertEqual("foobarbaz", expr("'foo' + 'bar' + 'baz'").static_eval(allow_partial_eval))
+            self.assertEqual("foobarbaz", expr("\"foo\" + \"bar\" + \"baz\"").static_eval(allow_partial_eval))
+            self.assertEqual("foobarbaz", expr("\"foo\" + 'bar' + \"baz\"").static_eval(allow_partial_eval))
+    
+            # Test lists/arrays:
+            self.assertEqual([], expr("[]").static_eval(allow_partial_eval))
+            self.assertEqual([42], expr("[42]").static_eval(allow_partial_eval))
+            self.assertEqual([1, 2, 3], expr("[1, 2, 3]").static_eval(allow_partial_eval))
+            self.assertEqual([30, 36], expr("[5*6, 6*6]").static_eval(allow_partial_eval))
+            self.assertEqual(["foo", "bar"], expr("['foo', 'bar']").static_eval(allow_partial_eval))
+    
+            # Test AssignmentExpressions:
+            self.assertEqual(42, expr("x = 42").static_eval(allow_partial_eval))
+            self.assertEqual(3.14, expr("x = 3.14").static_eval(allow_partial_eval))
+            self.assertEqual("foo", expr("x = 'foo'").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("x = true").static_eval(allow_partial_eval))
+    
+            # Test logic:
+            # NOT:
+            self.assertEqual(False, expr("!true").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("!false").static_eval(allow_partial_eval))
+            # OR:
+            self.assertEqual(False, expr("false || false").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("false || true").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("true || false").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("true || true").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("false | false").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("false | true").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("true | false").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("true | true").static_eval(allow_partial_eval))
+            # AND:
+            self.assertEqual(False, expr("false && false").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("false && true").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("true && false").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("true && true").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("false & false").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("false & true").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("true & false").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("true & true").static_eval(allow_partial_eval))
+            # Test laziness:
+            self.assertEqual(True, expr("true || foo(x)").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("false && foo(x)").static_eval(allow_partial_eval))
+            # Test more complex logic expressions:
+            self.assertEqual(True, expr("!(false || (true && false))").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("!(true || (false && true))").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("(0 <= 10) && (10 <= 100)").static_eval(allow_partial_eval))
+            
+            # Test tilde operator:
+            self.assertEqual(~42, expr("~42").static_eval(allow_partial_eval))
+            
+            # Test ConditionalExpressions:
+            self.assertEqual(11, expr("(true || false) ? 11 : 22").static_eval(allow_partial_eval))
+            self.assertEqual(22, expr("(true && false) ? 11 : 22").static_eval(allow_partial_eval))
+            
+            # Test lazy static evaluation of ConditionalExpressions:
+            self.assertEqual(11, expr("(true || false) ? 11 : foo(x)").static_eval(allow_partial_eval))
+            self.assertEqual(22, expr("(true && false) ? foo(x) : 22").static_eval(allow_partial_eval))
+    
+            # Test JavaScript quirks:
+            self.assertEqual(0, expr("+''").static_eval(allow_partial_eval))
+            self.assertEqual(0, expr("+[]").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("+[42]").static_eval(allow_partial_eval))
+            self.assertEqual(-42, expr("-[42]").static_eval(allow_partial_eval))
+    
+            # Test resolving of constants:
+            code = """
+            const x = 42;
+            foo(x);
+            """
+            pdg = generate_pdg(code)
+            print(pdg)
+            # [1] [Program] (2 children) <<< None
+            # 	[2] [VariableDeclaration:"const"] (1 child) <<< body
+            # 		[3] [VariableDeclarator] (2 children) <<< declarations
+            # 			[4] [Identifier:"x"] (0 children) <<< id --data--> [9]
+            # 			[5] [Literal::{'raw': '42', 'value': 42}] (0 children) <<< init
+            # 	[6] [ExpressionStatement] (1 child) <<< body
+            # 		[7] [CallExpression] (2 children) <<< expression
+            # 			[8] [Identifier:"foo"] (0 children) <<< callee
+            # 			[9] [Identifier:"x"] (0 children) <<< arguments
+            self.assertEqual(
+                42,
+                pdg.get_child("ExpressionStatement")
+                    .get_child("CallExpression")
+                    .children[1]
+                    .static_eval(allow_partial_eval)
+            )
+
+            # Test object:
+            code = """
+            const x = {"foo": "bar", a: "b", 11: 22};
+            foo(x);
+            """
+            pdg = generate_pdg(code)
+            print(pdg)
+            # [1] [Program] (2 children) <<< None
+            # 	[2] [VariableDeclaration:"const"] (1 child) <<< body
+            # 		[3] [VariableDeclarator] (2 children) <<< declarations
+            # 			[4] [Identifier:"x"] (0 children) <<< id --data--> [9]
+            # 			[5] [Literal::{'raw': '42', 'value': 42}] (0 children) <<< init
+            # 	[6] [ExpressionStatement] (1 child) <<< body
+            # 		[7] [CallExpression] (2 children) <<< expression
+            # 			[8] [Identifier:"foo"] (0 children) <<< callee
+            # 			[9] [Identifier:"x"] (0 children) <<< arguments
+            self.assertEqual(
+                {"foo": "bar", "a": "b", 11: 22},
+                pdg.get_child("ExpressionStatement")
+                .get_child("CallExpression")
+                .children[1]
+                .static_eval(allow_partial_eval)
+            )
+
+        # Test partial evaluation of objects:
+        code = """
+        const x = {"foo": "bar", a: foo(x), 11: 22};
+        foo(x);
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        # [1] [Program] (2 children) <<< None
+        # 	[2] [VariableDeclaration:"const"] (1 child) <<< body
+        # 		[3] [VariableDeclarator] (2 children) <<< declarations
+        # 			[4] [Identifier:"x"] (0 children) <<< id --data--> [9]
+        # 			[5] [Literal::{'raw': '42', 'value': 42}] (0 children) <<< init
+        # 	[6] [ExpressionStatement] (1 child) <<< body
+        # 		[7] [CallExpression] (2 children) <<< expression
+        # 			[8] [Identifier:"foo"] (0 children) <<< callee
+        # 			[9] [Identifier:"x"] (0 children) <<< arguments
+        self.assertEqual(
+            {"foo": "bar", "a": None, 11: 22},
+            pdg.get_child("ExpressionStatement")
+            .get_child("CallExpression")
+            .children[1]
+            .static_eval(allow_partial_eval=True)
+        )
 
 
 if __name__ == '__main__':
