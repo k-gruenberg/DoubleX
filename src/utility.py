@@ -20,7 +20,7 @@
 
 import logging
 import signal
-
+from collections import defaultdict
 
 TEST = False
 
@@ -64,3 +64,15 @@ class Timeout:
 
     def raise_timeout(self, *args):
         raise Timeout.Timeout()
+
+
+# ADDED BY ME:
+def nested_default_dicts_to_nested_dicts(nested_default_dicts: defaultdict) -> dict:
+    """
+    Unfortunately, (nested) defaultdicts are not serialized by multiprocessing...
+    Therefore, we have to convert nested defaultdicts into nested dicts...
+    """
+    if isinstance(nested_default_dicts, defaultdict):
+        return {k: nested_default_dicts_to_nested_dicts(v) for k, v in nested_default_dicts.items()}
+    else:
+        return nested_default_dicts
