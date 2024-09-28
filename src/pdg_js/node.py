@@ -2635,9 +2635,30 @@ class Node:
             test: Node = self.get("test")[0]
             consequent: Node = self.get("consequent")[0]
             alternate: Node = self.get("alternate")[0]
-            return (consequent.static_eval(allow_partial_eval=allow_partial_eval)
-                    if test.static_eval(allow_partial_eval=allow_partial_eval)
-                    else alternate.static_eval(allow_partial_eval=allow_partial_eval))
+            # There are 2 cases that we can handle statically:
+            #   (1) first `test` can be evaluated statically and then either `consequent` or `alternate`, depending on
+            #       the result of statically evaluating `test`
+            #   (2) `test` cannot be evaluated statically but both `consequent` and `alternate` can and both them they
+            #       evaluate to the same value
+            try:
+                # (1):
+                test_evaluated = test.static_eval(allow_partial_eval=allow_partial_eval)
+            except StaticEvalException:
+                # (2):
+                consequent_evaluated = consequent.static_eval(allow_partial_eval=allow_partial_eval)
+                alternate_evaluated = alternate.static_eval(allow_partial_eval=allow_partial_eval)
+                if consequent_evaluated == alternate_evaluated:  # Note: 0 == False and 1 == True in Python.
+                    return consequent_evaluated
+                else:  # neither (1) nor (2) worked:
+                    raise StaticEvalException(f"static eval failed: static evaluation of ConditionalExpression failed: "
+                                              f"both consequent and alternate could be evaluated but they differ and "
+                                              f"test couldn't be evaluated")
+
+            # (1):
+            if test_evaluated:
+                return consequent.static_eval(allow_partial_eval=allow_partial_eval)
+            else:
+                return alternate.static_eval(allow_partial_eval=allow_partial_eval)
             # Note: this lazy evaluation allows statically evaluating ConditionalExpressions even if one of
             #       "consequent" / "alternate" cannot be statically evaluated!
 

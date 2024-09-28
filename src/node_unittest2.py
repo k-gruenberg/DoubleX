@@ -1620,6 +1620,11 @@ class TestNodeClass2(unittest.TestCase):
             self.assertEqual(11, expr("(true || false) ? 11 : foo(x)").static_eval(allow_partial_eval))
             self.assertEqual(22, expr("(true && false) ? foo(x) : 22").static_eval(allow_partial_eval))
 
+            # Test static evaluation of redundant ConditionalExpressions, even when the test expression cannot be
+            #   evaluated statically:
+            self.assertEqual(42, expr("foo(x) ? 42 : 42").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("foo(x) ? (40+2) : (84/2)").static_eval(allow_partial_eval))
+
             # Test MemberExpressions:
             self.assertEqual(111, expr("[111, 222, 333][0]").static_eval(allow_partial_eval))
             self.assertEqual(222, expr("[111, 222, 333][1]").static_eval(allow_partial_eval))
