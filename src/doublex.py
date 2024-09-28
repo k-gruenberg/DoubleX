@@ -30,6 +30,7 @@ import traceback
 import multiprocessing
 from multiprocessing import Process
 import queue
+import re
 from typing import Tuple, Any
 
 # Original DoubleX extension analysis:
@@ -426,7 +427,10 @@ def main():
                           "BP code stats,CS code stats,"
                           "CS injected into,crashes,analysis time in seconds,total dangers,"
                           "BP exfiltration dangers,BP infiltration dangers,BP 3.1 violations w/o API danger,"
-                          "CS exfiltration dangers,CS infiltration dangers,files and line numbers\n")
+                          "BP extension storage accesses,"
+                          "CS exfiltration dangers,CS infiltration dangers,"
+                          "CS extension storage accesses,"
+                          "files and line numbers\n")
             csv_out.flush() # ToDo: add no. of UXSS vulnerabilities!
 
         if args.sort_crxs_by_size_ascending:
@@ -524,6 +528,42 @@ def main():
                            and 'crashes' in analysis_result['benchmarks']['cs'] else []
                 crashes_all = " | ".join(crashes + crashes_bp + crashes_cs)\
                                 .replace(",", "").replace("\n", "")
+
+                def extension_storage_accesses_to_string(
+                        extension_storage_accesses: dict,
+                        max_no_of_listed_keys: int = 3
+                ) -> str:
+                    """
+                    Example input (extension_storage_accesses):
+                    {
+                        "local": {
+                            "password": {
+                                "access_methods": [
+                                    "get"
+                                ],
+                                "values": [
+                                    "123456"
+                                ],
+                                "locations": [
+                                    "1:25 - 1:45"
+                                ]
+                            }
+                        }
+                    }
+
+                    Example output:
+                    "local: 1 ('password')"
+
+                    Another sample output (when max_no_of_listed_keys=3):
+                    "local: 4 ('foo' | 'bar' | 'baz' | ...) | sync: 1 ('boo')"
+                    """
+                    return " | ".join(f"{k}: {len(v)} "
+                                      f"({" | ".join([f"'{re.sub(r"[,\n'\"]", "?", v_)}'"
+                                                       for v_ in v.keys()][:max_no_of_listed_keys]
+                                                     + (['...'] if len(v.keys()) > max_no_of_listed_keys else []))})"
+                                      for k, v in extension_storage_accesses.items())
+
+                # BP:
                 bp_exfiltration_dangers = len(analysis_result['bp']['exfiltration_dangers'])\
                     if 'bp' in analysis_result and 'exfiltration_dangers' in analysis_result['bp'] else "N/A"
                 bp_infiltration_dangers = len(analysis_result['bp']['infiltration_dangers'])\
@@ -532,10 +572,21 @@ def main():
                     len(analysis_result['bp']['31_violations_without_sensitive_api_access']) \
                         if 'bp' in analysis_result\
                            and '31_violations_without_sensitive_api_access' in analysis_result['bp'] else "N/A"
+                bp_ext_storage_accesses =\
+                    extension_storage_accesses_to_string(analysis_result['bp']['extension_storage_accesses']) \
+                        .replace(",", "").replace("\n", "")\
+                    if 'bp' in analysis_result and 'extension_storage_accesses' in analysis_result['bp'] else "N/A"
+
+                # CS:
                 cs_exfiltration_dangers = len(analysis_result['cs']['exfiltration_dangers'])\
                     if 'cs' in analysis_result and 'exfiltration_dangers' in analysis_result['cs'] else "N/A"
                 cs_infiltration_dangers = len(analysis_result['cs']['infiltration_dangers'])\
                     if 'cs' in analysis_result and 'infiltration_dangers' in analysis_result['cs'] else "N/A"
+                cs_ext_storage_accesses =\
+                    extension_storage_accesses_to_string(analysis_result['cs']['extension_storage_accesses']) \
+                        .replace(",", "").replace("\n", "")\
+                    if 'cs' in analysis_result and 'extension_storage_accesses' in analysis_result['cs'] else "N/A"
+
                 total_no_of_dangers = sum(0 if d == "N/A" else d
                                           for d in [bp_exfiltration_dangers, bp_infiltration_dangers,
                                                     cs_exfiltration_dangers, cs_infiltration_dangers])
@@ -551,8 +602,8 @@ def main():
                               f"{content_script_injected_into},{crashes_all},"
                               f"{analysis_time},{total_no_of_dangers},"
                               f"{bp_exfiltration_dangers},{bp_infiltration_dangers},"
-                              f"{bp_31_violations_wo_api_danger},"
-                              f"{cs_exfiltration_dangers},{cs_infiltration_dangers},"
+                              f"{bp_31_violations_wo_api_danger},{bp_ext_storage_accesses},"
+                              f"{cs_exfiltration_dangers},{cs_infiltration_dangers},{cs_ext_storage_accesses},"
                               f"{files_and_line_numbers}\n")
                 csv_out.flush()
 
