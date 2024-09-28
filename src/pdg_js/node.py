@@ -109,6 +109,8 @@ class Node:
 
     # ADDED BY ME:
     def __eq__(self, other):
+        if other is None:
+            return False
         return self.id == other.id
 
     # ADDED BY ME: # Otherwise, there's a "TypeError: unhashable type: 'Identifier'" in set_provenance_dd().....
