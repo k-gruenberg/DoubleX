@@ -1348,6 +1348,8 @@ class Node:
                 self.column = column
 
             def __eq__(self, other):
+                if other is None:
+                    return False
                 return self.line == other.line and self.column == other.column
 
             def __lt__(self, other):  # implements the "<" operator; cf. logic in occurs_in_code_before()
