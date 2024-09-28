@@ -467,8 +467,10 @@ def main():
             crx = info["crx"]
             extension_size_unpacked = info["extension_size_unpacked"]
             js_loc = info["js_loc"]
-            bp_code_stats: str = " | ".join([f"{k}:{v}" for k, v in analysis_result['bp']['code_stats'].items()])
-            cs_code_stats: str = " | ".join([f"{k}:{v}" for k, v in analysis_result['cs']['code_stats'].items()])
+            bp_code_stats: str = " | ".join([f"{k}:{v}" for k, v in analysis_result['bp']['code_stats'].items()])\
+                if 'bp' in analysis_result and 'code_stats' in analysis_result['bp'] else "N/A"
+            cs_code_stats: str = " | ".join([f"{k}:{v}" for k, v in analysis_result['cs']['code_stats'].items()]) \
+                if 'cs' in analysis_result and 'code_stats' in analysis_result['cs'] else "N/A"
             analysis_time = info["analysis_time"]
             unpacked_ext_dir = info["unpacked_ext_dir"]
 
@@ -488,36 +490,36 @@ def main():
                 manifest = json.load(open(manifest_path))
                 ext_name = \
                     manifest['name'].replace(",", "").replace("\n", "") \
-                        if 'name' in manifest else ""
+                        if 'name' in manifest else "N/A"
                 ext_browser_action_default_title = \
                     manifest['browser_action']['default_title'].replace(",", "").replace("\n", "") \
-                        if 'browser_action' in manifest and 'default_title' in manifest['browser_action'] else ""
+                        if 'browser_action' in manifest and 'default_title' in manifest['browser_action'] else "N/A"
                 ext_version = \
                     manifest['version'].replace(",", "").replace("\n", "") \
-                        if 'version' in manifest else ""
+                        if 'version' in manifest else "N/A"
                 ext_manifest_version = \
                     str(manifest['manifest_version']).replace(",", "").replace("\n", "") \
-                        if 'manifest_version' in manifest else ""
+                        if 'manifest_version' in manifest else "N/A"
                 ext_description = \
                     manifest['description'][:100].replace(",", "").replace("\n", "") \
-                        if 'description' in manifest else ""
+                        if 'description' in manifest else "N/A"
                 ext_permissions = \
                     " | ".join(manifest['permissions']).replace(",", "").replace("\n", "")\
-                        if 'permissions' in manifest else ""
+                        if 'permissions' in manifest else "N/A"
                 ext_optional_permissions = \
                     " | ".join(manifest['optional_permissions']).replace(",", "").replace("\n", "")\
-                        if 'optional_permissions' in manifest else ""
+                        if 'optional_permissions' in manifest else "N/A"
                 ext_host_permissions = \
                     " | ".join(manifest['host_permissions']).replace(",", "").replace("\n", "")\
-                        if 'host_permissions' in manifest else ""
+                        if 'host_permissions' in manifest else "N/A"
                 ext_optional_host_permissions = \
                     " | ".join(manifest['optional_host_permissions']).replace(",", "").replace("\n", "")\
-                        if 'optional_host_permissions' in manifest else ""
+                        if 'optional_host_permissions' in manifest else "N/A"
 
                 # (3): Analysis results:
                 content_script_injected_into = \
                     " | ".join(analysis_result['content_script_injected_into']).replace(",", "").replace("\n", "")\
-                        if 'content_script_injected_into' in analysis_result else ""
+                        if 'content_script_injected_into' in analysis_result else "N/A"
                 crashes = analysis_result['benchmarks']['crashes']\
                         if 'benchmarks' in analysis_result and 'crashes' in analysis_result['benchmarks'] else []
                 crashes_bp = analysis_result['benchmarks']['bp']['crashes']\
