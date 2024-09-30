@@ -1743,7 +1743,7 @@ class Node:
                                           and self.is_inside(fd.function_declaration_get_scope())]
 
         if len(function_declarations_in_scope) == 0:
-            if print_warning_if_not_found:
+            if print_warning_if_not_found and os.environ.get('DEBUG') == "yes":
                 print(f"[Warning] no function definition found for call to '{self.attributes['name']}' in line "
                       f"{self.get_line()} (file {self.get_file()})")
             return None
@@ -2332,6 +2332,32 @@ class Node:
         #                   BinaryExpression | LogicalExpression | ConditionalExpression |
         #                   YieldExpression | AssignmentExpression | SequenceExpression;
 
+        # Can be statically evaluated: | Cannot be statically evaluated:
+        # ---------------------------- | -------------------------------
+        #                              | ThisExpression
+        # Identifier (const-only)      |
+        # Literal                      |
+        # ArrayExpression              |
+        # ObjectExpression             |
+        #                              | FunctionExpression
+        #                              | ArrowFunctionExpression
+        #                              | ClassExpression
+        #                              | TaggedTemplateExpression
+        # MemberExpression (LHS=array) |
+        #                              | Super
+        #                              | MetaProperty
+        #                              | NewExpression
+        # CallExpression (built-ins)   |
+        #                              | UpdateExpression (++/-- may only be used on mutable variables => non-static)
+        #                              | AwaitExpression
+        # UnaryExpression              |
+        # BinaryExpression             |
+        # LogicalExpression            |
+        # ConditionalExpression        |
+        #                              | YieldExpression
+        # AssignmentExpression         |
+        # SequenceExpression           |
+
         if self.name == "Literal":
             # interface Literal {
             #     value: boolean | number | string | RegExp | null;
@@ -2341,6 +2367,19 @@ class Node:
             if "regex" in self.attributes:
                 raise StaticEvalException(f"static eval failed: cannot statically evaluate JavaScript RegEx literals!")
             return self.attributes['value']  # note that a JavaScript "null" will return `None` here!
+
+        elif self.name == "SequenceExpression":
+            # interface SequenceExpression {
+            #     expressions: Expression[];
+            # }
+            # From the Mozilla docs
+            #   (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Comma_operator):
+            # "The comma (,) operator evaluates each of its operands (from left to right)
+            #  and returns the value of the last operand."
+            expressions: List[Node] = self.get("expressions")
+            if len(expressions) == 0:  # (shouldn't actually be possible)
+                raise StaticEvalException(f"static eval failed: empty SequenceExpression")
+            return expressions[-1].static_eval(allow_partial_eval=allow_partial_eval)
 
         elif self.name == "ObjectExpression":
             # interface ObjectExpression {
@@ -2498,9 +2537,7 @@ class Node:
                     # ({"a":1}+null)    | "[object Object]null" | TypeError: unsupported operand type(s) for +: 'dict' and 'NoneType'
                     # null + "foo"      | "nullfoo"             | TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'
                     left_evaluated = left.static_eval(allow_partial_eval)
-                    print(f"left_evaluated = {left_evaluated} (type: {type(left_evaluated)})") # todo: remove
                     right_evaluated = right.static_eval(allow_partial_eval)
-                    print(f"right_evaluated = {right_evaluated} (type: {type(right_evaluated)})")  # todo: remove
                     if (
                             isinstance(left_evaluated, (int, float, bool, type(None)))
                         and isinstance(right_evaluated, (int, float, bool, type(None)))
@@ -2870,7 +2907,7 @@ class Node:
                 else:
                     var_declaration: Node = variable_declarator.parent
                     assert var_declaration is not None and var_declaration.name == "VariableDeclaration"
-                    if var_declaration.attributes['kind'] == 'const':
+                    if var_declaration.attributes['kind'] == 'const':  # ToDo: also handle effectively constant values?!
                         init_expr: List[Node] = variable_declarator.get("init")
                         if len(init_expr) == 0:
                             raise StaticEvalException(f"static eval failed: JavaScript SyntaxError: "
@@ -2939,6 +2976,300 @@ class Node:
             else:
                 raise StaticEvalException(f"static eval failed: unsupported type of MemberExpression; "
                                           f"only supporting LHS=array")
+
+        elif self.name == "CallExpression":
+            # interface CallExpression {
+            #     callee: Expression | Import;
+            #     arguments: ArgumentListElement[];
+            # }
+            callee: Node = self.get("callee")[0]
+            if callee.name == "Identifier":
+                if (len(callee.data_dep_parents) > 0
+                        or callee.function_Identifier_get_FunctionDeclaration(False) is not None):
+                    raise StaticEvalException(f"static eval failed: can only statically evaluate calls to built-in "
+                                              f"functions, not user-defined functions")
+                    # ToDo: try to inline and statically evaluate user-defined pure(!) (or, at least, constant)
+                    #       functions, too! (e.g., functions consisting only of a single return statement)
+                identifier_name: str = callee.attributes['name']
+                arguments: List[Node] = self.get("arguments")
+                match identifier_name:
+                    case "isFinite":
+                        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/isFinite:
+                        # "The isFinite() function determines whether a value is finite, first converting the value to
+                        #  a number if necessary. A finite number is one that's not NaN or ±Infinity. Because coercion
+                        #  inside the isFinite() function can be surprising, you may prefer to use Number.isFinite()."
+                        # Syntax:
+                        #     isFinite(value)
+                        # Parameters:
+                        #     value: The value to be tested.
+                        # Return value:
+                        #     false if the given value is NaN, Infinity, or -Infinity after being converted to a number;
+                        #     otherwise, true.
+                        if len(arguments) == 0:
+                            return False  # isFinite() == false
+                        else:
+                            argument_evaluated = arguments[0].static_eval(allow_partial_eval=allow_partial_eval)
+                            if isinstance(argument_evaluated, int) or isinstance(argument_evaluated, bool):
+                                return True
+                            elif isinstance(argument_evaluated, type(None)):
+                                return True  # isFinite(null) == true
+                            elif isinstance(argument_evaluated, float):
+                                return not (math.isnan(argument_evaluated) or math.isinf(argument_evaluated))
+                            elif isinstance(argument_evaluated, dict):
+                                return False  # isFinite({}) == isFinite({"1":2}) == false
+                            elif isinstance(argument_evaluated, str):
+                                if argument_evaluated == '':
+                                    return True  # isFinite('') == true
+                                try:
+                                    f = float(argument_evaluated)
+                                    return not (math.isnan(f) or math.isinf(f))
+                                except ValueError:
+                                    return False
+                            elif isinstance(argument_evaluated, list):
+                                while True:
+                                    if len(argument_evaluated) == 0:
+                                        return True  # isFinite([]) == true
+                                    elif len(argument_evaluated) == 1:
+                                        list_element = argument_evaluated[0]
+                                        if isinstance(list_element, type(None)):
+                                            return True  # isFinite([null]) == true
+                                        elif isinstance(list_element, bool):
+                                            return False  # isFinite([true]) == isFinite([false]) == false
+                                        elif isinstance(list_element, dict):
+                                            return False  # isFinite([{}]) == isFinite([{"1":2}]) == false
+                                        elif isinstance(list_element, str):
+                                            if list_element == '':
+                                                return True  # isFinite(['']) == true
+                                            try:
+                                                f = float(list_element)
+                                                return not (math.isnan(f) or math.isinf(f))
+                                            except ValueError:
+                                                return False
+                                        elif isinstance(list_element, int):
+                                            return True
+                                        elif isinstance(list_element, float):
+                                            return not (math.isnan(list_element) or math.isinf(list_element))
+                                        elif isinstance(list_element, list):
+                                            # For nested lists, repeat the whole process over again:
+                                            argument_evaluated = list_element
+                                            continue
+                                    else:
+                                        return False  # isFinite([42,1]) == false
+                            else:
+                                raise StaticEvalException(f"static eval failed: value passed to isFinite() call was "
+                                                          f"statically evaluated but is of an unknown type: "
+                                                          f"{argument_evaluated}")
+
+                    case "isNaN":
+                        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/isNaN:
+                        # "The isNaN() function determines whether a value is NaN, first converting the value to a
+                        #  number if necessary. Because coercion inside the isNaN() function can be surprising, you
+                        #  may prefer to use Number.isNaN()."
+                        # Syntax:
+                        #     isNaN(value)
+                        # Parameters:
+                        #     value: The value to be tested.
+                        # Return value:
+                        #     true if the given value is NaN after being converted to a number; otherwise, false.
+                        if len(arguments) == 0:
+                            return True  # isNaN() == true
+                        else:
+                            argument_evaluated = arguments[0].static_eval(allow_partial_eval=allow_partial_eval)
+                            if isinstance(argument_evaluated, int) or isinstance(argument_evaluated, bool):
+                                return False  # isNaN(42) == isNaN(false) == isNaN(true) == false
+                            elif isinstance(argument_evaluated, type(None)):
+                                return False  # isNaN(null) == false
+                            elif isinstance(argument_evaluated, float):
+                                return math.isnan(argument_evaluated)
+                            elif isinstance(argument_evaluated, dict):
+                                return True  # isNaN({}) == isNaN({"1":2}) == true
+                            elif isinstance(argument_evaluated, str):
+                                if argument_evaluated == '':
+                                    return False  # isNan('') == false
+                                try:
+                                    f = float(argument_evaluated)
+                                    return math.isnan(f)
+                                except ValueError:
+                                    return True  # isNaN('x') == isNaN('42x') == true
+                            elif isinstance(argument_evaluated, list):
+                                while True:
+                                    if len(argument_evaluated) == 0:
+                                        return False  # isNaN([]) == false
+                                    elif len(argument_evaluated) == 1:
+                                        list_element = argument_evaluated[0]
+                                        if isinstance(list_element, type(None)):
+                                            return False  # isNaN([null]) == false
+                                        elif isinstance(list_element, bool):
+                                            return True  # isNaN([true]) == isNaN([false]) == true
+                                        elif isinstance(list_element, dict):
+                                            return True  # isNaN([{}]) == isNaN([{"1":2}]) == true
+                                        elif isinstance(list_element, str):
+                                            if list_element == '':
+                                                return False  # isNaN(['']) == false
+                                            try:
+                                                f = float(list_element)
+                                                return math.isnan(f)
+                                            except ValueError:
+                                                return True  # isNaN(['x']) == isNaN(['42x']) == True
+                                        elif isinstance(list_element, int):
+                                            return False  # isNaN([42]) == false
+                                        elif isinstance(list_element, float):
+                                            return math.isnan(list_element)
+                                        elif isinstance(list_element, list):
+                                            # For nested lists, repeat the whole process over again:
+                                            argument_evaluated = list_element
+                                            continue
+                                    else:
+                                        return True  # isFinite([42,1]) == true
+                            else:
+                                raise StaticEvalException(f"static eval failed: value passed to isNaN() call was "
+                                                          f"statically evaluated but is of an unknown type: "
+                                                          f"{argument_evaluated}")
+
+                    case "parseFloat":
+                        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseFloat:
+                        # "The parseFloat() function parses a string argument and returns a floating point number."
+                        # Syntax:
+                        #     parseFloat(string)
+                        # Parameters:
+                        #     string: The value to parse, coerced to a string.
+                        #             Leading whitespace in this argument is ignored.
+                        # Return value:
+                        #     A floating point number parsed from the given string,
+                        #     or NaN when the first non-whitespace character cannot be converted to a number.
+                        # Description:
+                        #     * "The characters accepted by parseFloat() are plus sign (+), minus sign
+                        #        (- U+002D HYPHEN-MINUS), decimal digits (0 – 9), decimal point (.), exponent indicator
+                        #        (e or E), and the "Infinity" literal."
+                        #     * "The +/- signs can only appear strictly at the beginning of the string, or immediately
+                        #        following the e/E character. The decimal point can only appear once, and only before
+                        #        the e/E character. The e/E character can only appear once, and only if there is at
+                        #        least one digit before it."
+                        #     * "Leading spaces in the argument are trimmed and ignored."
+                        #       => Python float() does the same
+                        #     * "parseFloat() can also parse and return Infinity or -Infinity if the string starts with
+                        #       "Infinity" or "-Infinity" preceded by none or more white spaces."
+                        #       => Python float() does the same!!!
+                        #     * "parseFloat() picks the longest substring starting from the beginning that generates a
+                        #        valid number literal. If it encounters an invalid character, it returns the number
+                        #        represented up to that point, ignoring the invalid character and all characters
+                        #        following it."
+                        #        => Python float() does NOT(!) do this but instead raises a ValueError!!!
+                        #     * "If the argument's first character can't start a legal number literal per the syntax
+                        #        above, parseFloat returns NaN."
+                        #        => Python also does NOT(!) do this but instead raises a ValueError!!!
+                        #     * "parseFloat() does not support non-decimal literals with 0x, 0b, or 0o prefixes"
+                        #        => as it seems, Python float() neither.
+                        if len(arguments) == 0:
+                            return float('nan')  # parseFloat() returns NaN
+                        else:
+                            argument_evaluated = arguments[0].static_eval(allow_partial_eval=allow_partial_eval)
+
+                            if isinstance(argument_evaluated, list):
+                                # parseFloat([]) gives NaN
+                                # parseFloat([[[3.14, 1], 2], 3]) == 3.14
+                                # parseFloat([[['3.14', '1'], '2'], '3']) == 3.14
+                                # parseFloat([[['x', '1'], '2'], '3']) gives NaN
+                                # parseFloat([[['', '1'], '2'], '3']) gives NaN
+                                # parseFloat([[], 42]) gives NaN
+                                while len(argument_evaluated) > 0 and isinstance(argument_evaluated[0], list):
+                                    argument_evaluated = argument_evaluated[0]
+                                if len(argument_evaluated) == 0:
+                                    return float('nan')  # parseFloat([]) gives NaN
+                                else:
+                                    argument_evaluated = argument_evaluated[0]
+                                    # Reduced list to relevant argument of interest, continue with code below...
+
+                            if isinstance(argument_evaluated, bool):  # Has to be checked before isinstance(int) !!!
+                                return float('nan')  # parseFloat(false) and parseFloat(true) return NaN
+                            elif isinstance(argument_evaluated, dict):
+                                return float('nan')  # parseFloat({}) and parseFloat({"1":2}) return NaN
+                            elif isinstance(argument_evaluated, type(None)):
+                                return float('nan')  # parseFloat(null) returns NaN
+                            elif isinstance(argument_evaluated, (int, float)):
+                                return argument_evaluated  # parseFloat(3) == 3 and parseFloat(3.14) == 3.14
+                            elif isinstance(argument_evaluated, str):
+                                # parseFloat() picks the longest substring starting from the beginning that generates a
+                                #     valid number literal:
+                                for i in range(len(argument_evaluated)):  # ToDo: replace with more efficient implementation
+                                    try:
+                                        return float(argument_evaluated[:len(argument_evaluated)-i])
+                                    except ValueError:
+                                        # Note that, in the last iteration, float('') will *also* raise a ValueError!
+                                        continue
+                                return float('nan')  # both parseFloat('') and parseFloat('xxx') return NaN
+                            else:
+                                raise StaticEvalException(f"static eval failed: value passed to parseFloat() call was "
+                                                          f"statically evaluated but is of an unknown type: "
+                                                          f"{argument_evaluated}")
+
+                    case "parseInt":
+                        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseInt:
+                        # "The parseInt() function parses a string argument and returns an integer of the specified
+                        #  radix (the base in mathematical numeral systems)."
+                        # Syntax:
+                        #     parseInt(string)
+                        #     parseInt(string, radix)
+                        # Parameters:
+                        #     string: A string starting with an integer. Leading whitespace in this argument is ignored.
+                        #     radix (optional): An integer between 2 and 36 that represents the radix;
+                        #                       if it's nonzero and outside the range of [2, 36] after conversion,
+                        #                       the function will always return NaN;
+                        #                       If 0 or not provided, the radix will be inferred based on string's
+                        #                       value. Be careful — this does not always default to 10!
+                        # Return value:
+                        #     An integer parsed from the given string, or NaN when
+                        #     * the radix as a 32-bit integer is smaller than 2 or bigger than 36, or
+                        #     * the first non-whitespace character cannot be converted to a number.
+                        # Description:
+                        #     * "If the input string, with leading whitespace and possible +/- signs removed, begins
+                        #        with 0x or 0X (a zero, followed by lowercase or uppercase X), radix is assumed to be
+                        #        16 and the rest of the string is parsed as a hexadecimal number."
+                        #     * "If the input string begins with any other value, the radix is 10 (decimal)."
+                        #       Note that "0b" and "0" prefixes for binary/octal are NOT(!) recognized!
+                        #     * "If the radix is 16, parseInt() allows the string to be optionally prefixed by 0x or
+                        #        0X after the optional sign character (+/-)."
+                        #     * "If the radix value (coerced if necessary) is not in range [2, 36] (inclusive)
+                        #        parseInt returns NaN."
+                        #     * "If the first character cannot be converted to a number with the radix in use,
+                        #        parseInt returns NaN. Leading whitespace is allowed."
+                        if len(arguments) == 0:  # parseInt()
+                            return float('nan')  # parseInt() returns NaN
+                        elif len(arguments) == 1:  # parseInt(string)
+                            string_arg_evaluated = arguments[0].static_eval(allow_partial_eval=allow_partial_eval)
+                            radix_arg_evaluated = 0
+                        else:  # parseInt(string, radix) (+ optional redundant extra parameters)
+                            string_arg_evaluated = arguments[0].static_eval(allow_partial_eval=allow_partial_eval)
+                            if string_arg_evaluated is None:
+                                # null is treated as "null" by parseInt(), e.g.:
+                                # parseInt(null, 36) == 1112745 and parseInt(null, 24) == 23
+                                string_arg_evaluated = "null"
+                            radix_arg_evaluated = arguments[1].static_eval(allow_partial_eval=allow_partial_eval)
+                            if radix_arg_evaluated != 0 and radix_arg_evaluated not in range(2, 37):
+                                # radix: if it's nonzero and outside the range of [2, 36] after conversion,
+                                #        the function will always return NaN
+                                return float('nan')
+                        # Python parses "123_456" as 123456 but JavaScript parses it as 123:
+                        string_arg_evaluated = string_arg_evaluated.split("_")[0]
+                        for i in range(len(string_arg_evaluated)):  # ToDo: replace with more efficient implementation
+                            try:
+                                return int(string_arg_evaluated[:len(string_arg_evaluated)-i], radix_arg_evaluated)
+                            except ValueError:
+                                # Note that, in the last iteration, parseInt('') will *also* raise a ValueError!
+                                if radix_arg_evaluated == 0:  # Python allows int("042") but not int("042", 0) ...
+                                    try:
+                                        return int(string_arg_evaluated[:len(string_arg_evaluated) - i])
+                                    except ValueError:
+                                        continue
+
+                        return float('nan')  # both parseInt('') and parseInt('xxx') return NaN
+
+                    case other:
+                        raise StaticEvalException(f"static eval failed: '{other}' built-in (or dynamically defined) "
+                                                  f"function not supported")
+            else:
+                raise StaticEvalException(f"static eval failed: unsupported type of CallExpression: callee is a "
+                                          f"{callee.name} and not an Identifier")
 
         else:
             raise StaticEvalException(f"static eval failed: unsupported type of Expression: {self.name}")

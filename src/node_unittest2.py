@@ -9,6 +9,8 @@ from get_pdg import get_pdg
 from pdg_js.build_pdg import get_data_flow
 from add_missing_data_flow_edges import add_missing_data_flow_edges
 from remove_incorrect_data_flow_edges import remove_incorrect_data_flow_edges
+from pdg_js.StaticEvalException import StaticEvalException
+
 # from add_missing_data_flow_edges_unittest import generate_ast
 
 os.environ['PARSER'] = "espree"
@@ -1647,6 +1649,188 @@ class TestNodeClass2(unittest.TestCase):
             self.assertEqual(3, expr("[1,2,3]['length']").static_eval(allow_partial_eval))
             self.assertEqual(4, expr("['a', 'b', 'c', 'd']['length']").static_eval(allow_partial_eval))
 
+            # Test SequenceExpressions (evaluate to the value of the last operand):
+            self.assertEqual(222, expr("111, 222").static_eval(allow_partial_eval))
+            self.assertEqual(333, expr("111, 222, 333").static_eval(allow_partial_eval))
+            self.assertEqual(444, expr("111, 222, 333, 444").static_eval(allow_partial_eval))
+            self.assertEqual(444, expr("foo(x), bar(y), baz(z), 444").static_eval(allow_partial_eval))
+            self.assertEqual(555, expr("foo(x), bar(y), baz(z), 444+111").static_eval(allow_partial_eval))
+
+            # Test static evaluation of calls to JavaScript built-in functions:
+            # isFinite():
+            self.assertEqual(True, expr("isFinite(42)").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite(3.14)").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite('42')").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite('3.14')").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite('')").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite('42x')").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite('x')").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite(true)").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite(false)").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite({})").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite([{}])").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite({'1':2})").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite([{'1':2}])").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite([])").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite([42])").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite([42,1])").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite([''])").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite(['42'])").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite(['42x'])").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite(['42', '1'])").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite([true])").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite([false])").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite(null)").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite([null])").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite(1/0)").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite(0/0)").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite([[42]])").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite([[[42]]])").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite([[[[42]]]])").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite([[[['']]]])").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite([[[[42,1]]]])").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite([[[[42],1]]])").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite([[[[42]],1]])").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isFinite([[[[42]]],1])").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isFinite([[[[[]]]]])").static_eval(allow_partial_eval))
+            # isNaN() - should return exactly the opposite of isFinite(), except for the case of Infinity (1/0):
+            self.assertEqual(not True, expr("isNaN(42)").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN(3.14)").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN('42')").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN('3.14')").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN('')").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN('42x')").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN('x')").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN(true)").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN(false)").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN({})").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN([{}])").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN({'1':2})").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN([{'1':2}])").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN([])").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN([42])").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN([42,1])").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN([''])").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN(['42'])").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN(['42x'])").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN(['42', '1'])").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN([true])").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN([false])").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN(null)").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN([null])").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("isNaN(1/0)").static_eval(allow_partial_eval))  # <----- Infinity
+            self.assertEqual(not False, expr("isNaN(0/0)").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN([[42]])").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN([[[42]]])").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN([[[[42]]]])").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN([[[['']]]])").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN([[[[42,1]]]])").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN([[[[42],1]]])").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN([[[[42]],1]])").static_eval(allow_partial_eval))
+            self.assertEqual(not False, expr("isNaN([[[[42]]],1])").static_eval(allow_partial_eval))
+            self.assertEqual(not True, expr("isNaN([[[[[]]]]])").static_eval(allow_partial_eval))
+            # parseFloat():
+            self.assertEqual(3.14, expr("parseFloat('3.14')").static_eval(allow_partial_eval))
+            self.assertEqual(3.14, expr("parseFloat('3.14xxx')").static_eval(allow_partial_eval))
+            self.assertTrue(math.isnan(expr("parseFloat('')").static_eval(allow_partial_eval)))
+            self.assertTrue(math.isnan(expr("parseFloat(false)").static_eval(allow_partial_eval)))
+            self.assertTrue(math.isnan(expr("parseFloat(true)").static_eval(allow_partial_eval)))
+            self.assertTrue(math.isnan(expr("parseFloat({})").static_eval(allow_partial_eval)))
+            self.assertTrue(math.isnan(expr("parseFloat({'1':2})").static_eval(allow_partial_eval)))
+            self.assertTrue(math.isnan(expr("parseFloat(null)").static_eval(allow_partial_eval)))
+            self.assertEqual(3, expr("parseFloat(3)").static_eval(allow_partial_eval))
+            self.assertEqual(3.14, expr("parseFloat(3.14)").static_eval(allow_partial_eval))
+            self.assertTrue(math.isnan(expr("parseFloat([])").static_eval(allow_partial_eval)))
+            self.assertEqual(3.14, expr("parseFloat([[[3.14, 1], 2], 3])").static_eval(allow_partial_eval))
+            self.assertEqual(3.14, expr("parseFloat([[['3.14', '1'], '2'], '3'])").static_eval(allow_partial_eval))
+            self.assertTrue(math.isnan(expr("parseFloat([[['x', '1'], '2'], '3'])").static_eval(allow_partial_eval)))
+            self.assertTrue(math.isnan(expr("parseFloat([[['', '1'], '2'], '3'])").static_eval(allow_partial_eval)))
+            self.assertTrue(math.isnan(expr("parseFloat([[], 42])").static_eval(allow_partial_eval)))
+            self.assertTrue(42, expr("parseFloat([['  42xxx', 3]])").static_eval(allow_partial_eval))
+            # parseInt():
+            self.assertEqual(42, expr("parseInt('42')").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("parseInt('   42  ')").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("parseInt('042')").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("parseInt('0042')").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("parseInt('00042')").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("parseInt('42.1')").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("parseInt('42.9')").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("parseInt('42xxx')").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("parseInt('42', 0)").static_eval(allow_partial_eval))
+            self.assertEqual(22, expr("parseInt('42', 5)").static_eval(allow_partial_eval))
+            self.assertEqual(26, expr("parseInt('42', 6)").static_eval(allow_partial_eval))
+            self.assertEqual(30, expr("parseInt('42', 7)").static_eval(allow_partial_eval))
+            self.assertEqual(34, expr("parseInt('42', 8)").static_eval(allow_partial_eval))
+            self.assertEqual(38, expr("parseInt('42', 9)").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("parseInt('42', 10)").static_eval(allow_partial_eval))
+            self.assertEqual(46, expr("parseInt('42', 11)").static_eval(allow_partial_eval))
+            self.assertEqual(50, expr("parseInt('42', 12)").static_eval(allow_partial_eval))
+            self.assertEqual(255, expr("parseInt('ff', 16)").static_eval(allow_partial_eval))
+            self.assertEqual(255, expr("parseInt('FF', 16)").static_eval(allow_partial_eval))
+            self.assertTrue(math.isnan(expr("parseInt('ff')").static_eval(allow_partial_eval)))
+            self.assertTrue(math.isnan(expr("parseInt('FF')").static_eval(allow_partial_eval)))
+            self.assertEqual(255, expr("parseInt('0xff', 16)").static_eval(allow_partial_eval))
+            self.assertEqual(255, expr("parseInt('0xFF', 16)").static_eval(allow_partial_eval))
+            self.assertEqual(255, expr("parseInt('0xff')").static_eval(allow_partial_eval))
+            self.assertEqual(255, expr("parseInt('0xFF')").static_eval(allow_partial_eval))
+            self.assertTrue(math.isnan(expr("parseInt('0', -1)").static_eval(allow_partial_eval)))
+            self.assertTrue(math.isnan(expr("parseInt('0', 1)").static_eval(allow_partial_eval)))
+            self.assertEqual(0, expr("parseInt('0', 2)").static_eval(allow_partial_eval))
+            self.assertEqual(0, expr("parseInt('0', 36)").static_eval(allow_partial_eval))
+            self.assertTrue(math.isnan(expr("parseInt('0', 37)").static_eval(allow_partial_eval)))
+            self.assertEqual(42, expr("parseInt('42', 10, 1234)").static_eval(allow_partial_eval))
+            # parseInt() examples from
+            #     https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseInt:
+            self.assertEqual(15, expr('parseInt("0xF", 16)').static_eval(allow_partial_eval))
+            self.assertEqual(15, expr('parseInt("0xF", 16)').static_eval(allow_partial_eval))
+            self.assertEqual(15, expr('parseInt("F", 16)').static_eval(allow_partial_eval))
+            self.assertEqual(15, expr('parseInt("17", 8)').static_eval(allow_partial_eval))
+            self.assertEqual(15, expr('parseInt("015", 10)').static_eval(allow_partial_eval))
+            self.assertEqual(15, expr('parseInt("15,123", 10)').static_eval(allow_partial_eval))
+            self.assertEqual(15, expr('parseInt("FXX123", 16)').static_eval(allow_partial_eval))
+            self.assertEqual(15, expr('parseInt("1111", 2)').static_eval(allow_partial_eval))
+            self.assertEqual(15, expr('parseInt("15 * 3", 10)').static_eval(allow_partial_eval))
+            self.assertEqual(15, expr('parseInt("15e2", 10)').static_eval(allow_partial_eval))
+            self.assertEqual(15, expr('parseInt("15px", 10)').static_eval(allow_partial_eval))
+            self.assertEqual(15, expr('parseInt("12", 13)').static_eval(allow_partial_eval))
+            self.assertTrue(math.isnan(expr('parseInt("Hello", 8)').static_eval(allow_partial_eval)))
+            self.assertTrue(math.isnan(expr('parseInt("546", 2)').static_eval(allow_partial_eval)))
+            self.assertEqual(-15, expr('parseInt("-F", 16)').static_eval(allow_partial_eval))
+            self.assertEqual(-15, expr('parseInt("-0F", 16)').static_eval(allow_partial_eval))
+            self.assertEqual(-15, expr('parseInt("-0XF", 16)').static_eval(allow_partial_eval))
+            self.assertEqual(-15, expr('parseInt("-17", 8)').static_eval(allow_partial_eval))
+            self.assertEqual(-15, expr('parseInt("-15", 10)').static_eval(allow_partial_eval))
+            self.assertEqual(-15, expr('parseInt("-1111", 2)').static_eval(allow_partial_eval))
+            self.assertEqual(-15, expr('parseInt("-15e1", 10)').static_eval(allow_partial_eval))
+            self.assertEqual(-15, expr('parseInt("-12", 13)').static_eval(allow_partial_eval))
+            self.assertEqual(224, expr('parseInt("0e0", 16)').static_eval(allow_partial_eval))
+            self.assertEqual(123, expr('parseInt("123_456")').static_eval(allow_partial_eval))
+            self.assertEqual(146, expr('parseInt("123_456", 11)').static_eval(allow_partial_eval))
+            # Using parseInt() on non-strings:
+            # (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseInt#using_parseint_on_non-strings)
+            self.assertEqual(1112745, expr('parseInt(null, 36)').static_eval(allow_partial_eval))
+            self.assertEqual(1023631, expr('parseInt(null, 35)').static_eval(allow_partial_eval))
+            self.assertEqual(939407, expr('parseInt(null, 34)').static_eval(allow_partial_eval))
+            self.assertEqual(859935, expr('parseInt(null, 33)').static_eval(allow_partial_eval))
+            self.assertEqual(785077, expr('parseInt(null, 32)').static_eval(allow_partial_eval))
+            self.assertEqual(714695, expr('parseInt(null, 31)').static_eval(allow_partial_eval))
+            self.assertEqual(23, expr('parseInt(null, 30)').static_eval(allow_partial_eval))
+            self.assertEqual(23, expr('parseInt(null, 29)').static_eval(allow_partial_eval))
+            self.assertEqual(23, expr('parseInt(null, 28)').static_eval(allow_partial_eval))
+            self.assertEqual(23, expr('parseInt(null, 27)').static_eval(allow_partial_eval))
+            self.assertEqual(23, expr('parseInt(null, 26)').static_eval(allow_partial_eval))
+            self.assertEqual(23, expr('parseInt(null, 25)').static_eval(allow_partial_eval))
+            self.assertEqual(23, expr('parseInt(null, 24)').static_eval(allow_partial_eval))
+            self.assertTrue(math.isnan(expr('parseInt(null, 23)').static_eval(allow_partial_eval)))
+            self.assertTrue(math.isnan(expr('parseInt(null, 22)').static_eval(allow_partial_eval)))
+            # Test behavior of these functions when no arguments are supplied:
+            self.assertEqual(False, expr("isFinite()").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isNaN()").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isNaN(parseFloat())").static_eval(allow_partial_eval))
+            self.assertEqual(True, expr("isNaN(parseInt())").static_eval(allow_partial_eval))
+            self.assertTrue(math.isnan(expr("parseFloat()").static_eval(allow_partial_eval)))
+            self.assertTrue(math.isnan(expr("parseInt()").static_eval(allow_partial_eval)))
+
             # Test JavaScript quirks:
             self.assertEqual(0, expr("+''").static_eval(allow_partial_eval))
             self.assertEqual(0, expr("+[]").static_eval(allow_partial_eval))
@@ -1691,6 +1875,71 @@ class TestNodeClass2(unittest.TestCase):
                 .children[1]
                 .static_eval(allow_partial_eval)
             )
+
+            # A built-in function is *not* overridden by a user-defined function:
+            code = """
+            foo(parseInt('42'));
+            """
+            pdg = generate_pdg(code)
+            print(pdg)
+            self.assertEqual(
+                42,
+                pdg.get_child("ExpressionStatement")
+                .get_child("CallExpression")
+                .children[1]
+                .static_eval(allow_partial_eval)
+            )
+
+            # A built-in function *is* overridden by a user-defined function:
+            for code in [
+                """
+                function parseInt(x) { return 43; }
+                foo(parseInt('42'));
+                """,
+                """
+                {parseInt = function (x) { return 43; }}
+                foo(parseInt('42'));
+                """,
+                """
+                var parseInt = function (x) { return 43; }
+                foo(parseInt('42'));
+                """,
+                """
+                let parseInt = function (x) { return 43; }
+                foo(parseInt('42'));
+                """,
+                """
+                const parseInt = function (x) { return 43; }
+                foo(parseInt('42'));
+                """,
+                """
+                {parseInt = (x) => { return 43; }}
+                foo(parseInt('42'));
+                """,
+                """
+                var parseInt = (x) => { return 43; }
+                foo(parseInt('42'));
+                """,
+                """
+                let parseInt = (x) => { return 43; }
+                foo(parseInt('42'));
+                """,
+                """
+                const parseInt = (x) => { return 43; }
+                foo(parseInt('42'));
+                """
+            ]:
+                pdg = generate_pdg(code)
+                print(pdg)
+                self.assertRaises(
+                    StaticEvalException,
+                    lambda: (pdg.get_child("ExpressionStatement")
+                                .get_child("CallExpression")
+                                .children[1]
+                                .static_eval(allow_partial_eval))
+                )
+                # ToDo: replace with self.assertEqual(43, ...) once static_eval() is capable of evaluating user-defined
+                #       pure functions statically (which will only work for 'const' though!)
 
         # Test partial evaluation of objects:
         code = """
