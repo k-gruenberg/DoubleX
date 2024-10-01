@@ -675,6 +675,7 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
                   f"{function_reference.get_line()}, file {function_reference.get_file()}), "
                   f"possible missing data flow edge(s)...")
             # ToDo: doesn't this spam a bit too much sometimes?! => add param --warn-func-decl-not-found !!!!!
+            # ToDo: stop warning for functions that aren't declared but that we can still resolve, e.g., "sendResponse" !!!!!
 
     elif pdg.name == "CallExpression" and len(pdg.children) > 1 and pdg.children[0].name == "FunctionExpression":
         # For each IIFE, e.g.: "!function(x,y){}(a,b)", add data flows from `a` to `x` and from `b` to `y`:
