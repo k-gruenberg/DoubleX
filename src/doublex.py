@@ -22,7 +22,6 @@
 """
 import os
 import argparse
-import datetime
 from pathlib import Path
 import time
 import json
@@ -113,15 +112,15 @@ def analyze_extensions_in_sequence(process_idx: int,
     This is the code of each worker process.
     By default, there are (number of CPUs)/2 worker processes.
     """
-    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Start of process #{process_idx}.")
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Start of process #{process_idx}.")
     try:
         while True:
             # (1): Take a CRX file from the global CRXs queue:
             crx = crxs_queue.get(block=False)
-            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Process #{process_idx} took CRX '{crx}'")
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Process #{process_idx} took CRX '{crx}'")
 
             # (2): Unpack the CRX file:
-            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacking '{crx}' ...")
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Unpacking '{crx}' ...")
             unpacked_ext_dir = unpack_extension(extension_crx=crx, dest=unpack_dest_dir)
             extension_size_unpacked = f"{get_directory_size(unpacked_ext_dir):_}"
             js_loc = f"{get_javascript_loc(unpacked_ext_dir):_}"
@@ -134,7 +133,7 @@ def analyze_extensions_in_sequence(process_idx: int,
                 "unpacked_ext_dir": unpacked_ext_dir,
             }
             if unpacked_ext_dir is None:
-                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unpacking failed: '{crx}'")
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Unpacking failed: '{crx}'")
                 # Simply continue with next extension...
                 # ...but don't forget to still put a result into the results_queue:
                 analysis_result = {
@@ -144,7 +143,7 @@ def analyze_extensions_in_sequence(process_idx: int,
                 }
                 results_queue.put((info, analysis_result), block=False)
                 continue
-            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] "
                   f"Unpacked '{crx}' into '{unpacked_ext_dir}'")
 
             # After unpacking, there are now JS files for CS and BP that can be analyzed in the next step:
@@ -152,7 +151,7 @@ def analyze_extensions_in_sequence(process_idx: int,
             bp = os.path.join(unpacked_ext_dir, "background.js")
 
             # (3): Analyze the unpacked extension:
-            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Analyzing '{crx}' ...")
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Analyzing '{crx}' ...")
             analysis_start = time.time()
             try:
                 res_dict = kim_and_lee_analyze_extension(cs, bp)
@@ -173,10 +172,10 @@ def analyze_extensions_in_sequence(process_idx: int,
                 info["analysis_time"] = time.time() - analysis_start
                 results_queue.put((info, analysis_result), block=False)
                 continue
-            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Done analyzing '{crx}' after "
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Done analyzing '{crx}' after "
                   f"{info['analysis_time']} seconds")
     except queue.Empty:
-        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] End of process #{process_idx}. "
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] End of process #{process_idx}. "
               f"No more extensions left in queue.")
 
 
@@ -412,7 +411,7 @@ def main():
         # Flatten the --crx / args.crx argument:
         #     => example: "--crx a b --crx x y" becomes: [['a', 'b'], ['x', 'y']]
         crxs = [c for cs in args.crx for c in cs]
-        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Analyzing {len(crxs)} packed extensions...")
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Analyzing {len(crxs)} packed extensions...")
 
         # Use the folder in which the first .CRX file is situated in, create a subfolder called "unpacked" and use that:
         unpack_dest_dir = os.path.join(Path(crxs[0]).parent.absolute(), "unpacked")
@@ -456,7 +455,7 @@ def main():
         processes = [Process(target=analyze_extensions_in_sequence,
                              args=[process_idx, crxs_queue, results_queue, unpack_dest_dir])
                      for process_idx in range(args.parallelize)]
-        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] "
               f"Starting {len(processes)} worker processes...")
         for process in processes:
             process.start()
@@ -618,18 +617,18 @@ def main():
                 csv_out.flush()
 
         # Join all worker processes (all joins should terminate immediately as all extensions have been processed):
-        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] "
               f"Joining all {len(processes)} worker processes; this should finish in no time...")
         for process in processes:
             process.join()
 
         # Close CSV output file:
         if args.csv_out != "":
-            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] "
                   f"Closing CSV output file...")
             csv_out.close()
 
-        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Done." +
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Done." +
               (f" {results_collected} results collected in CSV file: {args.csv_out}" if args.csv_out != '' else ''))
 
 
