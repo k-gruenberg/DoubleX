@@ -322,6 +322,14 @@ def main():
                              "Only has an effect in combination with --crx. "
                              "Default: CPU count/2 (as BP and CS of each extension will be analyzed in parallel, too)")
 
+    parser.add_argument("--warn-func-decl-not-found",
+                        dest='warn_func_decl_not_found',
+                        action='store_true',
+                        help="Print a warning to console whenever no corresponding function declaration could be "
+                             "found for an encountered call expression. Example: there's a 'foo()' call expression "
+                             "somewhere but a function declaration for a function named 'foo' cannot be found "
+                             "anywhere.") # TODO  # ToDo: refactor code?!
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()

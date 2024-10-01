@@ -1,25 +1,21 @@
-import time
 import tkinter as tk
 import tempfile
 import os
 import json
-from tkinter import WORD, CHAR, NONE
+from tkinter import NONE
 from typing import List, Tuple, Optional
 import traceback
 
-import get_pdg
 from kim_and_lee_vulnerability_detection import analyze_extension
-from remove_incorrect_data_flow_edges import remove_incorrect_data_flow_edges
-from add_missing_data_flow_edges import add_missing_data_flow_edges
 from pdg_js.tokenizer_espree import tokenize
 from pdg_js.node import Node
-import pdg_js.build_ast as build_ast
-from pdg_js.build_pdg import function_hoisting
 from DataFlow import DataFlow
 
-REMOVE_INCORRECT_DATA_FLOW_EDGES = True
-ADD_MISSING_DATA_FLOW_EDGES = True
-BUILD_AST_ONLY = False
+# ToDo: allow user to change the following using CheckBoxes:
+ADD_DOUBLEX_CONTROL_FLOWS = False
+ADD_DOUBLEX_DATA_FLOWS = False
+REMOVE_INCORRECT_DOUBLEX_DATA_FLOWS = False
+ADD_MY_DATA_FLOWS = True
 
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
@@ -48,41 +44,22 @@ def main():
         try:
             js_code = text_left.get("1.0", tk.END)
 
-            tmp_file = tempfile.NamedTemporaryFile()
-            with open(tmp_file.name, 'w') as f:
-                f.write(js_code)
-
             res_dict = dict()
             benchmarks = res_dict['benchmarks'] = dict()
-            if BUILD_AST_ONLY:
-                # cf. get_data_flow() in build_pdg.py:
-                if tmp_file.name.endswith('.js'):
-                    esprima_json = tmp_file.name.replace('.js', '.json')
-                else:
-                    esprima_json = tmp_file.name + '.json'
-                extended_ast = build_ast.get_extended_ast(tmp_file.name, esprima_json)
-                ast = extended_ast.get_ast()
-                ast = build_ast.ast_to_ast_nodes(ast, ast_nodes=Node('Program'))
-                function_hoisting(ast, ast)  # Hoists FunDecl at a basic block's beginning
-                pdg = ast
-            else:
-                pdg = get_pdg.get_pdg(file_path=tmp_file.name, res_dict=benchmarks)
-            print(f"Generated AST/PDG with {len(pdg.get_all('Identifier'))} Identifier Nodes.")
-            if REMOVE_INCORRECT_DATA_FLOW_EDGES:
-                print("Removing incorrect data flow edges...")
-                no_removed_df_edges: int = remove_incorrect_data_flow_edges(pdg)
-                print(f"{no_removed_df_edges} incorrect data flows edges removed from DoubleX-generated PDG")
-            if ADD_MISSING_DATA_FLOW_EDGES:
-                print("Adding missing data flow edges...")
-                no_added_df_edges: int = add_missing_data_flow_edges(pdg)
-                print(f"{no_added_df_edges} missing data flows edges added to PDG")
 
-            generated_pdg = pdg
+            generated_pdg = Node.pdg_from_string(
+                js_code=js_code,
+                benchmarks=benchmarks,
+                add_doublex_control_flows=ADD_DOUBLEX_CONTROL_FLOWS,
+                add_doublex_data_flows=ADD_DOUBLEX_DATA_FLOWS,
+                remove_incorrect_doublex_data_flows=REMOVE_INCORRECT_DOUBLEX_DATA_FLOWS,
+                add_my_data_flows=ADD_MY_DATA_FLOWS,
+            )
 
             # Set content of the right text area:
             text_right.config(state=tk.NORMAL)
             text_right.delete("1.0", tk.END)
-            text_right.insert(tk.END, str(pdg))
+            text_right.insert(tk.END, str(generated_pdg))
             text_right.config(state=tk.DISABLED)
         except Exception as e:
             traceback.print_exc()

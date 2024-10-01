@@ -1,15 +1,11 @@
 # Some unit tests of the "Node" class can't be done inside "node_unittest.py" because of import difficulties.
 import os
-import tempfile
 import unittest
 import math
 from typing import List
 
-from get_pdg import get_pdg
-from pdg_js.build_pdg import get_data_flow
-from add_missing_data_flow_edges import add_missing_data_flow_edges
-from remove_incorrect_data_flow_edges import remove_incorrect_data_flow_edges
-from pdg_js.StaticEvalException import StaticEvalException
+from src.pdg_js.node import Node
+from src.pdg_js.StaticEvalException import StaticEvalException
 
 # from add_missing_data_flow_edges_unittest import generate_ast
 
@@ -19,32 +15,19 @@ os.environ['DEBUG'] = "yes"
 os.environ['TIMEOUT'] = "600"
 
 
-def generate_pdg(code,
-                 do_remove_incorrect_data_flow_edges=True,
-                 do_add_missing_data_flow_edges=True):
-    tmp_file = tempfile.NamedTemporaryFile()
-    with open(tmp_file.name, 'w') as f:
-        f.write(code)
-
-    # WARNING: Do NOT put the below code into the "with" block, it won't work!!!
+def generate_pdg(code: str, ast_only=False) -> Node:
     res_dict = dict()
     benchmarks = res_dict['benchmarks'] = dict()
-    pdg = get_pdg(file_path=tmp_file.name, res_dict=benchmarks)
-    # Note that for a very obscure reason
-    #     src.get_pdg.get_pdg(file_path=tmp_file.name, res_dict=benchmarks)
-    # is *NOT* equivalent to
-    #     src.pdg_js.build_pdg.get_data_flow(tmp_file.name, benchmarks=benchmarks, store_pdgs=None, save_path_pdg=False,
-    #                                        beautiful_print=False, check_json=False)
-    # ...even though get_pdg() does nothing more than to call get_data_flow().
-    # The reason for that is the isinstance(lhs, Identifier) check in add_missing_data_flow_edges(); isinstance()
-    #     apparently somehow depends on how modules are imported, cf. https://bugs.python.org/issue1249615
-    if do_remove_incorrect_data_flow_edges:
-        no_removed_df_edges = remove_incorrect_data_flow_edges(pdg)
-        print(f"{no_removed_df_edges} incorrect data flows edges removed from PDG")
-    if do_add_missing_data_flow_edges:
-        no_added_df_edges = add_missing_data_flow_edges(pdg)
-        print(f"{no_added_df_edges} missing data flows edges added to PDG")
-    return pdg
+
+    return Node.pdg_from_string(
+        js_code=code,
+        benchmarks=benchmarks,
+        add_my_data_flows=not ast_only,
+    )
+
+
+def expr(expr_code: str) -> Node:
+    return generate_pdg(expr_code).get_child("ExpressionStatement").get("expression")[0]
 
 
 class TestNodeClass2(unittest.TestCase):
@@ -1297,7 +1280,7 @@ class TestNodeClass2(unittest.TestCase):
         class f {}
         here;
         """
-        pdg = generate_pdg(code, do_remove_incorrect_data_flow_edges=False, do_add_missing_data_flow_edges=False)
+        pdg = generate_pdg(code, ast_only=True)
         print(pdg)
         here = pdg.get_identifier_by_name("here")
         for return_overshadowed_identifiers, return_reassigned_identifiers\
@@ -1338,7 +1321,7 @@ class TestNodeClass2(unittest.TestCase):
             return x + y;  // returns 33 (not 44)
         }
         """
-        pdg = generate_pdg(code, do_remove_incorrect_data_flow_edges=False, do_add_missing_data_flow_edges=False)
+        pdg = generate_pdg(code, ast_only=True)
         print(pdg)
         # [78] [Program] (1 child)
         # 	[79] [FunctionDeclaration] (2 children) --e--> [81]
@@ -1418,7 +1401,7 @@ class TestNodeClass2(unittest.TestCase):
         }
         bar();
         """
-        pdg = generate_pdg(code, do_remove_incorrect_data_flow_edges=False, do_add_missing_data_flow_edges=False)
+        pdg = generate_pdg(code, ast_only=True)
         print(pdg)
         foo = pdg.get_identifier_by_name("foo")
         bar = pdg.get_identifier_by_name("bar")
@@ -1455,7 +1438,7 @@ class TestNodeClass2(unittest.TestCase):
         """
         # => this example is inspired by real-world code from the "ClassLink OneClick Extension", version 10.6,
         #    extension ID jgfbgkjjlonelmpenhpfeeljjlcgnkpe
-        pdg = generate_pdg(code, do_remove_incorrect_data_flow_edges=False, do_add_missing_data_flow_edges=False)
+        pdg = generate_pdg(code, ast_only=True)
         print(pdg)
         # [142] [Program] (1 child)
         # 	[143] [ExpressionStatement] (1 child)
@@ -1504,10 +1487,44 @@ class TestNodeClass2(unittest.TestCase):
         member_expressions2 = pdg.find_member_expressions_ending_in(".bar.baz")
         self.assertEqual(3, len(member_expressions2))
 
+    def test_member_expression_get_leftmost_identifier(self):
+        self.assertEqual(
+            "foo",
+            expr("foo.bar")
+                .member_expression_get_leftmost_identifier().attributes['name']
+        )
+        self.assertEqual(
+            "foo",
+            expr("foo.bar.baz")
+                .member_expression_get_leftmost_identifier().attributes['name']
+        )
+        self.assertEqual(
+            "foo",
+            expr("foo.bar(42).baz")
+            .member_expression_get_leftmost_identifier().attributes['name']
+        )
+        self.assertEqual(
+            "foo",
+            expr("foo.bar(42).baz(43).boo")
+            .member_expression_get_leftmost_identifier().attributes['name']
+        )
+        self.assertEqual(
+            "foo",
+            expr("foo.bar(1,2,3).baz(4,5).boo")
+            .member_expression_get_leftmost_identifier().attributes['name']
+        )
+        self.assertEqual(
+            "foo",
+            expr("foo.bar(1,2).baz(3,4,5).boo")
+            .member_expression_get_leftmost_identifier().attributes['name']
+        )
+        self.assertEqual(
+            "db",
+            expr('db.transaction("accounts").objectStore("accounts").get("Alice").addEventListener')
+            .member_expression_get_leftmost_identifier().attributes['name']
+        )
+
     def test_static_eval(self):
-        def expr(expr_code):
-            return generate_pdg(expr_code).get_child("ExpressionStatement").get("expression")[0]
-        
         for allow_partial_eval in [True, False]:
             self.assertEqual(42, expr("42").static_eval(allow_partial_eval))
             self.assertEqual(42, expr("+42").static_eval(allow_partial_eval))
@@ -1970,6 +1987,117 @@ class TestNodeClass2(unittest.TestCase):
             .children[1]
             .static_eval(allow_partial_eval=True)
         )
+
+    def test_is_unreachable(self):
+        # Basic example:
+        code = """
+        foo();
+        if (1==1) {
+            bar();
+        } else {
+            baz();
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        bar = pdg.get_identifier_by_name("bar")
+        self.assertFalse(bar.is_unreachable())
+        baz = pdg.get_identifier_by_name("baz")
+        self.assertTrue(baz.is_unreachable())
+
+        # The same basic example but with the test expression evaluating to False instead of True now:
+        code = """
+        foo();
+        if (1!=1) {
+            bar();
+        } else {
+            baz();
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        bar = pdg.get_identifier_by_name("bar")
+        self.assertTrue(bar.is_unreachable())
+        baz = pdg.get_identifier_by_name("baz")
+        self.assertFalse(baz.is_unreachable())
+
+        # The same basic example but w/o the else branch:
+        code = """
+        foo();
+        if (1!=1) {
+            bar();
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        bar = pdg.get_identifier_by_name("bar")
+        self.assertTrue(bar.is_unreachable())
+
+        # Test more complex static evaluation of the test expression:
+        code = """
+        const x = false || (10 < 5); // evaluates to false
+        if (x) {
+            bar();
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        bar = pdg.get_identifier_by_name("bar")
+        self.assertTrue(bar.is_unreachable())
+
+        # Nested if statements #1:
+        code = """
+        if (1==1) {
+            if (2==2) {
+                a();
+            } else {
+                b();
+            }
+        } else {
+            if (3==3) {
+                c();
+            } else {
+                d();
+            }
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        a = pdg.get_identifier_by_name("a")
+        b = pdg.get_identifier_by_name("b")
+        c = pdg.get_identifier_by_name("c")
+        d = pdg.get_identifier_by_name("d")
+        self.assertFalse(a.is_unreachable())
+        self.assertTrue(b.is_unreachable())
+        self.assertTrue(c.is_unreachable())
+        self.assertTrue(d.is_unreachable())
+
+        # Nested if statements #2:
+        code = """
+        if (1!=1) {
+            if (2!=2) {
+                a();
+            } else {
+                b();
+            }
+        } else {
+            if (3!=3) {
+                c();
+            } else {
+                d();
+            }
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        a = pdg.get_identifier_by_name("a")
+        b = pdg.get_identifier_by_name("b")
+        c = pdg.get_identifier_by_name("c")
+        d = pdg.get_identifier_by_name("d")
+        self.assertTrue(a.is_unreachable())
+        self.assertTrue(b.is_unreachable())
+        self.assertTrue(c.is_unreachable())
+        self.assertFalse(d.is_unreachable())
 
 
 if __name__ == '__main__':

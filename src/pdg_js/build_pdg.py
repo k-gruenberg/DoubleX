@@ -79,7 +79,11 @@ def get_data_flow_process(js_path, benchmarks, store_pdgs):
 
 def get_data_flow(input_file, benchmarks, store_pdgs=None, check_var=False, beautiful_print=False,
                   save_path_ast=False, save_path_cfg=False, save_path_pdg=False,
-                  check_json=CHECK_JSON):
+                  check_json=CHECK_JSON,
+                  do_doublex_function_hoisting: bool = True,  # <== ADDED BY ME
+                  add_doublex_control_flows: bool = True,  # <== ADDED BY ME
+                  add_doublex_data_flows: bool = True,  # <== ADDED BY ME
+                  ):
     """
         Builds the PDG: enhances the AST with CF, DF, and pointer analysis for a given file.
 
@@ -124,74 +128,79 @@ def get_data_flow(input_file, benchmarks, store_pdgs=None, check_var=False, beau
 
     benchmarks['errors'] = []
 
-    if extended_ast is not None:
+    if extended_ast is None:
+        benchmarks['errors'].append('parsing-error')
+        return _node.Node('ParsingError')  # Empty PDG to avoid trying to get the children of None
+    else:
         benchmarks['got AST'] = timeit.default_timer() - start
         start = utility_df.micro_benchmark(f"Successfully got {os.environ['PARSER']} AST in",
                                            timeit.default_timer() - start)
         ast = extended_ast.get_ast()
         if beautiful_print:
             build_ast.beautiful_print_ast(ast, delete_leaf=[])
-        ast_nodes = build_ast.ast_to_ast_nodes(ast, ast_nodes=_node.Node('Program'))
-        function_hoisting(ast_nodes, ast_nodes)  # Hoists FunDecl at a basic block's beginning
+        nodes = build_ast.ast_to_ast_nodes(ast, ast_nodes=_node.Node('Program'))
+        if do_doublex_function_hoisting:
+            function_hoisting(nodes, nodes)  # Hoists FunDecl at a basic block's beginning
 
         benchmarks['AST'] = timeit.default_timer() - start
         start = utility_df.micro_benchmark('Successfully produced the AST in',
                                            timeit.default_timer() - start)
         if save_path_ast is not False:
-            display_graph.draw_ast(ast_nodes, attributes=True, save_path=save_path_ast)
+            display_graph.draw_ast(nodes, attributes=True, save_path=save_path_ast)
 
-        cfg_nodes = control_flow.control_flow(ast_nodes)
-        benchmarks['CFG'] = timeit.default_timer() - start
-        start = utility_df.micro_benchmark('Successfully produced the CFG in',
-                                           timeit.default_timer() - start)
-        if save_path_cfg is not False:
-            display_graph.draw_cfg(cfg_nodes, attributes=True, save_path=save_path_cfg)
+        if add_doublex_control_flows:
+            nodes = control_flow.control_flow(nodes)
+            benchmarks['CFG'] = timeit.default_timer() - start
+            start = utility_df.micro_benchmark('Successfully produced the CFG in',
+                                               timeit.default_timer() - start)
+            if save_path_cfg is not False:
+                display_graph.draw_cfg(nodes, attributes=True, save_path=save_path_cfg)
 
-        unknown_var = []
+        if add_doublex_data_flows:
+            unknown_var = []
 
-        scopes = [_scope.Scope('Global')]
-        dfg_nodes, scopes = data_flow.df_scoping(cfg_nodes, scopes=scopes,
-                                                 id_list=[], entry=1)
-        # This may have to be added if we want to make the fake hoisting work
-        # dfg_nodes = data_flow.df_scoping(dfg_nodes, scopes=scopes, id_list=[], entry=1)[0]
+            scopes = [_scope.Scope('Global')]
+            nodes, scopes = data_flow.df_scoping(nodes, scopes=scopes,
+                                                     id_list=[], entry=1)
+            # This may have to be added if we want to make the fake hoisting work
+            # dfg_nodes = data_flow.df_scoping(dfg_nodes, scopes=scopes, id_list=[], entry=1)[0]
 
-        # except MemoryError:  # Catching it will catch ALL memory errors,
-            # while we just want to avoid getting over our 20GB limit
-            # logging.critical('Too much memory used for %s', input_file)
-            # return _node.Node('Program')  # Empty PDG to avoid trying to get the children of None
+            # except MemoryError:  # Catching it will catch ALL memory errors,
+                # while we just want to avoid getting over our 20GB limit
+                # logging.critical('Too much memory used for %s', input_file)
+                # return _node.Node('Program')  # Empty PDG to avoid trying to get the children of None
 
-        benchmarks['PDG'] = timeit.default_timer() - start
-        utility_df.micro_benchmark('Successfully produced the PDG in',
-                                   timeit.default_timer() - start)
-        if save_path_pdg is not False:
-            display_graph.draw_pdg(dfg_nodes, attributes=True, save_path=save_path_pdg)
+            benchmarks['PDG'] = timeit.default_timer() - start
+            utility_df.micro_benchmark('Successfully produced the PDG in',
+                                       timeit.default_timer() - start)
+            if save_path_pdg is not False:
+                display_graph.draw_pdg(nodes, attributes=True, save_path=save_path_pdg)
 
-        if check_json:  # Looking for possible bugs when building the AST / json doc in build_ast
-            my_json = esprima_json.replace('.json', '-back.json')
-            build_ast.save_json(dfg_nodes, my_json)
-            print(build_ast.get_code(my_json))
+            if check_json:  # Looking for possible bugs when building the AST / json doc in build_ast
+                my_json = esprima_json.replace('.json', '-back.json')
+                build_ast.save_json(nodes, my_json)
+                print(build_ast.get_code(my_json))
 
-        if check_var:
-            for scope in scopes:
-                for unknown in scope.unknown_var:
-                    if not unknown.data_dep_parents:
-                        # If DD: not unknown, can happen because of hoisting FunctionDeclaration
-                        # After second function run, not unknown anymore
-                        logging.warning('The variable %s is not declared in the scope %s',
-                                        unknown.attributes['name'], scope.name)
-                        unknown_var.append(unknown)
-            return unknown_var
+            if check_var:
+                for scope in scopes:
+                    for unknown in scope.unknown_var:
+                        if not unknown.data_dep_parents:
+                            # If DD: not unknown, can happen because of hoisting FunctionDeclaration
+                            # After second function run, not unknown anymore
+                            logging.warning('The variable %s is not declared in the scope %s',
+                                            unknown.attributes['name'], scope.name)
+                            unknown_var.append(unknown)
+                return unknown_var
 
-        if store_pdgs is not None:
-            store_pdg = os.path.join(store_pdgs, os.path.basename(input_file.replace('.js', '')))
-            pickle_dump_process(dfg_nodes, store_pdg)
-            json_analysis = os.path.join(store_pdgs, os.path.basename(esprima_json))
-            with open(json_analysis, 'w') as json_data:
-                json.dump(benchmarks, json_data, indent=4, sort_keys=False, default=default,
-                          skipkeys=True)
-        return dfg_nodes
-    benchmarks['errors'].append('parsing-error')
-    return _node.Node('ParsingError')  # Empty PDG to avoid trying to get the children of None
+            if store_pdgs is not None:
+                store_pdg = os.path.join(store_pdgs, os.path.basename(input_file.replace('.js', '')))
+                pickle_dump_process(nodes, store_pdg)
+                json_analysis = os.path.join(store_pdgs, os.path.basename(esprima_json))
+                with open(json_analysis, 'w') as json_data:
+                    json.dump(benchmarks, json_data, indent=4, sort_keys=False, default=default,
+                              skipkeys=True)
+
+        return nodes
 
 
 def default(o):

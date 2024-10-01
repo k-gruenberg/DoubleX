@@ -1,11 +1,11 @@
 import tempfile
 import unittest
 
-import pdg_js.build_ast as build_ast
-from pdg_js.build_pdg import function_hoisting
-from pdg_js.node import Node
+import build_ast
+from build_pdg import function_hoisting
+from node import Node
 
-from add_missing_data_flow_edges import *
+from src.pdg_js.add_missing_data_flow_edges import *
 # from node_unittest2 import generate_pdg
 
 

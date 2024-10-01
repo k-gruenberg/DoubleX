@@ -72,7 +72,8 @@ class DoubleDataFlow:
                                  from_node: Node,
                                  to_node: Node,
                                  rendezvous_nodes: List[str],
-                                 return_multiple=True) -> List[Self]:
+                                 return_multiple=True,
+                                 allow_unreachable_rendezvous=False) -> List[Self]:
         """
         Returns the empty list `[]` if no data flow exists from `from_node` to `to_node`.
         Otherwise, returns the data flow(s) from `from_node` to `to_node` as DoubleDataFlow objects.
@@ -96,6 +97,7 @@ class DoubleDataFlow:
                              can have arbitrary length;
                              set to True when you later want to filter the returned data flows, e.g., only for the
                              unprotected/un-checked/un-sanitized ones (!!!)
+            allow_unreachable_rendezvous: whether to allow the rendezvous to be unreachable (default: False)
 
         Returns:
             Returns the empty list `[]` if no data flow exists from `from_node` to `to_node`.
@@ -127,12 +129,13 @@ class DoubleDataFlow:
                 #       => it's not enough to just check each last_node() then!!!
                 #       => problem however: might *further* increase the FPR!!!
                 if from_flow_final_expr == to_flow_final_expr and from_flow_final_expr is not None:
-                    result = DoubleDataFlow(from_flow=from_flow, to_flow=to_flow, rendezvous_nodes=rendezvous_nodes)
-                    if return_multiple:
-                        results.append(result)
-                    else:
-                        result.data_flow_number = f"1/1+"  # meaning: 1st data flow of 1 (or more) total data flows
-                        return [result]
+                    if allow_unreachable_rendezvous or (not from_flow_final_expr.is_unreachable()):
+                        result = DoubleDataFlow(from_flow=from_flow, to_flow=to_flow, rendezvous_nodes=rendezvous_nodes)
+                        if return_multiple:
+                            results.append(result)
+                        else:
+                            result.data_flow_number = f"1/1+"  # meaning: 1st data flow of 1 (or more) total data flows
+                            return [result]
 
         for i in range(len(results)):
             results[i].data_flow_number = f"{i+1}/{len(results)}"

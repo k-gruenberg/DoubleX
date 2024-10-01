@@ -40,6 +40,8 @@ import itertools
 import os
 import re
 import statistics
+import tempfile
+import timeit
 from collections import defaultdict
 from functools import total_ordering
 from typing import Set, Tuple, Optional, Self, List, Any, Dict, DefaultDict
@@ -106,6 +108,133 @@ class Node:
         self.statement_dep_children = []  # Between Statement and their non-Statement descendants
         self.is_wildcard = False  # <== ADDED BY ME
         self.is_identifier_regex = False  # <== ADDED BY ME
+
+    # ADDED BY ME:
+    @classmethod
+    def ast_from_string(cls,
+                        js_code: str,
+                        benchmarks: Optional[dict] = None) -> Self:
+        """
+        Returns the parsed AST from the given `js_code`.
+        The AST will contain no control and no data flow edges.
+        """
+        return Node.pdg_from_string(
+            js_code=js_code,
+            benchmarks=benchmarks,
+            do_doublex_function_hoisting=False,
+            add_doublex_control_flows=False,
+            add_doublex_data_flows=False,
+            remove_incorrect_doublex_data_flows=False,
+            add_my_data_flows=False,
+        )
+
+    # ADDED BY ME:
+    @classmethod
+    def ast_from_file(cls,
+                      file: str,
+                      benchmarks: Optional[dict] = None) -> Self:
+        """
+        Returns the parsed AST from the given JavaScript `file`.
+        The AST will contain no control and no data flow edges.
+        """
+        return Node.pdg_from_file(
+            file=file,
+            benchmarks=benchmarks,
+            do_doublex_function_hoisting=False,
+            add_doublex_control_flows=False,
+            add_doublex_data_flows=False,
+            remove_incorrect_doublex_data_flows=False,
+            add_my_data_flows=False,
+        )
+
+    # ADDED BY ME:
+    @classmethod
+    def pdg_from_string(cls,
+                        js_code: str,
+                        benchmarks: Optional[dict] = None,
+                        do_doublex_function_hoisting: bool = False,
+                        add_doublex_control_flows: bool = False,
+                        add_doublex_data_flows: bool = False,
+                        remove_incorrect_doublex_data_flows: bool = False,
+                        add_my_data_flows: bool = True) -> Self:
+        """
+        Returns the parsed AST from the given `js_code`; annotated with data flow edges.
+        By default, no control flow edges will be added and data flow edge generation will use my own code instead
+        of DoubleX's original code, which contains numerous bugs.
+
+        Used by the GUI, as well as the test suites.
+        """
+        tmp_file = tempfile.NamedTemporaryFile()
+        with open(tmp_file.name, 'w') as f:
+            f.write(js_code)
+
+        # WARNING: Do NOT put the below code into the "with" block, it won't work!!!
+        return Node.pdg_from_file(
+            file=tmp_file.name,
+            benchmarks=benchmarks,
+            do_doublex_function_hoisting=do_doublex_function_hoisting,
+            add_doublex_control_flows=add_doublex_control_flows,
+            add_doublex_data_flows=add_doublex_data_flows,
+            remove_incorrect_doublex_data_flows=remove_incorrect_doublex_data_flows,
+            add_my_data_flows=add_my_data_flows,
+        )
+
+    # ADDED BY ME:
+    @classmethod
+    def pdg_from_file(cls,
+                      file: str,
+                      benchmarks: Optional[dict] = None,
+                      do_doublex_function_hoisting: bool = False,
+                      add_doublex_control_flows: bool = False,
+                      add_doublex_data_flows: bool = False,
+                      remove_incorrect_doublex_data_flows: bool = False,
+                      add_my_data_flows: bool = True) -> Self:
+        """
+        Returns the parsed AST from the given JavaScript `file`; annotated with data flow edges.
+        By default, no control flow edges will be added and data flow edge generation will use my own code instead
+        of DoubleX's original code, which contains numerous bugs.
+
+        Used for the main program/vulnerability detection.
+        """
+        # Imports have to happen here to avoid circular imports:
+        from .build_pdg import get_data_flow
+        from .remove_incorrect_data_flow_edges import remove_incorrect_data_flow_edges
+        from .add_missing_data_flow_edges import add_missing_data_flow_edges
+
+        if benchmarks is None:
+            res_dict = dict()
+            benchmarks = res_dict['benchmarks'] = dict()
+
+        start = timeit.default_timer()  # preferred over time.time() for timing code execution
+        pdg = get_data_flow(
+            input_file=file,
+            benchmarks=benchmarks,
+            do_doublex_function_hoisting=do_doublex_function_hoisting,
+            add_doublex_control_flows=add_doublex_control_flows,
+            add_doublex_data_flows=add_doublex_data_flows,
+        )
+        generated_what: str = "AST"
+        if add_doublex_control_flows:
+            generated_what = "CFG"
+        if add_doublex_data_flows:
+            generated_what = "PDG"
+        print(f"DoubleX generated {generated_what} within {timeit.default_timer() - start}s")
+
+        start = timeit.default_timer()
+        if remove_incorrect_doublex_data_flows:
+            print("Removing incorrect data flow edges...")
+            no_removed_df_edges: int = remove_incorrect_data_flow_edges(pdg)
+            print(f"{no_removed_df_edges} incorrect data flows edges removed from DoubleX-generated PDG within "
+                  f"{timeit.default_timer() - start}s")
+
+        start = timeit.default_timer()
+        if add_my_data_flows:
+            print("Adding missing data flow edges...")
+            no_added_df_edges: int = add_missing_data_flow_edges(pdg)
+            print(f"{no_added_df_edges} missing data flows edges added to PDG within "
+                  f"{timeit.default_timer() - start}s")
+
+        return pdg
 
     # ADDED BY ME:
     def __eq__(self, other):
@@ -486,6 +615,25 @@ class Node:
         return self == other or self.is_inside(other)
 
     # ADDED BY ME:
+    def is_inside_a(self, names: List[str], stop_at_parent: Optional[Self] = None) -> bool:
+        """
+        Whether `self` is inside a Node with name `name`, i.e., whether any of `self.get_parents()` has name `name`
+        (for any `name` in `names`).
+
+        The optional `stop_at_parent` is None by default but may be set to one of the parents of `self`.
+        In that case, only the parents of `self` below `stop_at_parent` (exclusive!) will be checked.
+
+        Raises an AssertionError when `stop_at_parent not in parents` !!!
+        """
+        if stop_at_parent is None:
+            return any(name in [parent.name for parent in self.get_parents()] for name in names)
+        else:
+            parents: List[Node] = self.get_parents()
+            assert stop_at_parent in parents
+            parents = parents[:parents.index(stop_at_parent)]
+            return any(name in [parent.name for parent in parents] for name in names)
+
+    # ADDED BY ME:
     def get_parent(self, allowed_parent_names) -> Self:
         """
         Returns `self.parent` but only if `self.parent.name in allowed_parent_names`, otherwise this function raises
@@ -545,7 +693,7 @@ class Node:
         return None
 
     # ADDED BY ME:
-    def get_ancestor_or_self(self, allowed_ancestor_names) -> Self: # todo
+    def get_ancestor_or_self(self, allowed_ancestor_names) -> Self:
         """
         WARNING: This method raises a LookupError if neither self nor any ancestor has one of the given names!
         Use get_ancestor_or_self_or_none() instead if you need a non-throwing variant of this method!!!
@@ -558,7 +706,7 @@ class Node:
         raise LookupError(f"no ancestor (or self) named '{allowed_ancestor_names}' found for node [{self.id}]")
 
     # ADDED BY ME:
-    def get_ancestor_or_self_or_none(self, allowed_ancestor_names) -> Optional[Self]: # todo
+    def get_ancestor_or_self_or_none(self, allowed_ancestor_names) -> Optional[Self]:
         node = self
         while node is not None:
             if node.name in allowed_ancestor_names:
@@ -574,6 +722,18 @@ class Node:
                 return True
             parent = parent.parent
         return False
+
+    # ADDED BY ME:
+    def get_all_ancestors(self, allowed_ancestor_names) -> List[Self]:
+        result = []
+
+        parent = self.parent
+        while parent is not None:
+            if parent.name in allowed_ancestor_names:
+                result.append(parent)
+            parent = parent.parent
+
+        return result
 
     # ADDED BY ME:
     def __str__(self) -> str:
@@ -723,6 +883,20 @@ class Node:
     # ADDED BY ME:
     def get_all_identifiers(self) -> List[Self]:
         return self.get_all("Identifier")
+
+    # ADDED BY ME:
+    def get_all_identifiers_not_inside_a_as_iter(self, forbidden_parent_names: List[str]):
+        """
+        Returns an iterator over all the Identifier Nodes inside `self` that do *not* have a parent, which is (a) a
+        descendant of `self` and (b) whose name is in `forbidden_parent_names`.
+        """
+        if self.name == "Identifier":
+            # This special case is necessary as otherwise the code below will raise an AssertionError!
+            yield self
+        else:
+            for identifier in self.get_all_as_iter("Identifier"):
+                if not identifier.is_inside_a(forbidden_parent_names, stop_at_parent=self):
+                    yield identifier
 
     # ADDED BY ME:
     def get_identifier_by_name(self, name: str) -> Self:
@@ -907,7 +1081,8 @@ class Node:
                      match_literals: bool,
                      match_operators: bool,
                      allow_additional_children: bool,
-                     allow_different_child_order: bool) -> List[Self]:
+                     allow_different_child_order: bool,
+                     allow_unreachable: bool = False) -> List[Self]:
         """
         Returns all subtrees of this PDG matching the given pattern `pattern`.
         Cf. `Node.matches()` function.
@@ -921,9 +1096,10 @@ class Node:
                                        match_operators=match_operators,
                                        allow_additional_children=allow_additional_children,
                                        allow_different_child_order=allow_different_child_order):
-                if os.environ.get('PRINT_PDGS') == "yes":
-                    print(f"Pattern Match:\n{match_candidate}")
-                result.append(match_candidate)
+                if allow_unreachable or (not match_candidate.is_unreachable()):
+                    if os.environ.get('PRINT_PDGS') == "yes":
+                        print(f"Pattern Match:\n{match_candidate}")
+                    result.append(match_candidate)
         return result
 
     # ADDED BY ME:
@@ -990,7 +1166,16 @@ class Node:
 
         leftmost_identifier = self.children[0]
 
-        while leftmost_identifier.name == "MemberExpression":
+        while leftmost_identifier.name in ["MemberExpression", "CallExpression"]:
+            # interface MemberExpression {
+            #     computed: boolean;
+            #     object: Expression;
+            #     property: Expression;
+            # }
+            # interface CallExpression {
+            #     callee: Expression | Import;
+            #     arguments: ArgumentListElement[];
+            # }
             leftmost_identifier = leftmost_identifier.children[0]
 
         return leftmost_identifier
@@ -1902,10 +2087,71 @@ class Node:
         return p
 
     # ADDED BY ME:
+    def assignment_expression_is_destructuring(self) -> bool:
+        """
+        Whether this AssignmentExpression is destructuring; examples:
+          - [x, y] = [1, 2];
+          - [x=1, y=2] = [3, 4];
+          - ({a:x} = {a:3});
+          - ({a:x=0} = {a:3});
+          - ({x} = {x:4});
+          - ({x=5} = {x:6});
+          => cf. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment
+
+        Cf. Node.assignment_expression_accesses_property().
+        """
+        assert self.name == "AssignmentExpression"
+        # interface AssignmentExpression {
+        #     operator: '=' | '*=' | '**=' | '/=' | '%=' | '+=' | '-=' |
+        #               '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|=';
+        #     left: Expression;
+        #     right: Expression;
+        # }
+        return self.lhs().name in ["ArrayPattern", "ObjectPattern"]
+
+    # ADDED BY ME:
+    def assignment_expression_accesses_property(self) -> bool:
+        """
+        Whether this AssignmentExpression accesses a property; examples:
+          - object.propertyName = 42;
+          - object[expression] = 42;
+          - object.#privateProperty = 42;
+          => cf. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Property_accessors
+
+        Cf. Node.assignment_expression_is_destructuring().
+        """
+        assert self.name == "AssignmentExpression"
+        return self.lhs().name == "MemberExpression"
+
+    # ADDED BY ME:
     def identifier_is_assigned_to_before(self, other: Self, scope: Self) -> bool:
         """
-        Whether the Identifier represented by `self` is assigned to (i.e., is within the LHS of an AssignmentExpression)
+        Whether the Identifier represented by `self` is assigned to (i.e., is the LHS of an AssignmentExpression)
         between `self` and `other`.
+
+        The following will be viewed as assignments to `x`:
+        * identifier:
+          - x = 42
+        * destructuring assignment pattern:
+          - [x, y] = [1, 2];
+          - [x=1, y=2] = [3, 4];
+          - ({a:x} = {a:3});
+          - ({a:x=0} = {a:3});
+          - ({x} = {x:4});
+          - ({x=5} = {x:6});
+          => cf. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment
+
+        The following, however, will **NOT** be viewed as assignments to `x`:
+        * property accessor:
+          - x.y = 42
+          - x[y] = 42
+          - x.#y = 42
+
+        Note: Only "=" assignments are considered. "+=", "-=", "*=", "/=", "%=", "&=", "|=", etc. will *not* be treated
+              as assignments as they are rather to be seen as an *update* to the LHS, they do not *override* the LHS
+              value; data flows may continue even through such update assignments, *especially* "+=" ones for strings!
+              Besides, we would expect "x=1; x+=2; foo(x)" to create a DF from the 1st to the 3rd "x", just like the
+              completely equivalent "x=1; x=x+2; foo(x)" does, too!
 
         *** IMPLEMENTATION DETAILS: ***
         Note that this function will also return True if `other` *itself* is part of such an AssignmentExpression
@@ -1955,7 +2201,8 @@ class Node:
                 # This check has to occur before the next check, otherwise the loop would continue if
                 #     other.name == "AssignmentExpression"!
                 return False
-            elif node.name == "AssignmentExpression":
+            elif (node.name == "AssignmentExpression" and node.attributes['operator'] == "="
+                  and not node.assignment_expression_accesses_property()):
                 # interface AssignmentExpression {
                 #     operator: '=' | '*=' | '**=' | '/=' | '%=' | '+=' | '-=' |
                 #               '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|=';
@@ -2301,7 +2548,7 @@ class Node:
         return declaration_identifier in other_node_identifiers_declared_in_scope
 
     # ADDED BY ME:
-    def static_eval(self, allow_partial_eval: bool) -> str | int | float | bool | list | dict | None:  # todo: can I find other use cases for this function?!
+    def static_eval(self, allow_partial_eval: bool) -> str | int | float | bool | list | dict | None:
         """
         Attempts to statically evaluate the value of this JavaScript expression.
         Returns the Python equivalent of the JavaScript value, which may be a string, an integer, a float, a boolean,
@@ -2312,6 +2559,12 @@ class Node:
         This method also raises a StaticEvalException when...
         (a) ...trying to statically evaluate a JavaScript regex literal!
         (b) ...trying to evaluate a "void ..." expression (which evaluates to undefined)!
+
+        *** Current use cases of this function are: ***
+        1. within get_extension_storage_accesses() to evaluate function params statically,
+           in order to find candidates for extension-storage-based 4.3-type vulnerabilities
+        2. within Node.is_unreachable() to statically evaluate the `test` Expression of an IfStatement,
+           in order to detect unreachable code
 
         Parameters:
             allow_partial_eval: when this parameter is set to True, the returned Python object may be the result of an
@@ -3273,6 +3526,53 @@ class Node:
 
         else:
             raise StaticEvalException(f"static eval failed: unsupported type of Expression: {self.name}")
+
+    # ADDED BY ME:
+    def is_unreachable(self) -> bool:
+        """
+        Returns True when the piece of code represented by this Node is *definitely* unreachable.
+        Note that a return value of False does *not* mean that this code is reachable!
+        """
+        if_ancestors: List[Node] = self.get_all_ancestors(["IfStatement"])
+
+        # Check if this piece of code is inside any unreachable branch of any IfStatement:
+        for if_ancestor in if_ancestors:
+            # interface IfStatement {
+            #     test: Expression;
+            #     consequent: Statement;
+            #     alternate?: Statement;
+            # }
+            assert self.is_inside(if_ancestor)
+            test: Node = if_ancestor.get("test")[0]
+
+            if self.is_inside(test):
+                continue
+
+            try:
+                test_statically_evaluated = test.static_eval(allow_partial_eval=False)
+                consequent: Node = if_ancestor.get("consequent")[0]
+                alternate: Optional[Node] = None if len(if_ancestor.get("alternate")) == 0\
+                                                    else if_ancestor.get("alternate")[0]
+                if test_statically_evaluated and alternate is not None and self.is_inside(alternate):
+                    # `test` evaluated to True but `self` is inside `alternate` => `self` is unreachable:
+                    return True
+                elif (not test_statically_evaluated) and self.is_inside(consequent):
+                    # `test` evaluated to False but `self` is inside `consequent` => `self` is unreachable:
+                    return True
+                else:
+                    # `self` is guaranteed reachable in *this* if_ancestor, we still have to check other ancestors,
+                    #    however...:
+                    continue
+            except StaticEvalException:
+                # The `test` Expression of the IfStatement couldn't be evaluated statically,
+                #   we cannot say for either branch whether it is unreachable; continue with the next
+                #   surrounding IfStatement ancestor:
+                continue
+
+        # Check if this piece of code occurs after a ReturnStatement:
+        # ToDo...
+
+        return False  # We cannot say for certain that `self` is unreachable!
 
     # ADDED BY ME:
     def function_param_get_identifier(self) -> Optional[Self]:
