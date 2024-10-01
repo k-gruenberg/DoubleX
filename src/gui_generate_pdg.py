@@ -12,6 +12,7 @@ from pdg_js.node import Node
 from DataFlow import DataFlow
 
 # ToDo: allow user to change the following using CheckBoxes:
+DO_DOUBLEX_FUNCTION_HOISTING = False
 ADD_DOUBLEX_CONTROL_FLOWS = False
 ADD_DOUBLEX_DATA_FLOWS = False
 REMOVE_INCORRECT_DOUBLEX_DATA_FLOWS = False
@@ -50,6 +51,7 @@ def main():
             generated_pdg = Node.pdg_from_string(
                 js_code=js_code,
                 benchmarks=benchmarks,
+                do_doublex_function_hoisting=DO_DOUBLEX_FUNCTION_HOISTING,
                 add_doublex_control_flows=ADD_DOUBLEX_CONTROL_FLOWS,
                 add_doublex_data_flows=ADD_DOUBLEX_DATA_FLOWS,
                 remove_incorrect_doublex_data_flows=REMOVE_INCORRECT_DOUBLEX_DATA_FLOWS,
