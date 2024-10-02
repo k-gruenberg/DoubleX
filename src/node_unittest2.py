@@ -111,7 +111,75 @@ class TestNodeClass2(unittest.TestCase):
         member_expression = pdg.get_all("MemberExpression")[0]
         self.assertEqual(member_expression.member_expression_to_string(), "foo.bar")
 
+        pdg = generate_pdg("foo['bar']")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo.bar")
+
+        pdg = generate_pdg("const x='b'+'ar'; foo[x]")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo.bar")
+
+        pdg = generate_pdg("foo[42]")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo[42]")
+
+        pdg = generate_pdg("foo[42.0]")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo[42]")
+
+        pdg = generate_pdg("foo[false]")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo[False]")
+
+        pdg = generate_pdg("foo[true]")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo[True]")
+
+        pdg = generate_pdg("foo[null]")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo[None]")
+
+        pdg = generate_pdg("foo[[1,2]]")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo[[1, 2]]")
+
+        pdg = generate_pdg("foo[{'a':1}]")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo[{'a': 1}]")
+
+        pdg = generate_pdg("foo[3.14]")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo[3.14]")
+
+        pdg = generate_pdg("foo[function() {}]")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo[<FunctionExpression>]")
+
+        pdg = generate_pdg('foo["bar"]')
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo.bar")
+
         pdg = generate_pdg("foo.bar.baz")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo.bar.baz")
+
+        pdg = generate_pdg("foo['bar'].baz")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo.bar.baz")
+
+        pdg = generate_pdg("foo[42].baz")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo[42].baz")
+
+        pdg = generate_pdg("foo.bar['baz']")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo.bar.baz")
+
+        pdg = generate_pdg("foo[42]['baz']")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo[42].baz")
+
+        pdg = generate_pdg("foo['bar']['baz']")
         member_expression = pdg.get_all("MemberExpression")[0]
         self.assertEqual(member_expression.member_expression_to_string(), "foo.bar.baz")
 
@@ -122,6 +190,18 @@ class TestNodeClass2(unittest.TestCase):
         # More complex examples:
 
         pdg = generate_pdg("foo.bar().baz.boo")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo.bar().baz.boo")
+
+        pdg = generate_pdg("foo['bar']().baz.boo")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo.bar().baz.boo")
+
+        pdg = generate_pdg("foo.bar()['baz'].boo")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "foo.bar().baz.boo")
+
+        pdg = generate_pdg("foo.bar().baz['boo']")
         member_expression = pdg.get_all("MemberExpression")[0]
         self.assertEqual(member_expression.member_expression_to_string(), "foo.bar().baz.boo")
 
@@ -147,6 +227,14 @@ class TestNodeClass2(unittest.TestCase):
         member_expression = pdg.get_all("MemberExpression")[0]
         self.assertEqual(member_expression.member_expression_to_string(), "this.bar")
 
+        pdg = generate_pdg("this['bar']")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "this.bar")
+
+        pdg = generate_pdg('this["bar"]')
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "this.bar")
+
         pdg = generate_pdg("this().bar")
         member_expression = pdg.get_all("MemberExpression")[0]
         self.assertEqual(member_expression.member_expression_to_string(), "this().bar")
@@ -157,6 +245,10 @@ class TestNodeClass2(unittest.TestCase):
 
         # Test handling of Literals:
         pdg = generate_pdg("'foo'.length")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "<Literal>.length")
+
+        pdg = generate_pdg("'foo'['length']")
         member_expression = pdg.get_all("MemberExpression")[0]
         self.assertEqual(member_expression.member_expression_to_string(), "<Literal>.length")
 
@@ -192,6 +284,44 @@ class TestNodeClass2(unittest.TestCase):
         call_expression = pdg.get_all("CallExpression")[0]
         self.assertEqual(call_expression.call_expression_get_full_function_name(), "foo.bar.baz.boo")
 
+        # Test handling of computed MemberExpressions (with statically evaluate-able strings):
+
+        pdg = generate_pdg("foo['bar'].baz(x)")
+        call_expression = pdg.get_all("CallExpression")[0]
+        self.assertEqual(call_expression.call_expression_get_full_function_name(), "foo.bar.baz")
+
+        pdg = generate_pdg("foo[bar].baz(x)")
+        call_expression = pdg.get_all("CallExpression")[0]
+        self.assertEqual(call_expression.call_expression_get_full_function_name(), "foo[<Identifier>].baz")
+
+        pdg = generate_pdg("foo.bar['baz'](x)")
+        call_expression = pdg.get_all("CallExpression")[0]
+        self.assertEqual(call_expression.call_expression_get_full_function_name(), "foo.bar.baz")
+
+        pdg = generate_pdg('foo["bar"].baz.boo(x)')
+        call_expression = pdg.get_all("CallExpression")[0]
+        self.assertEqual(call_expression.call_expression_get_full_function_name(), "foo.bar.baz.boo")
+
+        pdg = generate_pdg('foo.bar["baz"].boo(x)')
+        call_expression = pdg.get_all("CallExpression")[0]
+        self.assertEqual(call_expression.call_expression_get_full_function_name(), "foo.bar.baz.boo")
+
+        pdg = generate_pdg('foo.bar.baz["boo"](x)')
+        call_expression = pdg.get_all("CallExpression")[0]
+        self.assertEqual(call_expression.call_expression_get_full_function_name(), "foo.bar.baz.boo")
+
+        pdg = generate_pdg('foo.bar["baz"]["boo"](x)')
+        call_expression = pdg.get_all("CallExpression")[0]
+        self.assertEqual(call_expression.call_expression_get_full_function_name(), "foo.bar.baz.boo")
+
+        pdg = generate_pdg('foo["bar"].baz["boo"](x)')
+        call_expression = pdg.get_all("CallExpression")[0]
+        self.assertEqual(call_expression.call_expression_get_full_function_name(), "foo.bar.baz.boo")
+
+        pdg = generate_pdg('foo["bar"]["baz"]["boo"](x)')
+        call_expression = pdg.get_all("CallExpression")[0]
+        self.assertEqual(call_expression.call_expression_get_full_function_name(), "foo.bar.baz.boo")
+
         # Note that the returned value may also be more complex:
         #     * call_expression_get_full_function_name("x().y()") ==returns==> "x().y"
         #     * call_expression_get_full_function_name("x(a,b).y()") ==returns==> "x().y"
@@ -219,14 +349,14 @@ class TestNodeClass2(unittest.TestCase):
         pdg = generate_pdg("!function(x) {console.log(x)}(42)")
         call_expression = pdg.get_all("CallExpression")[0]
         self.assertEqual(call_expression.call_expression_get_full_function_name(),
-                         "<function_expression>")
+                         "<FunctionExpression>")
 
         # A real-world example from the "ClassLink OneClick Extension",
         #   version 10.6, extension ID jgfbgkjjlonelmpenhpfeeljjlcgnkpe:
         pdg = generate_pdg("!function(t, n, e) { f.apply(this, arguments) }(l, t.data, n.frameId)")
         call_expression = pdg.get_all("CallExpression")[0]
         self.assertEqual(call_expression.call_expression_get_full_function_name(),
-                         "<function_expression>")
+                         "<FunctionExpression>")
 
     def test_get_sensitive_apis_accessed(self):
         # No sensitive API:

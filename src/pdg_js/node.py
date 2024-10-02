@@ -1106,37 +1106,61 @@ class Node:
     def member_expression_to_string(self) -> str:
         """
         Turns a PDG MemberExpression back into a string.
+
         For something simple as the PDG representing "foo.bar.baz", "foo.bar.baz" is returned,
             corresponding to the source code.
+
         For more complex MemberExpressions, a simplified, standardized string form is returned, e.g.,
             a PDG representing this code: "foo.bar(x,y(z),w).baz.boo" becomes "foo.bar().baz.boo".
-        Any literal will become "<literal>", e.g. "'foo'.length" will become "<literal>.length"
+
+        Any literal will become "<Literal>", e.g. "'foo'.length" will become "<Literal>.length"
+
+        Whenever an "a['b']" access is equivalent to an "a.b" access, "a.b" will be returned as the normalized form!
+        "a[42]" (and "a[42.0]", "a[[42]]" and "a[[[42]]]") => todo: handle 1-element lists!!!
+        will simply become "a[42]" however, as it cannot be normalized.
+
+        Note that the output may also be "a[False]", "a[True]", "a[None]", "a[[1, 2]]", "a[{'b': 1}]", etc.
+        when static evaluation gives that result, although all of them will return undefined and are therefore
+        unlikely to be actually encountered.
         """
         if self.name != "MemberExpression":
             raise TypeError("member_expression_to_string() may only be called on a MemberExpression")
 
-        if self.rhs().name == "Identifier":
-            rhs = self.rhs().attributes['name']
-        else:
-            rhs = f"<{self.rhs().name}>"
+        # Note: * for "a.b",  computed=False
+        #       * for "x[y]", computed=True
+
+        if self.attributes['computed']:  # "x[y]"
+            try:
+                literal_evaluated = self.rhs().static_eval(allow_partial_eval=False)
+                if isinstance(literal_evaluated, str):
+                    rhs = "." + literal_evaluated  # turns "a['b']" into "a.b"
+                else:
+                    rhs = f"[{literal_evaluated}]"
+            except StaticEvalException:
+                rhs = f"[<{self.rhs().name}>]"
+        else:  # "a.b"
+            if self.rhs().name == "Identifier":
+                rhs = "." + self.rhs().attributes['name']
+            else:
+                rhs = f".<{self.rhs().name}>"
 
         if self.lhs().name == "ThisExpression":
-            return "this." + rhs
+            return "this" + rhs
 
         elif self.lhs().name == "Identifier":
-            return self.lhs().attributes['name'] + "." + rhs
+            return self.lhs().attributes['name'] + rhs
 
         elif self.lhs().name == "MemberExpression": # ToDo: handle a[b] and a['b'] type member expressions as well!!!
-            return self.lhs().member_expression_to_string() + "." + rhs
+            return self.lhs().member_expression_to_string() + rhs
 
         elif self.lhs().name == "CallExpression" and self.lhs().children[0].name == "ThisExpression":
-            return "this()." + rhs
+            return "this()" + rhs
 
         elif self.lhs().name == "CallExpression" and self.lhs().children[0].name == "Identifier":
-            return self.lhs().children[0].attributes['name'] + "()." + rhs
+            return self.lhs().children[0].attributes['name'] + "()" + rhs
 
         elif self.lhs().name == "CallExpression" and self.lhs().children[0].name == "MemberExpression":
-            return self.lhs().children[0].member_expression_to_string() + "()." + rhs
+            return self.lhs().children[0].member_expression_to_string() + "()" + rhs
 
         else:  # e.g., a Literal, NewExpression, FunctionExpression, AssignmentExpression, ...
             # Examples:
@@ -1144,7 +1168,7 @@ class Node:
             #   - NewExpression:        new RegExp(/^(http|https):\/\//).test(u[0])  => "<NewExpression>.test"
             #   - FunctionExpression:   (function foo() { return 42; }).bar          => "<FunctionExpression>.bar"
             #   - AssignmentExpression: (x='foo').length                             => "<AssignmentExpression>.length"
-            return f"<{self.lhs().name}>." + rhs
+            return f"<{self.lhs().name}>" + rhs
             # Note how "<XYZ>" is *NOT* a valid JavaScript identifier! (see https://mothereff.in/js-variables)
 
     # ADDED BY ME:
@@ -1197,8 +1221,10 @@ class Node:
 
         ...this functions returns "foo.bar.baz" (as a string!) for example.
 
-        Note that both "a[b](x,y,z)" and "a.b(x,y,z)" will result in the same output of "a.b" as the full function name!
-        => ToDo: fix!
+        * Note that both "a['b'](x,y,z)" and "a.b(x,y,z)" will result
+          in the same output of "a.b" as the full function name!
+        * "a[42](x,y,z)" will result in the output of "a[42]" as the full function name!
+        * "a[b](x,y,z)" where "b" cannot be statically evaluated will result in the output of "a[<Identifier>]"!
 
         Note that the returned value may also be more complex:
         * call_expression_get_full_function_name("x().y()") ==returns==> "x().y"
@@ -1213,7 +1239,6 @@ class Node:
         # Out of the Esprima docs:
         #
         # interface CallExpression {
-        #     type: 'CallExpression';
         #     callee: Expression | Import;
         #     arguments: ArgumentListElement[];
         # }
@@ -1232,13 +1257,9 @@ class Node:
         elif callee.name == "CallExpression":  # "x()()"
             return callee.call_expression_get_full_function_name() + "()"
 
-        elif callee.name == "FunctionExpression":  # "!function(x) {console.log(x)}(42)"
-            return "<function_expression>"
-
-        else:
-            raise TypeError(f"call_expression_get_full_function_name(): "
-                            f"Unsupported type of callee Expression used for a CallExpression "
-                            f"in line {callee.get_line()}: {callee}")
+        else:  # e.g., "!function(x) {console.log(x)}(42)"
+            # FunctionExpression, ArrowFunctionExpression, ...
+            return f"<{callee.name}>"
 
     # ADDED BY ME:
     def call_expression_get_all_arguments(self) -> List[Self]:
@@ -1251,7 +1272,7 @@ class Node:
 
     DEFAULT_SENSITIVE_APIS = ["chrome.cookies", "chrome.scripting", "chrome.tabs.executeScript",
                               "browser.cookies", "browser.scripting", "browser.tabs.executeScript",
-                              "indexedDB", "fetch"]
+                              "indexedDB", "fetch"]  # Note: indexedDB is called as indexedDB.open()!
 
     # ADDED BY ME:
     def get_sensitive_apis_accessed(self, apis=DEFAULT_SENSITIVE_APIS) -> Set[Tuple[str, str]]:
@@ -2567,6 +2588,7 @@ class Node:
            in order to find candidates for extension-storage-based 4.3-type vulnerabilities
         2. within Node.is_unreachable() to statically evaluate the `test` Expression of an IfStatement,
            in order to detect unreachable code
+        3. within Node.member_expression_to_string() to normalize "a['b']" into "a.b"
 
         Parameters:
             allow_partial_eval: when this parameter is set to True, the returned Python object may be the result of an
