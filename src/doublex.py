@@ -20,6 +20,7 @@
 """
     To call DoubleX from the command-line.
 """
+# import faulthandler; faulthandler.enable()  # <=== useful for debugging, should multiprocessing create a segfault !!!
 import os
 import argparse
 from pathlib import Path

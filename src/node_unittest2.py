@@ -156,10 +156,24 @@ class TestNodeClass2(unittest.TestCase):
         self.assertEqual(member_expression.member_expression_to_string(), "this().bar")
 
         # Test handling of Literals:
-
         pdg = generate_pdg("'foo'.length")
         member_expression = pdg.get_all("MemberExpression")[0]
-        self.assertEqual(member_expression.member_expression_to_string(), "<literal>.length")
+        self.assertEqual(member_expression.member_expression_to_string(), "<Literal>.length")
+
+        # Test handling of NewExpressions:
+        pdg = generate_pdg(r"new RegExp(/^(http|https):\/\//).test")  # (real-world example)
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "<NewExpression>.test")
+
+        # Test handling of FunctionExpressions:
+        pdg = generate_pdg("(function foo() { return 42; }).bar")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "<FunctionExpression>.bar")
+
+        # Test handling of AssignmentExpressions:
+        pdg = generate_pdg("(x='foo').length")
+        member_expression = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expression.member_expression_to_string(), "<AssignmentExpression>.length")
 
     def test_call_expression_get_full_function_name(self):
         pdg = generate_pdg("foo(x)")

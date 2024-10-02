@@ -1115,35 +1115,37 @@ class Node:
         if self.name != "MemberExpression":
             raise TypeError("member_expression_to_string() may only be called on a MemberExpression")
 
+        if self.rhs().name == "Identifier":
+            rhs = self.rhs().attributes['name']
+        else:
+            rhs = f"<{self.rhs().name}>"
+
         if self.lhs().name == "ThisExpression":
-            return "this." + self.rhs().attributes['name']
-
-        elif self.lhs().name == "Literal":  # e.g.: "foo".length
-            return "<literal>." + self.rhs().attributes['name']
-            # Note how "<literal>" is *NOT* a valid JavaScript identifier! (see https://mothereff.in/js-variables)
-
-        elif self.lhs().name == "NewExpression":  # e.g.: "new RegExp(/^(http|https):\/\//).test" (followed by "(u[0])")
-            return "<new_expression>"
+            return "this." + rhs
 
         elif self.lhs().name == "Identifier":
-            return self.lhs().attributes['name'] + "." + self.rhs().attributes['name']
+            return self.lhs().attributes['name'] + "." + rhs
 
         elif self.lhs().name == "MemberExpression": # ToDo: handle a[b] and a['b'] type member expressions as well!!!
-            return self.lhs().member_expression_to_string() + "." + self.rhs().attributes['name']
+            return self.lhs().member_expression_to_string() + "." + rhs
 
         elif self.lhs().name == "CallExpression" and self.lhs().children[0].name == "ThisExpression":
-            return "this()." + self.rhs().attributes['name']
+            return "this()." + rhs
 
         elif self.lhs().name == "CallExpression" and self.lhs().children[0].name == "Identifier":
-            return self.lhs().children[0].attributes['name'] + "()." + self.rhs().attributes['name']
+            return self.lhs().children[0].attributes['name'] + "()." + rhs
 
         elif self.lhs().name == "CallExpression" and self.lhs().children[0].name == "MemberExpression":
-            return self.lhs().children[0].member_expression_to_string() + "()." + self.rhs().attributes['name']
+            return self.lhs().children[0].member_expression_to_string() + "()." + rhs
 
-        else:
-            raise TypeError(f"member_expression_to_string(): LHS of MemberExpression in line {self.get_line()} "
-                            f"is neither a ThisExpression "
-                            f"nor an Identifier nor a MemberExpression: {self.lhs()}")
+        else:  # e.g., a Literal, NewExpression, FunctionExpression, AssignmentExpression, ...
+            # Examples:
+            #   - Literal:              "foo".length                                 => "<Literal>.length"
+            #   - NewExpression:        new RegExp(/^(http|https):\/\//).test(u[0])  => "<NewExpression>.test"
+            #   - FunctionExpression:   (function foo() { return 42; }).bar          => "<FunctionExpression>.bar"
+            #   - AssignmentExpression: (x='foo').length                             => "<AssignmentExpression>.length"
+            return f"<{self.lhs().name}>." + rhs
+            # Note how "<XYZ>" is *NOT* a valid JavaScript identifier! (see https://mothereff.in/js-variables)
 
     # ADDED BY ME:
     def find_member_expressions_ending_in(self, suffix: str) -> List[Self]:
