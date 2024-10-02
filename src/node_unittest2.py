@@ -767,32 +767,31 @@ class TestNodeClass2(unittest.TestCase):
         """
         pdg = generate_pdg(code)
         print(pdg)
-        # [81] [Program] (2 children)
-        # 	[87] [FunctionDeclaration] (3 children) --e--> [90] --e--> [89]
-        # 		[90] [FunctionDeclaration] (2 children) --e--> [92]
-        # 			[91] [Identifier:"foo"] (0 children) --data--> [101]     <--------- ...should refer to this!
-        # 			[92] [BlockStatement] (1 child) --e--> [93]
-        # 				[93] [ReturnStatement] (1 child)
-        # 					[94] [Literal::{'raw': '2', 'value': 2}] (0 children)
-        # 		[88] [Identifier:"bar"] (0 children)
-        # 		[89] [BlockStatement] (1 child) --e--> [95]
-        # 			[95] [ExpressionStatement] (1 child)
-        # 				[96] [CallExpression] (2 children)
-        # 					[97] [MemberExpression:"False"] (2 children)
-        # 						[98] [Identifier:"console"] (0 children)
-        # 						[99] [Identifier:"log"] (0 children)
-        # 					[100] [CallExpression] (1 child)
-        # 						[101] [Identifier:"foo"] (0 children)        <--------- This...
-        # 	[82] [FunctionDeclaration] (2 children) --e--> [84]
-        # 		[83] [Identifier:"foo"] (0 children)
-        # 		[84] [BlockStatement] (1 child) --e--> [85]
-        # 			[85] [ReturnStatement] (1 child)
-        # 				[86] [Literal::{'raw': '1', 'value': 1}] (0 children)
+        # [117] [Program] (2 children) <<< None
+        # 	[118] [FunctionDeclaration] (2 children) <<< body
+        # 		[119] [Identifier:"foo"] (0 children) <<< id
+        # 		[120] [BlockStatement] (1 child) <<< body
+        # 			[121] [ReturnStatement] (1 child) <<< body
+        # 				[122] [Literal::{'raw': '1', 'value': 1}] (0 children) <<< argument
+        # 	[123] [FunctionDeclaration] (2 children) <<< body
+        # 		[124] [Identifier:"bar"] (0 children) <<< id
+        # 		[125] [BlockStatement] (2 children) <<< body
+        # 			[126] [FunctionDeclaration] (2 children) <<< body
+        # 				[127] [Identifier:"foo"] (0 children) <<< id --data--> [137]     <----- ...should refer to this!
+        # 				[128] [BlockStatement] (1 child) <<< body
+        # 					[129] [ReturnStatement] (1 child) <<< body
+        # 						[130] [Literal::{'raw': '2', 'value': 2}] (0 children) <<< argument
+        # 			[131] [ExpressionStatement] (1 child) <<< body
+        # 				[132] [CallExpression] (2 children) <<< expression
+        # 					[133] [MemberExpression:"False"] (2 children) <<< callee
+        # 						[134] [Identifier:"console"] (0 children) <<< object
+        # 						[135] [Identifier:"log"] (0 children) <<< property
+        # 					[136] [CallExpression] (1 child) <<< arguments
+        # 						[137] [Identifier:"foo"] (0 children) <<< callee      <----- This...
         foos = [identifier for identifier in pdg.get_all_identifiers() if identifier.attributes['name'] == "foo"]
         self.assertEqual(len(foos), 3)
         function_identifier = [foo for foo in foos if foo.parent.name == "CallExpression"][0]
-        correct_function_declaration = [foo.parent for foo in foos if foo.parent.name == "FunctionDeclaration"
-                                                            and foo.grandparent().name == "FunctionDeclaration"][0]
+        correct_function_declaration = [foo.parent for foo in foos if foo.grandparent().name == "BlockStatement"][0]
         print(f"function_identifier = {function_identifier}")
         print(f"correct_function_declaration = {correct_function_declaration}")
 
@@ -812,7 +811,7 @@ class TestNodeClass2(unittest.TestCase):
         code = """
         function foo() {return 1;}
         function bar() {
-            {function foo() {return 2;}}
+            {function foo() {return 2;}} // <--- note the difference to the test above: the "{" and the "}"
             console.log(foo());
         }
         """
@@ -821,8 +820,7 @@ class TestNodeClass2(unittest.TestCase):
         foos = [identifier for identifier in pdg.get_all_identifiers() if identifier.attributes['name'] == "foo"]
         self.assertEqual(len(foos), 3)
         function_identifier = [foo for foo in foos if foo.parent.name == "CallExpression"][0]
-        correct_function_declaration = [foo.parent for foo in foos if foo.parent.name == "FunctionDeclaration"
-                                        and foo.grandparent().name == "FunctionDeclaration"][0]
+        correct_function_declaration = [foo.parent for foo in foos if foo.grandparent().name == "BlockStatement"][0]
         print(f"function_identifier = {function_identifier}")
         print(f"correct_function_declaration = {correct_function_declaration}")
 
