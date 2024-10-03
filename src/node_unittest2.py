@@ -2241,6 +2241,52 @@ class TestNodeClass2(unittest.TestCase):
         self.assertTrue(c.is_unreachable())
         self.assertFalse(d.is_unreachable())
 
+    def test_get_data_flow_parents_in_order_no_split(self):
+        code = """
+        a = 1;
+        b = 2;
+        c = a + b;
+        d = c;
+        e = d;
+        f = e;
+        g = f;
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        g = pdg.get_identifier_by_name("g")
+        data_flow_parents_in_order_no_split: List[Node] = g.get_data_flow_parents_in_order_no_split()
+        data_flow_parents_in_order_no_split: List[str] = [p.attributes['name'] for p in data_flow_parents_in_order_no_split]
+        print(data_flow_parents_in_order_no_split)
+        self.assertEqual(
+            data_flow_parents_in_order_no_split,
+            ['g', 'f', 'f', 'e', 'e', 'd', 'd', 'c', 'c']
+        )
+
+    def test_is_in_same_loop_as(self):
+        code = """
+        while (1) {
+            let x;
+            let y;
+        }
+        let z; // not inside *any* loop
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        x = pdg.get_identifier_by_name("x")
+        y = pdg.get_identifier_by_name("y")
+        z = pdg.get_identifier_by_name("z")
+        self.assertTrue(x.is_in_same_loop_as(y))
+        self.assertTrue(y.is_in_same_loop_as(x))
+        self.assertFalse(z.is_in_same_loop_as(x))
+        self.assertFalse(z.is_in_same_loop_as(y))
+        self.assertFalse(x.is_in_same_loop_as(z))
+        self.assertFalse(y.is_in_same_loop_as(z))
+
+        # Edge case: self == other:
+        self.assertTrue(x.is_in_same_loop_as(x))
+        self.assertTrue(y.is_in_same_loop_as(y))
+        self.assertFalse(z.is_in_same_loop_as(z))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -255,7 +255,8 @@ def add_basic_data_flow_edges(pdg: Node, debug=False) -> int:
                     # * [id2] occurs in code *after* [id1], or *might* occur after [id1]:
                     if not (
                         identifier2.occurs_in_code_after(identifier1) or
-                        identifier2.might_occur_after(identifier1)
+                        identifier2.might_occur_after(identifier1) or
+                        identifier1.is_id_of_function_declaration()  # (scope is checked later)
                     ):
                         if debug:
                             print(f"[id2] (line {identifier2.get_line()}) "
@@ -402,9 +403,9 @@ def add_missing_data_flow_edges_declarations_and_assignments(pdg: Node) -> int:
     * ({x:x} = y);
 
     Note that the `y` on the right-hand side may also be enclosed within an arbitrarily complex expression!
-    Data flows are always added for all identifiers found on the right-hand side; with the notable exception of
-    all identifiers occurring within BlockStatements - this is in order to reduce the amount of false positives,
-    even if it may miss a few very obscure flows.
+    Data flows are always added for all identifiers found on the right-hand side; with a few notable exceptions:
+    1. all RHS identifiers occurring within (Arrow)FunctionExpressions (both within the parameters and within the body)
+       => this is in order to reduce the amount of false positives, even if it may miss a few very obscure flows.
 
     Also adds data flows in the other direction, from `x` to `y` in non-declaring member assignments where the RHS
     is an (Arrow)FunctionExpression; e.g.:
@@ -514,7 +515,8 @@ def add_missing_data_flow_edges_declarations_and_assignments(pdg: Node) -> int:
         rhs = pdg.rhs()
 
         if lhs.name == "Identifier":  # "let cookies2 = cookies;" or "var cookies2 = cookies;" or "const cookies2 = cookies;" or "cookies2 = cookies;"
-            for identifier in rhs.get_all_identifiers_not_inside_a_as_iter(["BlockStatement"]):  # For each identifier in the right-hand side...:
+            # For each identifier in the right-hand side...:
+            for identifier in rhs.get_all_identifiers_not_inside_a_as_iter(["FunctionExpression", "ArrowFunctionExpression"]):  # (exception #1)
                 # ...add a data flow edge *from* that identifier *to* the left-hand side:
                 data_flow_edges_added += identifier.set_data_dependency(lhs)  # includes call: identifier.data_dep_children.append(extremity=lhs)
 

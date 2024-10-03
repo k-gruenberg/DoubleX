@@ -322,13 +322,17 @@ def main():
                              "Only has an effect in combination with --crx. "
                              "Default: CPU count/2 (as BP and CS of each extension will be analyzed in parallel, too)")
 
-    parser.add_argument("--warn-func-decl-not-found",
-                        dest='warn_func_decl_not_found',
+    parser.add_argument("--warn-msg-listener-func-not-found",
+                        dest='warn_msg_listener_func_not_found',
                         action='store_true',
-                        help="Print a warning to console whenever no corresponding function declaration could be "
-                             "found for an encountered call expression. Example: there's a 'foo()' call expression "
-                             "somewhere but a function declaration for a function named 'foo' cannot be found "
-                             "anywhere.") # TODO  # ToDo: refactor code?!
+                        help="Print a warning message to console when the handler function for a message listener "
+                             "cannot be found/resolved.")
+
+    parser.add_argument("--warn-callback-func-not-found",
+                        dest='warn_callback_func_not_found',
+                        action='store_true',
+                        help="Print a warning message to console when the function for a callback "
+                             "cannot be found/resolved.")
 
     # TODO: control verbosity of logging?
 
@@ -385,6 +389,12 @@ def main():
         raise AssertionError("neither args.debug nor args.prod is set")
 
     os.environ['TIMEOUT'] = str(args.timeout)
+
+    if args.warn_msg_listener_func_not_found:
+        os.environ['WARN_MSG_LISTENER_FUNC_NOT_FOUND'] = "yes"
+
+    if args.warn_callback_func_not_found:
+        os.environ['WARN_CALLBACK_FUNC_NOT_FOUND'] = "yes"
 
     if args.crx is None:  # No --crx argument supplied: Use -cs and -bp arguments:
         print("Analyzing a single, unpacked extension...")
@@ -532,7 +542,7 @@ def main():
                         if 'benchmarks' in analysis_result and 'crashes' in analysis_result['benchmarks'] else []
                 crashes_bp = analysis_result['benchmarks']['bp']['crashes']\
                         if 'benchmarks' in analysis_result and 'bp' in analysis_result['benchmarks']\
-                           and 'crashes' in analysis_result['benchmarks']['bp'] else []
+                           and 'crashes' in analysis_result['benchmarks']['bp'] else []  # TODO: "errors", too!
                 crashes_cs = analysis_result['benchmarks']['cs']['crashes']\
                         if 'benchmarks' in analysis_result and 'cs' in analysis_result['benchmarks']\
                            and 'crashes' in analysis_result['benchmarks']['cs'] else []

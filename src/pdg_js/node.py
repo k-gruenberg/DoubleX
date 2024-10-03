@@ -382,6 +382,8 @@ class Node:
         Returns all nodes [p] such that there exist nodes [x1], [x2], ..., [xn] such that:
         [p] --data--> [x1] --data--> [x2] --data--> ... --data--> [xn] --data--> [self]
         where `max_depth` specifies the maximum number of --data--> edges to follow.
+
+        Note that [self] itself will also be included in the Set returned!
         """
         if self.name != "Identifier":
             raise TypeError("get_data_flow_parents() may only be called on Identifiers")
@@ -395,9 +397,39 @@ class Node:
                 # Note: update() appends multiple elements to a set
             current_depth += 1
             if len(self_data_dep_parents) == last_len_self_data_dep_parents:
-                break  # stop as soon a as fixed point has been reached :)
+                break  # stop as soon as a fixed point has been reached :)
             else:
                 last_len_self_data_dep_parents = len(self_data_dep_parents)
+
+        return self_data_dep_parents
+
+    # ADDED BY ME:
+    def get_data_flow_parents_in_order_no_split(self, max_depth=1_000_000_000) -> List[Self]:
+        """
+        Returns all data flow parents [p1], [p2], ..., [pn] of this Node, in order, such that:
+        [pn] --data--> ... --data--> [p2] --data--> [p1] --data--> [self]
+
+        ...where [pn] either has 0 or >1 data flow parent, or `max_depth` --data--> edges have been reached, or
+        [pn] == [pm] for an m < n, i.e., when a loop is detected.
+
+        Note that [self] itself will also be included in the List returned, as the 0th element.
+        """
+        if self.name != "Identifier":
+            raise TypeError("get_data_flow_parents_in_order_no_split() may only be called on Identifiers")
+
+        self_data_dep_parents = [self]
+
+        current_depth = 0
+        while current_depth < max_depth:
+            if len(set(self_data_dep_parents)) < len(self_data_dep_parents):  # Duplicate node => loop
+                break  # stop as soon as a loop is detected
+
+            data_flow_parents: List[Node] = [p.extremity for p in self_data_dep_parents[-1].data_dep_parents]
+            if len(data_flow_parents) == 1:
+                self_data_dep_parents.append(data_flow_parents[0])
+            else:
+                break
+            current_depth += 1
 
         return self_data_dep_parents
 
@@ -426,6 +458,13 @@ class Node:
         n = cls("Identifier")
         n.attributes['name'] = name
         return n
+
+    # ADDED BY ME:
+    def is_identifier_named(self, name: str) -> bool:  # ToDo: use this method everywhere to make code more readable
+        """
+        Returns True if and only if `self` is an Identifier with name `name`.
+        """
+        return self.name == "Identifier" and self.attributes['name'] == name
 
     # ADDED BY ME:
     @classmethod
@@ -634,6 +673,21 @@ class Node:
             return any(name in [parent.name for parent in parents] for name in names)
 
     # ADDED BY ME:
+    def is_lhs_of_a(self, parent_name: str, allow_missing_rhs=False) -> bool:
+        return (self.parent is not None and self.parent.name == parent_name) \
+               and \
+               (
+                (not allow_missing_rhs and len(self.parent.children) == 2 and self.parent.lhs() == self)
+                   or
+                (allow_missing_rhs and len(self.parent.children) >= 1 and self.parent.children[0] == self)
+               )
+
+    # ADDED BY ME:
+    def is_rhs_of_a(self, parent_name: str) -> bool:
+        return (self.parent is not None and self.parent.name == parent_name
+                and len(self.parent.children) == 2 and self.parent.rhs() == self)
+
+    # ADDED BY ME:
     def get_parent(self, allowed_parent_names) -> Self:
         """
         Returns `self.parent` but only if `self.parent.name in allowed_parent_names`, otherwise this function raises
@@ -724,12 +778,12 @@ class Node:
         return False
 
     # ADDED BY ME:
-    def get_all_ancestors(self, allowed_ancestor_names) -> List[Self]:
+    def get_all_ancestors(self, allowed_ancestor_names: Optional[List[str]]) -> List[Self]:
         result = []
 
         parent = self.parent
         while parent is not None:
-            if parent.name in allowed_ancestor_names:
+            if allowed_ancestor_names is None or parent.name in allowed_ancestor_names:
                 result.append(parent)
             parent = parent.parent
 
@@ -1498,6 +1552,44 @@ class Node:
             (self_start_line == other_start_line and self_start_column > other_start_column)
 
     # ADDED BY ME:
+    def get_loop_ancestors(self) -> List[Self]:
+        """
+        Returns all ancestors of this Node that are loops.
+
+        Cf. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Loops_and_iteration for a list of all loop
+        types in JavaScript:
+        * WhileStatement:   while(1) {}
+        * ForStatement:     for(;;) {}
+        * DoWhileStatement: do {} while (1);
+        * ForInStatement:   for (x in {1:2,3:4}) {console.log(x);};  // prints 1,3
+        * ForOfStatement:   for (i of [1,2,3]) {console.log(i);};    // prints 1,2,3
+        """
+        return self.get_all_ancestors(
+            ["WhileStatement", "ForStatement", "DoWhileStatement", "ForInStatement", "ForOfStatement"]
+        )
+
+    # ADDED BY ME:
+    def is_in_same_loop_as(self, other: Self) -> bool:  # (ToDo: add a ignore_trivial_loops parameter?!)
+        """
+        Whether this Node and the `other` Node are in the same while/for/do while/for in/for of loop.
+
+        Note:
+        When `self == other`, this method returns True if self is inside any loop at all, otherwise it returns False!
+
+        Cf. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Loops_and_iteration for a list of all loop
+        types in JavaScript:
+        * WhileStatement:   while(1) {}
+        * ForStatement:     for(;;) {}
+        * DoWhileStatement: do {} while (1);
+        * ForInStatement:   for (x in {1:2,3:4}) {console.log(x);};  // prints 1,3
+        * ForOfStatement:   for (i of [1,2,3]) {console.log(i);};    // prints 1,2,3
+
+        Parameters:
+            other: the other Node for which to check whether `self` and `other` are in the same loop
+        """
+        return len(set.intersection(set(self.get_loop_ancestors()), set(other.get_loop_ancestors()))) > 0
+
+    # ADDED BY ME:
     def might_occur_after(self, other_node: Self) -> bool:
         """
         Take a look at the following piece of JavaScript code:
@@ -1513,12 +1605,17 @@ class Node:
         (b) `self` and `other_node` occur within the same function declaration/expression body (not talking about
             nested functions here but in the very *same* function!) and that function is called somewhere
             (in case of function expressions that has to be recursively)
+        (c) `self` and `other_node` occur within the same loop
 
         *** BEWARE: ***
         This method does NOT(!) check/do anything about Identifiers!
         It is more to be seen as an addition to Node.occurs_in_code_after()!
         For handling Identifiers, you likely have to check Node.identifier_is_in_scope_at() as well!
         """
+        # (c) `self` and `other_node` occur within the same loop:
+        if self.is_in_same_loop_as(other_node):
+            return True
+
         # (a) `self` occurs inside a declared function that is called after `other_node`:
         self_func_decl: Optional[Node] = self.get_ancestor_or_none(["FunctionDeclaration"])
         if self_func_decl is not None:
@@ -1850,7 +1947,7 @@ class Node:
     # ADDED BY ME:
     def function_Identifier_get_FunctionDeclaration(self,
                                                     print_warning_if_not_found: bool,
-                                                    add_data_flow_edges=True) -> Optional[Self]:
+                                                    add_data_flow_edges=True) -> Optional[Self]:  # TODO: replace all usages with Func() !!!
         """
         When this Node is an Identifier referencing a function, this method returns the corresponding
         FunctionDeclaration where said function is defined.
@@ -3970,6 +4067,23 @@ class Node:
         return (self.name == "Identifier"
                 and self.parent is not None
                 and self.parent.name in ["FunctionExpression", "ArrowFunctionExpression"]
+                and self.is_nth_child_of_parent(0)
+                and len(self.parent.get("id")) == 1
+                and self == self.parent.get("id")[0])
+
+    # ADDED BY ME:
+    def is_id_of_function_declaration(self) -> bool:
+        # interface FunctionDeclaration {
+        #     id: Identifier | null;        <----- is `self` this?
+        #     params: FunctionParameter[];
+        #     body: BlockStatement;
+        #     generator: boolean;
+        #     async: boolean;
+        #     expression: false;
+        # }
+        return (self.name == "Identifier"
+                and self.parent is not None
+                and self.parent.name == "FunctionDeclaration"
                 and self.is_nth_child_of_parent(0)
                 and len(self.parent.get("id")) == 1
                 and self == self.parent.get("id")[0])

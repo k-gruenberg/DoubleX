@@ -441,5 +441,40 @@ class TestNodeClass(unittest.TestCase):
         self.assertEqual(Node.lower(literal1, literal2), literal1)
         self.assertEqual(Node.lower(literal2, literal1), literal2)
 
+    def test_is_identifier_named(self):
+        self.assertTrue(Node.identifier("foobar").is_identifier_named("foobar"))
+        self.assertFalse(Node.identifier("foobar").is_identifier_named("foo"))
+        self.assertFalse(Node("Program").is_identifier_named("foo"))
+
+    def test_is_lhs_of_a_and_is_rhs_of_a(self):
+        expression = Node("BinaryExpression", attributes={"operator": "+"}) \
+            .child(Node("Literal", attributes={"raw": "'x'", "value": "x"})) \
+            .child(Node("Literal", attributes={"raw": "'y'", "value": "y"}))
+        print(expression)
+        [literal1, literal2] = expression.children
+        self.assertTrue(literal1.is_lhs_of_a("BinaryExpression"))
+        self.assertTrue(literal1.is_lhs_of_a("BinaryExpression", allow_missing_rhs=False))
+        self.assertTrue(literal1.is_lhs_of_a("BinaryExpression", allow_missing_rhs=True))
+        self.assertTrue(literal2.is_rhs_of_a("BinaryExpression"))
+
+        self.assertFalse(literal1.is_lhs_of_a("LogicalExpression"))
+        self.assertFalse(literal1.is_lhs_of_a("LogicalExpression", allow_missing_rhs=False))
+        self.assertFalse(literal1.is_lhs_of_a("LogicalExpression", allow_missing_rhs=True))
+        self.assertFalse(literal2.is_rhs_of_a("LogicalExpression"))
+
+        self.assertFalse(literal1.is_rhs_of_a("BinaryExpression"))
+        self.assertFalse(literal2.is_lhs_of_a("BinaryExpression"))
+        self.assertFalse(literal2.is_lhs_of_a("BinaryExpression", allow_missing_rhs=False))
+        self.assertFalse(literal2.is_lhs_of_a("BinaryExpression", allow_missing_rhs=True))
+
+        # Test allow_missing_rhs argument:
+        expression = Node("UnaryExpression", attributes={"operator": "+"}) \
+            .child(Node("Literal", attributes={"raw": "42", "value": 42}))
+        print(expression)
+        [literal1] = expression.children
+        self.assertTrue(literal1.is_lhs_of_a("UnaryExpression", allow_missing_rhs=True))
+        self.assertFalse(literal1.is_lhs_of_a("UnaryExpression", allow_missing_rhs=False))
+
+
 if __name__ == '__main__':
     unittest.main()

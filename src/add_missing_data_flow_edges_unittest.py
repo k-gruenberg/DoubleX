@@ -1,10 +1,6 @@
 import tempfile
 import unittest
 
-import build_ast
-from build_pdg import function_hoisting
-from node import Node
-
 from src.pdg_js.add_missing_data_flow_edges import *
 # from node_unittest2 import generate_pdg
 
@@ -15,27 +11,19 @@ os.environ['DEBUG'] = "yes"
 os.environ['TIMEOUT'] = "600"
 
 
+def generate_pdg(code: str, ast_only=False) -> Node:
+    res_dict = dict()
+    benchmarks = res_dict['benchmarks'] = dict()
+
+    return Node.pdg_from_string(
+        js_code=code,
+        benchmarks=benchmarks,
+        add_my_data_flows=not ast_only,
+    )
+
+
 def generate_ast(code):
-    """
-    cf. generate_pdg() in node_unittest2.py
-    """
-    tmp_file = tempfile.NamedTemporaryFile()
-    with open(tmp_file.name, 'w') as f:
-        f.write(code)
-
-    # WARNING: Do NOT put the below code into the "with" block, it won't work!!!
-
-    # cf. get_data_flow() in build_pdg.py:
-    if tmp_file.name.endswith('.js'):
-        esprima_json = tmp_file.name.replace('.js', '.json')
-    else:
-        esprima_json = tmp_file.name + '.json'
-
-    extended_ast = build_ast.get_extended_ast(tmp_file.name, esprima_json)
-    ast = extended_ast.get_ast()
-    ast = build_ast.ast_to_ast_nodes(ast, ast_nodes=Node('Program'))
-    function_hoisting(ast, ast)  # Hoists FunDecl at a basic block's beginning
-    return ast
+    return generate_pdg(code, ast_only=True)
 
 
 class TestAddMissingDataFlowEdges(unittest.TestCase):
