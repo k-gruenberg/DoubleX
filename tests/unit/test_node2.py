@@ -1,4 +1,3 @@
-# Some unit tests of the "Node" class can't be done inside "node_unittest.py" because of import difficulties.
 import os
 import unittest
 import math
