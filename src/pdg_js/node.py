@@ -247,6 +247,10 @@ class Node:
         return hash(self.id)
 
     # ADDED BY ME:
+    def is_parsing_error(self) -> bool:
+        return self.name == "ParsingError"
+
+    # ADDED BY ME:
     def root(self) -> Self:
         """
         Returns the root Node of this tree.
