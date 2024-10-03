@@ -584,10 +584,10 @@ def update_call_expr(node):
 def update_benchmarks_pdg(benchmarks, whoami):
     """ PDG generation benchmarks are generic, here we make the difference between CS and BP. """
 
-    if 'errors' in benchmarks:
+    if 'crashes' in benchmarks:
         if 'crashes' not in benchmarks:
             benchmarks['crashes'] = []
-        crashes = benchmarks.pop('errors')
+        crashes = benchmarks.pop('crashes')
         for el in crashes:
             benchmarks['crashes'].append(whoami + ': ' + el)
     if 'got AST' in benchmarks:

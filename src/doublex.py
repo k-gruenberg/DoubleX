@@ -542,10 +542,12 @@ def main():
                         if 'benchmarks' in analysis_result and 'crashes' in analysis_result['benchmarks'] else []
                 crashes_bp = analysis_result['benchmarks']['bp']['crashes']\
                         if 'benchmarks' in analysis_result and 'bp' in analysis_result['benchmarks']\
-                           and 'crashes' in analysis_result['benchmarks']['bp'] else []  # TODO: "errors", too!
+                           and 'crashes' in analysis_result['benchmarks']['bp'] else []
+                crashes_bp = [f"BP crash: {bp_crash}" for bp_crash in crashes_bp]
                 crashes_cs = analysis_result['benchmarks']['cs']['crashes']\
                         if 'benchmarks' in analysis_result and 'cs' in analysis_result['benchmarks']\
                            and 'crashes' in analysis_result['benchmarks']['cs'] else []
+                crashes_cs = [f"CS crash: {cs_crash}" for cs_crash in crashes_cs]
                 crashes_all = " | ".join(crashes + crashes_bp + crashes_cs)\
                                 .replace(",", "").replace("\n", "")
 

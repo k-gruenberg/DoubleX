@@ -126,10 +126,11 @@ def get_data_flow(input_file, benchmarks, store_pdgs=None, check_var=False, beau
         esprima_json = input_file + '.json'
     extended_ast = build_ast.get_extended_ast(input_file, esprima_json)
 
-    benchmarks['errors'] = []
+    if 'crashes' not in benchmarks:
+        benchmarks['crashes'] = []
 
     if extended_ast is None:
-        benchmarks['errors'].append('parsing-error')
+        benchmarks['crashes'].append('parsing-error')
         return _node.Node('ParsingError')  # Empty PDG to avoid trying to get the children of None
     else:
         benchmarks['got AST'] = timeit.default_timer() - start
