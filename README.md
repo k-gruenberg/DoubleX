@@ -1,149 +1,350 @@
-# DoubleX: Statically Detecting Vulnerable Data Flows in Browser Extensions at Scale
+# Automated Detection of Site Isolation Bypass Vulnerabilities in Browser Extensions
 
-This repository contains the code for the [CCS'21 paper: "DoubleX: Statically Detecting Vulnerable Data Flows in Browser Extensions at Scale"](https://swag.cispa.saarland/papers/fass2021doublex.pdf).  
-Please note that in its current state, the code is a Poc and not a fully-fledged production-ready API.
+This is a JavaScript static analysis tool for finding renderer-attacker-exploitable site-isolation-bypass 
+vulnerabilities in Chrome extensions, loosely based on a static analysis tool called *DoubleX* by 
+Aurore Fass et al. ([GitHub here](https://github.com/Aurore54F/DoubleX), 
+[paper here](https://swag.cispa.saarland/papers/fass2021doublex.pdf)).
 
+It has been developed in 2024 by Kendrick Grünberg (B.Sc.) as a 3-month / 15 ECTS project work 
+@ [the Institute for Application Security (IAS), TU Braunschweig](https://www.tu-braunschweig.de/ias/), 
+under the supervision of [Jan Niklas Drescher](https://github.com/jndre).
 
-## Summary
-DoubleX statically detects vulnerable data flows in a browser extension:
-- Definition and construction of an Extension Dependence Graph (EDG), i.e., semantic abstraction of extension code (including control and data flows, and pointer analysis) and model of the message interactions within and outside of an extension.
-- Data flow analysis to track data from and toward security- and privacy-critical APIs in browser extensions (e.g., `tabs.executeScript`, `downloads.download`, or `topSites.get`).
+## Types of vulnerabilities detected
 
+This tool is intended to detect vulnerabilities in Chrome extensions exploitable by a web renderer attacker, as 
+described and discussed in 
+[this 2023 paper by Young Min Kim and Byoungyoung Lee](https://www.usenix.org/conference/usenixsecurity23/presentation/kim-young-min).
 
-## Setup
+They consider 3 types of vulnerabilities:
+1. type 4.1 vulnerabilities: the execution of privileged browser APIs (resulting in data exfiltration or UXSS)
+2. type 4.2 vulnerabilities: writing sensitive extension data (resulting in UXSS)
+3. type 4.3 vulnerabilities: reading sensitive extension data (resulting in data exfiltration)
+
+This tool will detect a vulnerability in the following service worker (under MV2 known as a *background page*) code, 
+for example:
+
+```javascript
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    chrome.cookies.getAll({},
+        function(cookies) {
+            sendResponse(cookies);
+        }
+    );
+    return true;
+});
+```
+
+This tool will detect two data flows, a source data flow and a sink data flow, both ending in the same rendezvous call 
+expression:
+* The source (or "from") data flow begins at `cookies` in line 3 and ends at `cookies` in line 4.
+* The sink (or "to") data flow begins at `sendResponse` in line 1 and ends at `sendResponse` in line 4.
+* They both meet in the same call expression `sendResponse(cookies)` in line 4.
+
+This code is vulnerable because a renderer attacker is capable of sending extension messages and will therefore be 
+able to extract all the user's cookies.
+
+The following code on the other hand is safe and this tool will detect **no** vulnerability:
+
+```javascript
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    let url = sender.url;
+    chrome.cookies.getAll({},
+        function(cookies) {
+            if (url == "https://admin.com") {
+                sendResponse(cookies);
+            }
+        }
+    );
+    return true;
+});
+```
+
+While a renderer attacker can send extension messages, 
+he or she cannot spoof the sender URL associated with the message. 
+As the code above verifies the sender URL in a sufficient way, 
+it is safe against the type of attacks that we consider. 
+In the above case, in addition to finding an exploit in Chrome's rending engine, the attacker would have to take 
+over `https://admin.com` as well.
+
+See `/tests/integration/test_kim_and_lee_vulnerability_detection.py` for many, many more examples!
+
+## Setup (cf. DoubleX)
 
 ```
 install python3 # (tested with 3.7.3 and 3.7.4)
 install nodejs
 install npm
 cd src
-npm install esprima # (tested with 4.0.1)
-npm install espree
-npm install escodegen # (tested with 1.14.2 and 2.0.0)
+npm install esprima # (outdated)
+npm install espree # (recommended)
+npm install escodegen
 npm -g install js-beautify
 ```
 
-To install graphviz (only for drawing graphs, not yet documented, please open an issue if interested)
+To install Python dependencies (within a new virtual environment):
 ```
-pip3 install graphviz
-On MacOS: install brew and then brew install graphviz
-On Linux: sudo apt-get install graphviz
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements.txt
 ```
-
 
 ## Usage
 
-DoubleX can analyze both Chromium-based and Firefox extensions.
+This tool uses parallelism by default and is intended to analyze a large amount of .CRX files (Chrome extensions).
 
-### Unpack a Chrome Extension
+It is called using the command line:
+```shell
+python3 doublex.py --renderer-attacker --espree --src-type-module --prod --crx /folder/*.crx --csv-out /folder/result.csv --include-31-violations-without-privileged-api-access --sort-crxs-by-size-ascending --warn-msg-listener-func-not-found --warn-callback-func-not-found
+```
 
-If you already have extracted the content scripts, background scripts/page, WARs, and manifest, directly move on to the next section `Chrome Extensions`. Otherwise, you can extract these components from a packed extension `CRX_PATH` and store them in `UNPACKED_PATH/extension_name` by running the following command:
+Use `python3 doublex.py -h` for help.
+
+Some notable, useful arguments are:
+* `--timeout seconds` to alter the timeout for analyzing each extension (default: 600 seconds, i.e., 10 minutes).
+* `--parallelize no_extensions` to specify how many extensions shall be analyzed in parallel. 
+  Implementation uses the Python `multiprocessing` module. 
+  Default: CPU count/2 (as BP and CS of each extension will be analyzed in parallel, too).
+* `--sort-crxs-by-size-ascending` to sort all CRX input files by size, in ascending order, before beginning to 
+  unpack and analyze them. The idea behind this is the heuristic that smaller files will be easier/faster to analyze.
+* `--csv-out path` to specify the path of the CSV output file to create (creation of this CSV is highly recommended!)
+* `--include-31-violations-without-privileged-api-access` to also look for "weaker" vulnerabilities, where there's  
+  no verification of the message sender (renderer-attacker-exploitable) but no sensitive API is actually accessed; 
+  it has to be verified manually whether each of these actually pose any real danger.
+
+## How to get .CRX files?
+
+1. A Chrome extension with ID `{extension_id}` may be downloaded using the following link:
+   ```
+   https://clients2.google.com/service/update2/crx?response=redirect&os=win&arch=x64&os_arch=x86_64&nacl_arch=x86-64&prod=chromiumcrx&prodchannel=beta&prodversion=79.0.3945.53&lang=en&acceptformat=crx3&x=id%3D{extension_id}%26installsource%3Dondemand%26uc
+   ```
+2. [www.crx4chrome.com](https://www.crx4chrome.com/) allows for downloading older versions of widespread Chrome 
+   extensions.
+3. The following repository contains a Python script to crawl the Chrome web store:  
+   [https://github.com/k-gruenberg/chrome_webstore_crawler](https://github.com/k-gruenberg/chrome_webstore_crawler)
+
+### Unpacking a Chrome Extension
+
+This tool will automatically unpack Chrome extensions in .CRX format for you, when you supply them using 
+the `--crx` command line argument. Multiple .CRX files may be supplied, in fact, you are encouraged to simply
+use the `*` syntax of your shell to supply a folder full of .CRX files, like so: `--crx /folder/*.crx`
+
+Should your extension already be unpacked, you may use `-bp` and `-cs` instead, only a single extension may be 
+supplied using that syntax though.
+
+You may unpack an extension using the following command:
 ```
 python3 src/unpack_extension.py -s 'CRX_PATH' -d 'UNPACKED_PATH'
 ```
 
-
-### Chrome Extensions
-
-To analyze a Chrome extension with the content script `CONTENT_SCRIPT` and background page `BACKGROUND_PAGE`, run the following command:
-```
-python3 src/doublex.py -cs 'CONTENT_SCRIPT' -bp 'BACKGROUND_PAGE'
-```
-
-By default, DoubleX will consider that the extension `manifest.json` file is located in the same directory as the content script. A custom manifest location can be specified with the `--manifest` command:
-```
-python3 src/doublex.py -cs 'CONTENT_SCRIPT' -bp 'BACKGROUND_PAGE' --manifest 'CUSTOM_MANIFEST_PATH'
-```
-
-For performance reasons, you can generate the PDGs of the content script and background page beforehand. In this case, see the README in `src/pdg_js` and call the function `src/vulnerability_detection/analyze_extension` with 1) the path of the content script's PDG, 2) the path of the background page's PDG, and 3) the attribute `pdg` with the value True.
-
-Note: DoubleX can also analyze Firefox extensions (i.e., not Chromium-based). In this case, add the parameter `--not-chrome`:
-```
-python3 src/doublex.py -cs 'CONTENT_SCRIPT' -bp 'BACKGROUND_PAGE' --not-chrome
-```
-
-
 ### Output of the Analysis
 
-Calling the main function `doublex` does not return anything but will generate 2 JSON files:
-1) `extension_doublex_apis.json`, stored in the content script's folder. This JSON file indicates the sensitive APIs that were analyzed for a given extension, based on its permissions (cf. §4.4.1 and §4.4.2 of the paper). Specifically, if the extension has all corresponding permissions, all APIs from Table 5 in the Appendix would be considered. Note that the list of APIs to analyze can be changed (cf. below).
-2) `analysis.json`, stored in the content script's folder (configurable with the parameter `--analysis`). This JSON file summarizes DoubleX data flow reports for the analyzed extension (cf. §4.4.3). In particular, this file indicates the sensitive APIs that were detected in the extension and whether DoubleX reported a suspicious data flow or not.
-Our data flow reports indicate in which component a sensitive API was detected and, in the case of a detected suspicious data flow, the component that received/sent a message from/to an external actor. Therefore, if DoubleX detects, e.g., a sensitive API in the background page and a data flow between this API and an attacker-controllable message received in the content script, it means that DoubleX detected that the content script forwarded the message (or parts of the message) to the background page.  
-Note: DoubleX reports a suspicious data flow when `"dataflow": true` in the analysis JSON file. If `"dataflow": false` it just means that DoubleX detected a suspicious API but without an attacker-controllable flow / data exfiltration to an attacker.
-
-
-### Case of Web Accessible Resources (WARs)
-
-Instead of background pages, it is also possible to consider Web Accessible Resources (`WAR`).
-The WARs are handled slightly differently from background pages (due to their communication with the web application, cf. §2.2 of the paper); therefore, they should be given as parameter instead of the background page with the additional `--war` parameter:
-```
-python3 src/doublex.py -cs 'CONTENT_SCRIPT' -bp 'WAR' --war
-```
-
-### Sensitive APIs Considered
-
-Finally, it is possible to change the sensitive APIs analyzed. By default, we consider the DoubleX selected APIs for which an extension **has the corresponding permissions** (default is: `--apis 'permissions'`).  
-To run DoubleX on our ground-truth dataset and compare with EmPoWeb's findings on this dataset, the APIs to consider should be explicitly indicated with `--apis 'empoweb'` (cf. §5.4 of the paper). Note: this setting should *only* be used for the EmPoWeb comparison on the ground-truth dataset. For all other experiments, please use `--apis 'permissions'` (or simply omit this parameter).
-
-
-## Examples
-
-As an illustration of DoubleX's capabilities (e.g., aliasing, APIs not written in plain text, dynamic sink invocations, message forwarding between extension components, or confused deputy), we wrote some custom examples in the `examples` folder:
-
-- `examples/listing4/` contains the vulnerable content script example from Listing 4 of the paper. The analysis can be run with:
-```
-python3 src/doublex.py -cs 'examples/listing4/contentscript.js' -bp 'examples/listing4/background.js'
-```
-Two files will be generated in `examples/listing4/`, namely `extension_doublex_apis.json` (i.e., sensitive APIs for which the extension has the corresponding permissions) and `analysis.json` (i.e., DoubleX data flow reports). The expected results are in the `expected` folder.  
-As discussed in §4.4.2 and §4.4.3, DoubleX correctly detects the two calls to `eval` (despite dynamic invocation for the first one) and correctly flags only the first one as attacker controllable.
-
-- `examples/alias/` contains an example with aliasing (as discussed in §5.3 of the paper). The analysis can be run with:
-```
-python3 src/doublex.py -cs 'examples/alias/contentscript.js' -bp 'examples/alias/background.js'
-```
-In particular, DoubleX accurately detects the message-passing API in the content script, despite aliasing. This can be read from the following lines of the analysis file: 1) lines 12-16: the sensitive API `eval` was detected in the background page, 2) line 17: a suspicious data flow (i.e., attacker-controlled) is going into `eval`, and 3) lines 19-24: this attacker-controllable data was received line 2 of the content script. Since there is a data flow from attacker-controlled data in the content script to `eval` in the background page, this means that DoubleX correctly detected the fact that the content script forwarded this attacker-controllable message to the background.
-
-- `examples/dynamic-invocation/` contains an example with a dynamic sink invocation (as discussed in §4.4.2 of the paper). The analysis can be run with:
-```
-python3 src/doublex.py -cs 'examples/dynamic-invocation/contentscript.js' -bp 'examples/dynamic-invocation/background.js'
-```
-As previously, DoubleX detects that the content script forwards an attacker-controllable message to the background (as indicated in the analysis file: message received in the content script but sink invoked in the background). In addition, DoubleX pointer analysis module correctly computes and identifies the call to "chrome.tabs.executeScript(attackerData)" in the background page (string concatenation and detection of the dynamic invocation with the bracket notation, similarly to the example of §4.4.2).
-
-- `examples/externally-connectable/` is a Confused Deputy example, i.e., this extension can be exploited by any extension, as it does not specify the `externally_connectable` entry in its manifest (as discussed in §2.2 and §3 of the paper). The analysis can be run with:
-```
-python3 src/doublex.py -cs 'examples/externally-connectable/contentscript.js' -bp 'examples/externally-connectable/background.js'
-```
-As indicated in the analysis file, this extension exfiltrates a user's browsing history.
-
-
-## Vulnerable Extensions Detected
-
-We can provide a list of the 184 vulnerable extensions we detected, their source code, as well as DoubleX generated reports upon request (in this case, please send me an email).
-
-
-## Ground-Truth Extension Set
-
-We can provide a list of the 73 ground-truth vulnerable extensions from the EmPoWeb paper that were still vulnerable in March 2021, their source code, as well as DoubleX generated reports upon request (in this case, please send me an email).
-
-
-## Cite this work
-If you use DoubleX for academic research, you are highly encouraged to cite the following [paper](https://swag.cispa.saarland/papers/fass2021doublex.pdf):
-```
-@inproceedings{fass2021doublex,
-    author="Aurore Fass and Doli{\`e}re Francis Som{\'e} and Michael Backes and Ben Stock",
-    title="{\textsc{DoubleX}: Statically Detecting Vulnerable Data Flows in Browser Extensions at Scale}",
-    booktitle="ACM CCS",
-    year="2021"
+The analysis output of each single extension will be stored in a file called `analysis_renderer_attacker.json`. 
+For the example given above, the JSON output will look like this:
+```json
+{
+    "extension": "/extension/path",
+    "benchmarks": {
+        "bp": {
+            "crashes": [],
+            "got AST": 0.0924349578563124,
+            "AST": 0.0006474161054939032,
+            "bp: 4.1/3.1 non-UXSS vulnerabilities": 0.001533915987238288,
+            "bp: 4.1/3.1 UXSS vulnerabilities": 0.00018408405594527721,
+            "bp: 4.2/3.2 UXSS vulnerabilities": 0.0001669169869273901,
+            "bp: 4.3/3.1 vulnerabilities": 0.00018233410082757473,
+            "bp: 4.3/3.2 vulnerabilities": 7.795891724526882e-05,
+            "bp: 3.1 violations w/o privileged API access": 0.00010699988342821598,
+            "bp: 4.3/3.2 extension storage accesses": 0.00011675013229250908
+        },
+        "cs": {
+            "crashes": [],
+            "got AST": 0.060651957988739014,
+            "AST": 6.83339312672615e-05,
+            "cs: ~4.2/3.2 UXSS vulnerabilities": 0.00029204203747212887,
+            "cs: 4.3/3.2/3.3 extension storage accesses": 0.0002911249175667763
+        }
+    },
+    "manifest_version": 3,
+    "content_script_injected_into": [
+        "<all_urls>"
+    ],
+    "bp": {
+        "code_stats": {
+            "avg_name_len_identifiers": 7.615384615384615,
+            "avg_name_len_declared_vars": -1,
+            "avg_name_len_declared_funcs": -1,
+            "avg_name_len_declared_classes": -1,
+            "one_character_identifier_percentage": 0
+        },
+        "exfiltration_dangers": [
+            {
+                "from_flow": [
+                    {
+                        "no": 1,
+                        "location": "3:17 - 3:24",
+                        "filename": "/extension/path/background.js",
+                        "identifier": "cookies",
+                        "line_of_code": "        function(cookies) {"
+                    },
+                    {
+                        "no": 2,
+                        "location": "4:25 - 4:32",
+                        "filename": "/extension/path/background.js",
+                        "identifier": "cookies",
+                        "line_of_code": "            sendResponse(cookies);"
+                    }
+                ],
+                "to_flow": [
+                    {
+                        "no": 1,
+                        "location": "1:51 - 1:63",
+                        "filename": "/extension/path/background.js",
+                        "identifier": "sendResponse",
+                        "line_of_code": "chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {"
+                    },
+                    {
+                        "no": 2,
+                        "location": "4:12 - 4:24",
+                        "filename": "/extension/path/background.js",
+                        "identifier": "sendResponse",
+                        "line_of_code": "            sendResponse(cookies);"
+                    }
+                ],
+                "rendezvous": {
+                    "type": "CallExpression",
+                    "location": "4:12 - 4:33",
+                    "filename": "/extension/path/background.js",
+                    "line_of_code": "            sendResponse(cookies);"
+                },
+                "data_flow_number": "1/1"
+            }
+        ],
+        "infiltration_dangers": [],
+        "31_violations_without_sensitive_api_access": [],
+        "extension_storage_accesses": {}
+    },
+    "cs": {
+        "code_stats": {
+            "avg_name_len_identifiers": -1,
+            "avg_name_len_declared_vars": -1,
+            "avg_name_len_declared_funcs": -1,
+            "avg_name_len_declared_classes": -1,
+            "one_character_identifier_percentage": -1
+        },
+        "exfiltration_dangers": [],
+        "infiltration_dangers": [],
+        "extension_storage_accesses": {}
+    }
 }
 ```
 
-### Abstract:
+A digest of all analysis results for all extensions analyzed will be stored in a CSV file as well. 
+Its path is specified via the `--csv-out` command line argument. 
+No CSV file will be created when no `--csv-out` argument is supplied.
 
-Browser extensions are popular to enhance users' browsing experience. By design, they have access to security- and privacy-critical APIs to perform tasks that web applications cannot traditionally do. Even though web pages and extensions are isolated, they can communicate through messages. Specifically, a vulnerable extension can receive messages from another extension or web page, under the control of an attacker. Thus, these communication channels are a way for a malicious actor to elevate their privileges to the capabilities of an extension, which can lead to, e.g., universal cross-site scripting or sensitive user data exfiltration. To automatically detect such security and privacy threats in benign-but-buggy extensions, we propose our static analyzer DoubleX. DoubleX defines an Extension Dependence Graph (EDG), which abstracts extension code with control and data flows, pointer analysis, and models the message interactions within and outside of an extension. This way, we can leverage this graph to track and detect suspicious data flows between external actors and sensitive APIs in browser extensions.
+## Improvements made upon DoubleX
 
-We evaluated DoubleX on 154,484 Chrome extensions, where it flags 278 extensions as having a suspicious data flow. Overall, we could verify that 89% of these flows can be influenced by external actors (i.e., an attacker). Based on our threat model, we subsequently demonstrate exploitability for 184 extensions. Finally, we evaluated DoubleX on a labeled vulnerable extension set, where it accurately detects almost 93% of known flaws.
+Despite the fact that it focuses on different kinds of vulnerabilities, this tool adds some 
+functionality/fixes to DoubleX:
+1. supports input of multiple CRX files, as well as parallelization of the analysis 
+2. one joint output in CSV format, in addition to the per-extension JSON output
+3. replacement of the Esprima parser, which isn't maintained anymore and therefore does not support newer JavaScript 
+   syntax features, with the Espree parser
+4. improved (in fact, completely re-implemented) data flow generation; see below:
 
+The following examples were mishandled by DoubleX, their data flows are now correctly handled:
+
+### Function expressions are only in scope within themselves:
+
+```javascript
+(function(t) {
+    !function t() {}   // DoubleX adds exactly 1 data flow: from this "t"...
+    console.log(t);    // ...to this "t" and that data flow is WRONG!
+})(42);
+```
+
+### Declared functions are hoisted but only within their scope, which is the function they're in:
+
+```javascript
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    function cookies_handler(cookies) {
+        sendResponse(cookies);
+    }
+          
+    let promise = chrome.cookies.getAll({});
+    promise.then(cookies_handler);
+   
+    return true;
+});
+
+cookies_handler; // this shouldn’t refer to anything as "cookies_handler" is not in scope!!!
+```
+
+### Missing data flow to function declaration once code gets a little more complex:
+
+```javascript
+!function(e, r, t) {
+    function s(e) {
+        v(e) // DoubleX had no data flow from function "v", instead from var "v", which isn't even in scope!
+    }
+
+    function u(e, r, t, n) {
+        var o = Object.getPrototypeOf(r);
+        !function(e, r, t) {
+                (r[t] = function() {
+                    var v = r.level;
+                    l(this, {}, u)
+                })
+            }(e, r, t)
+    }
+
+    function a(e, r, t, i) {
+        return e, r, t, i
+    }
+
+    function c(e, r, t, n) {
+        return e, r, t, n
+    }
+
+    function d(e, r, t) {
+        return e, r, t
+    }
+
+    function l(e, r, t) {
+        return e, r, t
+    }
+
+    function f(e) {
+        return e
+    }
+
+    function v(e) {
+        return e
+    }
+}
+```
+
+### Miscellaneous oddities DoubleX data flow generation exhibited, too:
+
+```javascript
+foo(a,b,c,d)
+x = {a:b, c:d} // DoubleX adds data flows from this "a" and this "c" to the "a" and "c" above
+```
+
+```javascript
+const db = x;              // Missing data flow from this "db" ...
+db.get("Alice").age = 42;  // ... to this "db".
+// Worked however when you remove the "= 42" or the ".get("Alice")" ...
+```
 
 ## License
 
-This project is licensed under the terms of the AGPL3 license, which you can find in ```LICENSE```.
+DoubleX, and hence this tool as well, is licensed under the terms of the AGPL3 license (a strong copyleft license), 
+which you can find in ```LICENSE```.
+
+## Further reading
+
+Further reading on this topic can be found here:
+* [the 2023 paper by Young Min Kim and Byoungyoung Lee, describing the attacker model, they analyzed dozens of extensions manually](https://www.usenix.org/conference/usenixsecurity23/presentation/kim-young-min)
+* [the DoubleX paper by Fass et al., on which this tool's code is based](https://swag.cispa.saarland/papers/fass2021doublex.pdf)
+* [the Chrome extension API reference](https://developer.chrome.com/docs/extensions/reference/api/)
