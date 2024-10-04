@@ -230,7 +230,8 @@ class Node:
         start = timeit.default_timer()
         if add_my_data_flows:
             print("Adding missing data flow edges...")
-            no_added_df_edges: int = add_missing_data_flow_edges(pdg)
+            data_flow_gen_benchmarks = benchmarks['data_flow_gen_benchmarks'] = dict()
+            no_added_df_edges: int = add_missing_data_flow_edges(pdg, benchmarks=data_flow_gen_benchmarks)
             print(f"{no_added_df_edges} missing data flows edges added to PDG within "
                   f"{timeit.default_timer() - start}s")
 
