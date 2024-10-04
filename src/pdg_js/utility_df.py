@@ -105,3 +105,25 @@ def limit_memory(maxsize):
 
     soft, hard = resource.getrlimit(resource.RLIMIT_AS)
     resource.setrlimit(resource.RLIMIT_AS, (maxsize, hard))
+
+
+# ADDED BY ME:
+def cross_product(xs, ys, where_either_equals=None):
+    """
+    *** Implementation note: ***
+    When `where_either_equals is not None and where_either_equals in xs and where_either_equals in ys`, then
+    (where_either_equals, where_either_equals) will be returned twice!
+    """
+    if where_either_equals is None:
+        for x in xs:
+            for y in ys:
+                yield x, y
+
+    else:
+        for x in [x_ for x_ in xs if x_ == where_either_equals]:
+            for y in ys:
+                yield x, y
+
+        for y in [y_ for y_ in ys if y_ == where_either_equals]:
+            for x in xs:
+                yield x, y

@@ -126,6 +126,7 @@ class Node:
             add_doublex_data_flows=False,
             remove_incorrect_doublex_data_flows=False,
             add_my_data_flows=False,
+            add_my_basic_data_flows=False,
         )
 
     # ADDED BY ME:
@@ -145,6 +146,7 @@ class Node:
             add_doublex_data_flows=False,
             remove_incorrect_doublex_data_flows=False,
             add_my_data_flows=False,
+            add_my_basic_data_flows=False,
         )
 
     # ADDED BY ME:
@@ -156,7 +158,8 @@ class Node:
                         add_doublex_control_flows: bool = False,
                         add_doublex_data_flows: bool = False,
                         remove_incorrect_doublex_data_flows: bool = False,
-                        add_my_data_flows: bool = True) -> Self:
+                        add_my_data_flows: bool = True,
+                        add_my_basic_data_flows: bool = True) -> Self:
         """
         Returns the parsed AST from the given `js_code`; annotated with data flow edges.
         By default, no control flow edges will be added and data flow edge generation will use my own code instead
@@ -177,6 +180,7 @@ class Node:
             add_doublex_data_flows=add_doublex_data_flows,
             remove_incorrect_doublex_data_flows=remove_incorrect_doublex_data_flows,
             add_my_data_flows=add_my_data_flows,
+            add_my_basic_data_flows=add_my_basic_data_flows,
         )
 
     # ADDED BY ME:
@@ -188,7 +192,8 @@ class Node:
                       add_doublex_control_flows: bool = False,
                       add_doublex_data_flows: bool = False,
                       remove_incorrect_doublex_data_flows: bool = False,
-                      add_my_data_flows: bool = True) -> Self:
+                      add_my_data_flows: bool = True,
+                      add_my_basic_data_flows: bool = True) -> Self:
         """
         Returns the parsed AST from the given JavaScript `file`; annotated with data flow edges.
         By default, no control flow edges will be added and data flow edge generation will use my own code instead
@@ -231,7 +236,9 @@ class Node:
         if add_my_data_flows:
             print("Adding missing data flow edges...")
             data_flow_gen_benchmarks = benchmarks['data_flow_gen_benchmarks'] = dict()
-            no_added_df_edges: int = add_missing_data_flow_edges(pdg, benchmarks=data_flow_gen_benchmarks)
+            no_added_df_edges: int = add_missing_data_flow_edges(pdg,
+                                                                 add_basic_df_edges=add_my_basic_data_flows,
+                                                                 benchmarks=data_flow_gen_benchmarks)
             print(f"{no_added_df_edges} missing data flows edges added to PDG within "
                   f"{timeit.default_timer() - start}s")
 
