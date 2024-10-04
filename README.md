@@ -122,7 +122,7 @@ Some notable, useful arguments are:
 3. The following repository contains a Python script to crawl the Chrome web store:  
    [https://github.com/k-gruenberg/chrome_webstore_crawler](https://github.com/k-gruenberg/chrome_webstore_crawler)
 
-### Unpacking a Chrome Extension
+## Unpacking a Chrome Extension
 
 This tool will automatically unpack Chrome extensions in .CRX format for you, when you supply them using 
 the `--crx` command line argument. Multiple .CRX files may be supplied, in fact, you are encouraged to simply
@@ -136,7 +136,7 @@ You may unpack an extension using the following command:
 python3 src/unpack_extension.py -s 'CRX_PATH' -d 'UNPACKED_PATH'
 ```
 
-### Output of the Analysis
+## Output of the Analysis
 
 The analysis output of each single extension will be stored in a file called `analysis_renderer_attacker.json`. 
 For the example given above, the JSON output will look like this:
