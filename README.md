@@ -107,7 +107,7 @@ Some notable, useful arguments are:
 * `--sort-crxs-by-size-ascending` to sort all CRX input files by size, in ascending order, before beginning to 
   unpack and analyze them. The idea behind this is the heuristic that smaller files will be easier/faster to analyze.
 * `--csv-out path` to specify the path of the CSV output file to create (creation of this CSV is highly recommended!)
-* `--include-31-violations-without-privileged-api-access` to also look for "weaker" vulnerabilities, where there's  
+* `--include-31-violations-without-privileged-api-access` to also look for "weaker" vulnerabilities, where there's 
   no verification of the message sender (renderer-attacker-exploitable) but no sensitive API is actually accessed; 
   it has to be verified manually whether each of these actually pose any real danger.
 
