@@ -8,13 +8,14 @@ import traceback
 
 
 def read_from_source_file(filename: str, location: str,
-                          lines_before: int = 5, lines_after: int = 5) -> str:
+                          lines_before: int = 5, lines_after: int = 5, max_no_of_lines: int = 100) -> str:
     """
     Parameters:
         filename: e.g.: "/extension/path/background.js"
         location: e.g.: "4:12 - 4:33"
         lines_before: how many additional preceding lines to include as well (if possible); default: 5
         lines_after: how many additional subsequent lines to include as well (if possible); default: 5
+        max_no_of_lines: the maximum number of lines to read; default: 100
     """
     [start, end] = location.split(" - ")
     start_line: int = int(start.split(":")[0])
@@ -27,7 +28,9 @@ def read_from_source_file(filename: str, location: str,
 
     with open(filename, "r") as f:
         for current_line_num, line in enumerate(f, start=1):
-            if start_line <= current_line_num <= end_line:
+            if len(lines) >= max_no_of_lines:
+                break  # stop reading
+            elif start_line <= current_line_num <= end_line:
                 lines.append(line)
             elif current_line_num > end_line:
                 break  # stop reading
