@@ -4766,6 +4766,7 @@ class Identifier(Node, Value):
         """
         return_value = 0
         if extremity not in [el.extremity for el in self._data_dep_children]:  # Avoids duplicates
+            assert extremity.name == "Identifier"
             self._data_dep_children.append(Dependence('data dependency', extremity, 'data',
                                                        nearest_statement))
             extremity._data_dep_parents.append(Dependence('data dependency', self, 'data',
