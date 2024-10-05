@@ -32,7 +32,6 @@ from multiprocessing import Process
 import queue
 import re
 from typing import Tuple, Any
-
 # Original DoubleX extension analysis:
 from vulnerability_detection import analyze_extension as doublex_analyze_extension
 
@@ -43,6 +42,7 @@ from vulnerability_detection import analyze_extension as doublex_analyze_extensi
 from kim_and_lee_vulnerability_detection import analyze_extension as kim_and_lee_analyze_extension
 
 from unpack_extension import unpack_extension
+from MarkdownReport import MarkdownReport
 
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
@@ -276,7 +276,16 @@ def main():
                              "Only has an effect in combination with the --crx and --renderer-attacker parameters. "
                              "CSV file will contain list of all extensions analyzed and number of vulnerabilities"
                              "found, by type. "
-                             "No .CSV file will be created when the --csv-out argument isn't supplied.")
+                             "No .CSV file will be created when the --csv-out argument isn't supplied. "
+                             "Recommended value: 'result.csv'")
+    # => ToDo: put logic into separate file, cf. MarkdownReport class
+
+    parser.add_argument("--md-out", metavar="path", type=str, default="",
+                        help="Path of the .MD (Markdown) output file. "
+                             "Only has an effect in combination with the --crx and --renderer-attacker parameters. "
+                             "Markdown file will contain list of all vulnerabilities found in a most human-readable "
+                             "manner. No .MD file will be created when the --md-out argument isn't supplied. "
+                             "Recommended value: 'report.md'")
 
     parser.add_argument("--consider-http-as-safe", dest='consider_http_as_safe',
                         action='store_true',
@@ -467,6 +476,21 @@ def main():
                           "files and line numbers\n")
             csv_out.flush() # ToDo: add no. of UXSS vulnerabilities!
 
+        # If user activated output of vulnerabilities found into a MD file by supplying the --md-out argument:
+        if args.md_out != "":
+            if not args.renderer_attacker:
+                print(f"Error: the --md-out argument may only be supplied in combination with the --renderer-attacker "
+                      f"argument.")
+                exit(1)
+            elif os.path.exists(args.md_out):
+                print(f"Error: '{args.md_out}' file already exists, please supply another file as --md-out.")
+                exit(1)
+            markdown_report = MarkdownReport(
+                md_path=args.md_out,
+                no_worker_processes_used=args.parallelize,
+                timeout_used=args.timeout,
+            )
+
         if args.sort_crxs_by_size_ascending:
             print(f"Sorting {len(crxs)} .CRX files by file size...")
             crxs.sort(key=lambda crx_file: os.path.getsize(crx_file))
@@ -498,6 +522,8 @@ def main():
                            suffix=f"({formatted_time_passed_so_far} passed so far)")
 
             info, analysis_result = results_queue.get(block=True)  # blocks until a result is available
+            if args.md_out != "":
+                markdown_report.add_extension(info=info, analysis_result=analysis_result)
             crx = info["crx"]
             extension_size_unpacked = info["extension_size_unpacked"]
             js_loc = info["js_loc"]
@@ -659,12 +685,17 @@ def main():
 
         # Close CSV output file:
         if args.csv_out != "":
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] "
-                  f"Closing CSV output file...")
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Closing CSV output file...")
             csv_out.close()
 
+        # Close Markdown output file:
+        if args.md_out != "":
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Closing MD output file...")
+            markdown_report.close_file()
+
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Done." +
-              (f" {results_collected} results collected in CSV file: {args.csv_out}" if args.csv_out != '' else ''))
+              (f" {results_collected} results collected in CSV file: {args.csv_out}" if (args.csv_out != '') else '') +
+              (f" Vulnerabilities collected in Markdown file: {args.md_out}" if (args.md_out != '') else ''))
 
 
 if __name__ == "__main__":
