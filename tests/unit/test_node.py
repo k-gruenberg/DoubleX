@@ -408,7 +408,7 @@ class TestNodeClass(unittest.TestCase):
                     .child(Node("Identifier", attributes={"name": "x"}))
                     .child(Node("Identifier", attributes={"name": "y"}))
             )
-        # print(expression) # will raise an AttributeError as data_dep_children is None for the Identifiers!
+        # print(expression) # will raise an AttributeError as __data_dep_children is None for the Identifiers!
         a = expression.get_identifier_by_name("a")
         b = expression.get_identifier_by_name("b")
         x = expression.get_identifier_by_name("x")

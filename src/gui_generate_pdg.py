@@ -17,6 +17,7 @@ ADD_DOUBLEX_CONTROL_FLOWS = False
 ADD_DOUBLEX_DATA_FLOWS = False
 REMOVE_INCORRECT_DOUBLEX_DATA_FLOWS = False
 ADD_MY_DATA_FLOWS = True
+ADD_MY_BASIC_DATA_FLOWS = True  # (usually set to False due to lazy data flow generation but not for the GUI)
 
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
@@ -56,6 +57,7 @@ def main():
                 add_doublex_data_flows=ADD_DOUBLEX_DATA_FLOWS,
                 remove_incorrect_doublex_data_flows=REMOVE_INCORRECT_DOUBLEX_DATA_FLOWS,
                 add_my_data_flows=ADD_MY_DATA_FLOWS,
+                add_my_basic_data_flows=ADD_MY_BASIC_DATA_FLOWS,
             )
 
             # Set content of the right text area:
@@ -251,7 +253,7 @@ def main():
                     identifier: Node = identifiers[0]
 
                     # Highlight all data flow parents in red:
-                    for df_parent in identifier.data_dep_parents:
+                    for df_parent in identifier.data_dep_parents():
                         df_parent_node = df_parent.extremity
                         start_line, start_column, end_line, end_column = df_parent_node.get_location_as_tuple()
                         highlight_start = f"{start_line}.{start_column}"

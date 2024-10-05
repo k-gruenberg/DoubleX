@@ -185,7 +185,7 @@ def get_data_flow(input_file, benchmarks, store_pdgs=None, check_var=False, beau
             if check_var:
                 for scope in scopes:
                     for unknown in scope.unknown_var:
-                        if not unknown.data_dep_parents:
+                        if not unknown.__data_dep_parents:
                             # If DD: not unknown, can happen because of hoisting FunctionDeclaration
                             # After second function run, not unknown anymore
                             logging.warning('The variable %s is not declared in the scope %s',

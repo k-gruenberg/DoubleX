@@ -69,9 +69,9 @@ def find_callback_def(handle_callback, param_nb):
         return find_callback_def(handle_callback, param_nb)  # handle_callback is a FunExpr or Id
 
     elif isinstance(handle_callback, _node.Identifier):
-        if len(handle_callback.data_dep_parents) >= 1:  # Will look for the callback definition
-            while handle_callback.data_dep_parents:
-                handle_callback = handle_callback.data_dep_parents[0].extremity  # Identifier Node
+        if len(handle_callback.data_dep_parents()) >= 1:  # Will look for the callback definition
+            while handle_callback.data_dep_parents():
+                handle_callback = handle_callback.data_dep_parents()[0].extremity  # Identifier Node
             fun = handle_callback.fun  # Handler to the function?
             # Case1: if fun is not None, fun is a handler to the function
             # handle_callback was initially the function call site and is now the function def site
@@ -100,7 +100,7 @@ def find_callback_def(handle_callback, param_nb):
 
         else:
             logging.error('The callback %s has been defined %s times...', handle_callback.id,
-                          len(handle_callback.data_dep_children))
+                          len(handle_callback.data_dep_children()))
             message, fun = None, None
 
     else:
@@ -130,12 +130,12 @@ def find_callback_call(handle_callback, visited):
         # arrow function, something strange occurs
         return None
 
-    if not hasattr(handle_callback, "data_dep_children"):
+    if not hasattr(handle_callback, "__data_dep_children"):
         return None
 
-    if handle_callback.data_dep_children:  # Will find where the callback is called
+    if handle_callback.data_dep_children():  # Will find where the callback is called
         messages_list = []
-        for callback_called in handle_callback.data_dep_children:
+        for callback_called in handle_callback.data_dep_children():
             fun_handle_message = callback_called.extremity  # Identifier Node
 
             if hasattr(fun_handle_message, 'fun_param_parents'):  # Aliasing case, looks for params
@@ -166,7 +166,7 @@ def find_callback_call(handle_callback, visited):
         return messages_list
 
     logging.error('The callback %s has been called %s times...', handle_callback.id,
-                  len(handle_callback.data_dep_children))
+                  len(handle_callback.data_dep_children()))
     return None
 
 

@@ -100,7 +100,7 @@ class DataFlow:
         """
         Returns True iff this data flow may be continued.
         """
-        return len(self.nodes[-1].data_dep_children) > 0
+        return len(self.nodes[-1].data_dep_children()) > 0
 
     def continue_flow(self) -> List[Self]:
         """
@@ -108,7 +108,7 @@ class DataFlow:
         or `None` if this DataFlow cannot be continued any further.
         """
         result = []
-        next = self.nodes[-1].data_dep_children
+        next = self.nodes[-1].data_dep_children()
         if len(next) == 0:
             return None  # indicate that this DataFlow cannot be continued any further
         for child_data_dep in next:

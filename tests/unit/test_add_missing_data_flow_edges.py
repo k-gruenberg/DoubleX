@@ -117,9 +117,9 @@ class TestAddMissingDataFlowEdges(unittest.TestCase):
                           .get_child("Identifier"))
         self.assertEqual("z", first_z.attributes['name'])
         self.assertEqual("z", second_z.attributes['name'])
-        self.assertEqual(1, len(first_z.data_dep_children))
-        self.assertEqual(second_z, first_z.data_dep_children[0].extremity)
-        self.assertEqual(0, len(second_z.data_dep_children))
+        self.assertEqual(1, len(first_z._data_dep_children))
+        self.assertEqual(second_z, first_z._data_dep_children[0].extremity)
+        self.assertEqual(0, len(second_z._data_dep_children))
 
         # Test ObjectPatterns as function parameters:
         code = """
@@ -150,9 +150,9 @@ class TestAddMissingDataFlowEdges(unittest.TestCase):
                           .get_child("CallExpression").get_child("Identifier"))
         self.assertEqual("a", first_a.attributes['name'])
         self.assertEqual("a", second_a.attributes['name'])
-        self.assertEqual(1, len(first_a.data_dep_children))
-        self.assertEqual(second_a, first_a.data_dep_children[0].extremity)
-        self.assertEqual(0, len(second_a.data_dep_children))
+        self.assertEqual(1, len(first_a._data_dep_children))
+        self.assertEqual(second_a, first_a._data_dep_children[0].extremity)
+        self.assertEqual(0, len(second_a._data_dep_children))
 
         # Test function parameters with default values:
         code = """
@@ -182,9 +182,9 @@ class TestAddMissingDataFlowEdges(unittest.TestCase):
                           .get_child("CallExpression").get_child("Identifier"))
         self.assertEqual("x", first_x.attributes['name'])
         self.assertEqual("x", second_x.attributes['name'])
-        self.assertEqual(1, len(first_x.data_dep_children))
-        self.assertEqual(second_x, first_x.data_dep_children[0].extremity)
-        self.assertEqual(0, len(second_x.data_dep_children))
+        self.assertEqual(1, len(first_x._data_dep_children))
+        self.assertEqual(second_x, first_x._data_dep_children[0].extremity)
+        self.assertEqual(0, len(second_x._data_dep_children))
 
         # Test function expressions:
         code = """
@@ -229,10 +229,10 @@ class TestAddMissingDataFlowEdges(unittest.TestCase):
         self.assertEqual("t", first_t.attributes['name'])
         self.assertEqual("t", second_t.attributes['name'])
         self.assertEqual("t", third_t.attributes['name'])
-        self.assertEqual(1, len(first_t.data_dep_children))
-        self.assertEqual(third_t, first_t.data_dep_children[0].extremity)
-        self.assertEqual(0, len(second_t.data_dep_children))
-        self.assertEqual(0, len(third_t.data_dep_children))
+        self.assertEqual(1, len(first_t._data_dep_children))
+        self.assertEqual(third_t, first_t._data_dep_children[0].extremity)
+        self.assertEqual(0, len(second_t._data_dep_children))
+        self.assertEqual(0, len(third_t._data_dep_children))
 
         # Test handling of identifier overshadowing:
         code = """
@@ -268,7 +268,7 @@ class TestAddMissingDataFlowEdges(unittest.TestCase):
         self.assertEqual("w", first_w.attributes['name'])
         self.assertEqual("w", second_w.attributes['name'])
         self.assertEqual("w", third_w.attributes['name'])
-        self.assertEqual(1, len(second_w.data_dep_children))
-        self.assertEqual(third_w, second_w.data_dep_children[0].extremity)
-        self.assertEqual(0, len(first_w.data_dep_children))
-        self.assertEqual(0, len(third_w.data_dep_children))
+        self.assertEqual(1, len(second_w._data_dep_children))
+        self.assertEqual(third_w, second_w._data_dep_children[0].extremity)
+        self.assertEqual(0, len(first_w._data_dep_children))
+        self.assertEqual(0, len(third_w._data_dep_children))

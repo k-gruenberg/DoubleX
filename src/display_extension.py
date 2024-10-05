@@ -170,7 +170,7 @@ def produce_cfg_one_child(child, data_flow, attributes,
     if data_flow:
         graph.attr('edge', color='darkorange', style='dashed')
         if isinstance(child, _node.Identifier):
-            for child_data_dep in child.data_dep_children:
+            for child_data_dep in child._data_dep_children:
                 child_data = child_data_dep.extremity
                 type_node = cfg_type_node(child)
                 graph.attr('node', shape=type_node[0], color=type_node[1], fillcolor=type_node[2])

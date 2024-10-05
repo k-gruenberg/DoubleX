@@ -977,7 +977,7 @@ def build_dfg_content(child, scopes, id_list, entry):
         else:
             identifiers = search_identifiers(callee, id_list=[], tab=[])
             for identifier in identifiers:
-                for data_dep in identifier.data_dep_parents:
+                for data_dep in identifier.__data_dep_parents:
                     if data_dep.extremity.fun is not None:  # Calling a fun that was defined before
                         callee = data_dep.extremity.fun
                         scopes = handle_call_expr(child, scopes=scopes, callee=callee,
@@ -1054,9 +1054,9 @@ def build_dfg_content(child, scopes, id_list, entry):
                         scopes = data_flow(child.children[3], scopes, id_list, entry)  # body
                     scopes = data_flow(child.children[2], scopes, id_list, entry)  # update / body
                     for identifier in identifiers:
-                        if len(identifier.data_dep_children) >= 3:
-                            identifier.data_dep_children[0].extremity.set_value(
-                                identifier.data_dep_children[2].extremity)  # updates test value
+                        if len(identifier._data_dep_children) >= 3:
+                            identifier._data_dep_children[0].extremity.set_value(
+                                identifier._data_dep_children[2].extremity)  # updates test value
                 else:
                     break  # To go out of the while!
             let_const_scope(child, scopes)  # Limit scope when going out of the block

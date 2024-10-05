@@ -32,7 +32,7 @@ def remove_incorrect_data_flow_edges(pdg: Node) -> int:
         #   cf. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/function):
         for func_expr_child in pdg.children:
             if func_expr_child.name == "Identifier":
-                for data_dep_child in func_expr_child.data_dep_children:
+                for data_dep_child in func_expr_child._data_dep_children:
                     if not data_dep_child.extremity.is_inside(block_statement):
                         # There is a data flow from the identifier or a parameter of a FunctionExpression to *outside*
                         #   the FunctionExpression's body (and therefore scope), remove it:

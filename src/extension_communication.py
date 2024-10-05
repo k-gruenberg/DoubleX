@@ -253,7 +253,7 @@ def detect_onmessage(child, all_messages, where, chrome):
             if not isinstance(init, _node.Identifier):
                 return
 
-            for data_dep_parent in init.data_dep_parents:
+            for data_dep_parent in init.data_dep_parents():
                 # Case: onmessage = f and the FunExpr/FunDecl f defined before
                 # We are looking for the function definition site
                 fun_identifier = data_dep_parent.extremity
@@ -279,7 +279,7 @@ def update_receiver_data_dep(receiver, updated_id):
     """ Updates the value of the DD from a receiver node with the sender's value. """
 
     # Recursively updates data flow
-    for data_dep in receiver.data_dep_children:
+    for data_dep in receiver.data_dep_children():
         data_dep = data_dep.extremity
         data_dep.set_value(receiver.value)  # Updates with value of receiver coming from sender
         data_dep.set_provenance(receiver)  # data_dep is depending on receiver

@@ -159,13 +159,17 @@ class Node:
                         add_doublex_data_flows: bool = False,
                         remove_incorrect_doublex_data_flows: bool = False,
                         add_my_data_flows: bool = True,
-                        add_my_basic_data_flows: bool = True) -> Self:
+                        add_my_basic_data_flows: bool = False) -> Self:
         """
         Returns the parsed AST from the given `js_code`; annotated with data flow edges.
         By default, no control flow edges will be added and data flow edge generation will use my own code instead
         of DoubleX's original code, which contains numerous bugs.
 
         Used by the GUI, as well as the test suites.
+
+        Note:
+        When add_my_basic_data_flows=False (which is the default), basic data flow edges will *still* be
+        generated, just later, lazily on demand!
         """
         tmp_file = tempfile.NamedTemporaryFile()
         with open(tmp_file.name, 'w') as f:
@@ -193,13 +197,17 @@ class Node:
                       add_doublex_data_flows: bool = False,
                       remove_incorrect_doublex_data_flows: bool = False,
                       add_my_data_flows: bool = True,
-                      add_my_basic_data_flows: bool = True) -> Self:
+                      add_my_basic_data_flows: bool = False) -> Self:
         """
         Returns the parsed AST from the given JavaScript `file`; annotated with data flow edges.
         By default, no control flow edges will be added and data flow edge generation will use my own code instead
         of DoubleX's original code, which contains numerous bugs.
 
         Used for the main program/vulnerability detection.
+
+        Note:
+        When add_my_basic_data_flows=False (which is the default), basic data flow edges will *still* be
+        generated, just later, lazily on demand!
         """
         # Imports have to happen here to avoid circular imports:
         from .build_pdg import get_data_flow
@@ -405,7 +413,7 @@ class Node:
         last_len_self_data_dep_parents = 1
         while current_depth < max_depth:
             for parent1 in self_data_dep_parents.copy():
-                self_data_dep_parents.update(grandparent.extremity for grandparent in parent1.data_dep_parents)
+                self_data_dep_parents.update(grandparent.extremity for grandparent in parent1.data_dep_parents())
                 # Note: update() appends multiple elements to a set
             current_depth += 1
             if len(self_data_dep_parents) == last_len_self_data_dep_parents:
@@ -436,7 +444,7 @@ class Node:
             if len(set(self_data_dep_parents)) < len(self_data_dep_parents):  # Duplicate node => loop
                 break  # stop as soon as a loop is detected
 
-            data_flow_parents: List[Node] = [p.extremity for p in self_data_dep_parents[-1].data_dep_parents]
+            data_flow_parents: List[Node] = [p.extremity for p in self_data_dep_parents[-1].data_dep_parents()]
             if len(data_flow_parents) == 1:
                 self_data_dep_parents.append(data_flow_parents[0])
             else:
@@ -840,7 +848,7 @@ class Node:
 
         # cf. display_extension.py:
         if self.name == "Identifier":
-            for data_dep in self.data_dep_children:
+            for data_dep in self._data_dep_children:  # Note: calling str() does not trigger *generation* of DF edges!
                 str_repr += f" --{data_dep.label}--> [{data_dep.extremity.id}]"
 
         str_repr += "\n"
@@ -1950,11 +1958,11 @@ class Node:
         assert self.name == "Identifier" and other.name == "Identifier"
         if self == other:
             return 0
-        elif len(self.data_dep_children) == 0:
+        elif len(self.data_dep_children()) == 0:
             return float("inf")
         else:
             return 1 + min(data_flow_child.extremity.data_flow_distance_to(other)
-                           for data_flow_child in self.data_dep_children)
+                           for data_flow_child in self.data_dep_children())
 
     # ADDED BY ME:
     def function_Identifier_get_FunctionDeclaration(self,
@@ -3370,7 +3378,7 @@ class Node:
             # }
             callee: Node = self.get("callee")[0]
             if callee.name == "Identifier":
-                if (len(callee.data_dep_parents) > 0
+                if (len(callee.data_dep_parents()) > 0
                         or callee.function_Identifier_get_FunctionDeclaration(False) is not None):
                     raise StaticEvalException(f"static eval failed: can only statically evaluate calls to built-in "
                                               f"functions, not user-defined functions")
@@ -4708,8 +4716,39 @@ class Identifier(Node, Value):
         Value.__init__(self)
         self.code = None
         self.fun = None
-        self.data_dep_parents = []
-        self.data_dep_children = []
+        self._data_dep_parents = []
+        self._data_dep_children = []
+        self.basic_data_dep_computed = False
+
+    # ADDED BY ME:
+    def data_dep_parents(self) -> list:
+        # Lazy computation of basic data dep parents & children:
+        if not self.basic_data_dep_computed:
+            from .add_missing_data_flow_edges import add_basic_data_flow_edges
+            add_basic_data_flow_edges(
+                pdg=self.root(),
+                identifier_of_interest=self,
+                # All data flows [id1] --data--> [id2] will be generated where either [id1]==self or [id2]==self.
+                debug=(os.environ.get('DEBUG') == "yes"),
+            )
+            self.basic_data_dep_computed = True
+
+        return self._data_dep_parents
+
+    # ADDED BY ME:
+    def data_dep_children(self) -> list:
+        # Lazy computation of basic data dep parents & children:
+        if not self.basic_data_dep_computed:
+            from .add_missing_data_flow_edges import add_basic_data_flow_edges
+            add_basic_data_flow_edges(
+                pdg=self.root(),
+                identifier_of_interest=self,
+                # All data flows [id1] --data--> [id2] will be generated where either [id1]==self or [id2]==self.
+                debug=(os.environ.get('DEBUG') == "yes"),
+            )
+            self.basic_data_dep_computed = True
+
+        return self._data_dep_children
 
     def set_code(self, code):
         self.code = code
@@ -4724,11 +4763,11 @@ class Identifier(Node, Value):
             1 if a new data dependency edge has been added.
         """
         return_value = 0
-        if extremity not in [el.extremity for el in self.data_dep_children]:  # Avoids duplicates
-            self.data_dep_children.append(Dependence('data dependency', extremity, 'data',
-                                                     nearest_statement))
-            extremity.data_dep_parents.append(Dependence('data dependency', self, 'data',
-                                                         nearest_statement))
+        if extremity not in [el.extremity for el in self._data_dep_children]:  # Avoids duplicates
+            self._data_dep_children.append(Dependence('data dependency', extremity, 'data',
+                                                       nearest_statement))
+            extremity._data_dep_parents.append(Dependence('data dependency', self, 'data',
+                                                          nearest_statement))
             return_value = 1
         self.set_provenance_dd(extremity)  # Stored provenance
         return return_value
@@ -4742,14 +4781,14 @@ class Identifier(Node, Value):
         Returns:
             the number of removed data dependency children
         """
-        prev_no_data_dep_children = len(self.data_dep_children)
+        prev_no_data_dep_children = len(self._data_dep_children)
 
-        self.data_dep_children = [el for el in self.data_dep_children if el.extremity != extremity]
+        self._data_dep_children = [el for el in self._data_dep_children if el.extremity != extremity]
 
         # Don't forget to also remove the extremity's data dependency parent(!):
-        extremity.data_dep_parents = [el for el in extremity.data_dep_parents if el.extremity != self]
+        extremity.__data_dep_parents = [el for el in extremity._data_dep_parents if el.extremity != self]
 
-        return prev_no_data_dep_children - len(self.data_dep_children)  # the no. of removed data dependency children
+        return prev_no_data_dep_children - len(self._data_dep_children)  # the no. of removed data dependency children
 
 
 class ValueExpr(Node, Value):
