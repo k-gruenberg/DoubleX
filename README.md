@@ -250,7 +250,8 @@ functionality/fixes to DoubleX:
 2. one joint output in CSV format, in addition to the per-extension JSON output
 3. replacement of the Esprima parser, which isn't maintained anymore and therefore does not support newer JavaScript 
    syntax features, with the Espree parser
-4. improved (in fact, completely re-implemented) data flow generation; see below:
+4. data flows are now computed lazily on-demand, providing a speed-up, especially for large obfuscated extension code
+5. improved (in fact, completely re-implemented) data flow generation; see below:
 
 The following examples were mishandled by DoubleX, their data flows are now correctly handled:
 
