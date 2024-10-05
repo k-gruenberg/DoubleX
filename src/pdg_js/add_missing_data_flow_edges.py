@@ -594,23 +594,23 @@ def add_missing_data_flow_edges_declarations_and_assignments(pdg: Node) -> int:
                     # ...add a data flow edge *from* that identifier *to* the leftmost identifier of the left-hand side:
                     data_flow_edges_added += identifier.set_data_dependency(leftmost_identifier)  # includes call: identifier._data_dep_children.append(extremity=lhs)
 
-            # Also adds data flows in the other direction, from `x` to `y` in non-declaring member assignments where
-            #     the RHS is an (Arrow)FunctionExpression; e.g.:
-            # x.onsuccess = (y) => { /* ... */ };
-            if pdg.name == "AssignmentExpression":
-                # (1) Determine all function params:
-                func_params: List[Node] = []
-                if rhs.name in ["ArrowFunctionExpression", "FunctionExpression"]:
-                    func_params = rhs.arrow_function_expression_get_params()
-                elif rhs.name == "Identifier":
-                    func_decl: Optional[Node] = rhs.function_Identifier_get_FunctionDeclaration(False)
-                    # => print_warning_if_not_found=False because Identifier may very well not refer to a function!
-                    if func_decl is not None:
-                        func_params = func_decl.function_declaration_get_params()
-                # (2) For each identifier `y` in each function param, add a data flow edge x --data--> y:
-                for func_param in func_params:
-                    for func_param_identifier in func_param.function_param_get_identifiers():
-                        data_flow_edges_added += leftmost_identifier.set_data_dependency(func_param_identifier)
+                # Also adds data flows in the other direction, from `x` to `y` in non-declaring member assignments where
+                #     the RHS is an (Arrow)FunctionExpression; e.g.:
+                # x.onsuccess = (y) => { /* ... */ };
+                if pdg.name == "AssignmentExpression":
+                    # (1) Determine all function params:
+                    func_params: List[Node] = []
+                    if rhs.name in ["ArrowFunctionExpression", "FunctionExpression"]:
+                        func_params = rhs.arrow_function_expression_get_params()
+                    elif rhs.name == "Identifier":
+                        func_decl: Optional[Node] = rhs.function_Identifier_get_FunctionDeclaration(False)
+                        # => print_warning_if_not_found=False because Identifier may very well not refer to a function!
+                        if func_decl is not None:
+                            func_params = func_decl.function_declaration_get_params()
+                    # (2) For each identifier `y` in each function param, add a data flow edge x --data--> y:
+                    for func_param in func_params:
+                        for func_param_identifier in func_param.function_param_get_identifiers():
+                            data_flow_edges_added += leftmost_identifier.set_data_dependency(func_param_identifier)
 
         elif lhs.name == "ArrayPattern" and rhs.name == "ArrayExpression":  # "let [cookies2, forty_two] = [cookies, 42];" (the "let" being optional)
             for i in range(min(len(lhs.children), len(rhs.children))):
