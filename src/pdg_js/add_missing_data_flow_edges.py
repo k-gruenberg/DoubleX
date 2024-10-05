@@ -215,21 +215,27 @@ def add_basic_data_flow_edges(pdg: Node, identifier_of_interest: Optional[Node] 
     data_flow_edges_added: int = 0
 
     # Collect *all* Identifier Nodes and group them by their name
-    #   (we'll only create DF edged between Identifiers with the same name in this function):
-    identifiers_by_name: Dict[str, List[Node]] = dict()
-    for identifier in pdg.get_all_as_iter("Identifier"):
-        # When identifier_of_interest_name=None, non-lazy basic data flow creation is used.
-        # To avoid *additional* redundant "lazy" re-computation in data_dep_parents()/data_dep_children(),
-        # we set the `basic_data_dep_computed` of all Identifiers to True.
-        if identifier_of_interest_name is None:
-            identifier.basic_data_dep_computed = True  # => technically not yet, but we are going to below :)
+    #   (we'll only create DF edged between Identifiers with the same name in this function)
+    #   => to avoid continuous re-computation in lazy mode, the result will be cached within the PDG root node:
+    if pdg.identifiers_by_name is None:
+        identifiers_by_name: Dict[str, List[Node]] = dict()
+        for identifier in pdg.get_all_as_iter("Identifier"):
+            # When identifier_of_interest_name=None, non-lazy basic data flow creation is used.
+            # To avoid *additional* redundant "lazy" re-computation in data_dep_parents()/data_dep_children(),
+            # we set the `basic_data_dep_computed` of all Identifiers to True.
+            if identifier_of_interest_name is None:
+                identifier.basic_data_dep_computed = True  # => technically not yet, but we are going to below :)
 
-        identifier_name: str = identifier.attributes['name']
-        if identifier_of_interest_name is None or identifier_name == identifier_of_interest_name:
-            if identifier_name not in identifiers_by_name:
-                identifiers_by_name[identifier_name] = list()
-            identifiers_by_name[identifier_name].append(identifier)
-    # => O(n) where: n = the total number of identifier nodes
+            identifier_name: str = identifier.attributes['name']
+            if identifier_of_interest_name is None or identifier_name == identifier_of_interest_name:
+                if identifier_name not in identifiers_by_name:
+                    identifiers_by_name[identifier_name] = list()
+                identifiers_by_name[identifier_name].append(identifier)
+        # => O(n) where: n = the total number of identifier nodes
+        # Cache result for next time:
+        pdg.identifiers_by_name = identifiers_by_name
+    else:  # Retrieve cached result:
+        identifiers_by_name: Dict[str, List[Node]] = pdg.identifiers_by_name
 
     if debug:
         print(f"Identifiers found: {sum(len(v) for v in identifiers_by_name.values())}")
@@ -723,11 +729,11 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
                     #    * `foo(42*y)` (i.e. n_th_call_param.name == "BinaryExpression").
 
         elif function_reference.attributes['name'] not in JAVASCRIPT_BUILT_IN_FUNCTIONS:  # ToDo: put logic into Node.function_Identifier_get_FunctionDeclaration() ?!
-            print(f"[Warning] declaration of function '{function_reference.attributes['name']}' not found (line "
-                  f"{function_reference.get_line()}, file {function_reference.get_file()}), "
-                  f"possible missing data flow edge(s)...")
-            # ToDo: doesn't this spam a bit too much sometimes?! => add param --warn-func-decl-not-found !!!!!
-            # ToDo: stop warning for functions that aren't declared but that we can still resolve, e.g., "sendResponse" !!!!!
+            if os.environ.get('WARN_FUNC_DEF_NOT_FOUND') == "yes":
+                print(f"[Warning] declaration of function '{function_reference.attributes['name']}' not found (line "
+                      f"{function_reference.get_line()}, file {function_reference.get_file()}), "
+                      f"possible missing data flow edge(s)...")
+                # todo: stop warning for functions that aren't declared but that we can still resolve, e.g., "sendResponse" !!!!!
 
     elif pdg.name == "CallExpression" and len(pdg.children) > 1 and pdg.children[0].name == "FunctionExpression":
         # For each IIFE, e.g.: "!function(x,y){}(a,b)", add data flows from `a` to `x` and from `b` to `y`:

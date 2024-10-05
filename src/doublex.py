@@ -303,11 +303,9 @@ def main():
 
     group3 = parser.add_mutually_exclusive_group(required=True)
     group3.add_argument('--prod', action='store_true',
-                        help="Enables production mode. Program will continue after Exceptions.")
+                        help="Enables production mode.")
     group3.add_argument('--debug', action='store_true',
-                        help="Enables debug mode. "
-                             "Program will do some unnecessary computations that may find subtle bugs during "
-                             "development however.")
+                        help="Enables debug mode. Creates (lots of) additional informative prints to console.")
 
     parser.add_argument("--timeout", metavar="seconds", type=int, default=600,
                         help="The timeout (in seconds) for analyzing each extension (including prior PDG generation). "
@@ -334,12 +332,17 @@ def main():
                         help="Print a warning message to console when the function for a callback "
                              "cannot be found/resolved.")
 
-    parser.add_argument("--info-prints",
-                        dest='info_prints',
+    parser.add_argument("--warn-func-def-not-found",
+                        dest='warn_func_def_not_found',
                         action='store_true',
-                        help="Print verbose infos to console, e.g., ... ")  # ToDo  # ToDo: what about --debug?!
+                        help="Print a warning message to console when a function definition could not be found.")
+    # => ToDo: looking for func def only (w/o Func()) is deprecated !!!
 
-    # ToDo: --eager-df-gen (i.e., non-lazy) ?!
+    parser.add_argument("--eager-df-gen",
+                        dest='eager_df_gen',
+                        action='store_true',
+                        help="Generate all basic data flow edges eagerly in the beginning; instead of only computing "
+                             "them lazily on demand, which is the default. SLOW!!! NOT RECOMMENDED!!!")
 
     # TODO: control verbosity of logging?
 
@@ -402,6 +405,12 @@ def main():
 
     if args.warn_callback_func_not_found:
         os.environ['WARN_CALLBACK_FUNC_NOT_FOUND'] = "yes"
+
+    if args.warn_func_def_not_found:
+        os.environ['WARN_FUNC_DEF_NOT_FOUND'] = "yes"
+
+    if args.eager_df_gen:
+        os.environ['EAGER_DF_GEN'] = "yes"
 
     if args.crx is None:  # No --crx argument supplied: Use -cs and -bp arguments:
         print("Analyzing a single, unpacked extension...")

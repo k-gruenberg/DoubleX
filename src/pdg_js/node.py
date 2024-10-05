@@ -108,6 +108,7 @@ class Node:
         self.statement_dep_children = []  # Between Statement and their non-Statement descendants
         self.is_wildcard = False  # <== ADDED BY ME
         self.is_identifier_regex = False  # <== ADDED BY ME
+        self.identifiers_by_name: Optional[Dict[str, List[Node]]] = None  # <== ADDED BY ME (shall only be not None for the root Node)
 
     # ADDED BY ME:
     @classmethod
@@ -2068,27 +2069,28 @@ class Node:
                                           and self.is_inside(fd.function_declaration_get_scope())]
 
         if len(function_declarations_in_scope) == 0:
-            if print_warning_if_not_found and os.environ.get('DEBUG') == "yes":
+            if print_warning_if_not_found and os.environ.get('WARN_FUNC_DEF_NOT_FOUND') == "yes":
                 print(f"[Warning] no function definition found for call to '{self.attributes['name']}' in line "
                       f"{self.get_line()} (file {self.get_file()})")
             return None
 
         elif len(function_declarations_in_scope) == 1:
             func_decl = function_declarations_in_scope[0]
-            print(f"[Info] function declaration for call to '{self.attributes['name']}' in line "
-                  f"{self.get_line()} (file {self.get_file()}) found in line "
-                  f"{func_decl.get_line()}: '{func_decl.function_declaration_get_name()}'")
+            if os.environ.get("DEBUG") == "yes":
+                print(f"[Info] function declaration for call to '{self.attributes['name']}' in line "
+                      f"{self.get_line()} (file {self.get_file()}) found in line "
+                      f"{func_decl.get_line()}: '{func_decl.function_declaration_get_name()}'")
             if add_data_flow_edges:
                 # While already at it, add a data flow edge on the fly:
                 #     declaration identifier --data--> call identifier
                 #     (DoubleX should add all of those but doesn't!)
                 function_decl_identifier = func_decl.function_declaration_get_function_identifier()
                 if function_decl_identifier.set_data_dependency(self):  # returns 1 if edge was added, 0 if existed
-                    print(f"[Info] added missing data flow edge from function declaration identifier "
-                          f"'{function_decl_identifier.attributes['name']}' in line "
-                          f"{function_decl_identifier.get_line()} "
-                          f"to function identifier '{self.attributes['name']}' in line {self.get_line()}")
-                    # ToDo: doesn't this spam a bit too much sometimes?!
+                    if os.environ.get("DEBUG") == "yes":
+                        print(f"[Info] added missing data flow edge from function declaration identifier "
+                              f"'{function_decl_identifier.attributes['name']}' in line "
+                              f"{function_decl_identifier.get_line()} "
+                              f"to function identifier '{self.attributes['name']}' in line {self.get_line()}")
             return func_decl
 
         else:
@@ -4716,9 +4718,9 @@ class Identifier(Node, Value):
         Value.__init__(self)
         self.code = None
         self.fun = None
-        self._data_dep_parents = []
-        self._data_dep_children = []
-        self.basic_data_dep_computed = False
+        self._data_dep_parents = []  # <== RENAMED BY ME
+        self._data_dep_children = []  # <== RENAMED BY ME
+        self.basic_data_dep_computed = False  # <== ADDED BY ME
 
     # ADDED BY ME:
     def data_dep_parents(self) -> list:
