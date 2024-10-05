@@ -334,6 +334,13 @@ def main():
                         help="Print a warning message to console when the function for a callback "
                              "cannot be found/resolved.")
 
+    parser.add_argument("--info-prints",
+                        dest='info_prints',
+                        action='store_true',
+                        help="Print verbose infos to console, e.g., ... ")  # ToDo  # ToDo: what about --debug?!
+
+    # ToDo: --eager-df-gen (i.e., non-lazy) ?!
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
@@ -553,7 +560,7 @@ def main():
 
                 def extension_storage_accesses_to_string(
                         extension_storage_accesses: dict,
-                        max_no_of_listed_keys: int = 3
+                        max_no_of_listed_keys: int = 5
                 ) -> str:
                     """
                     Example input (extension_storage_accesses):
@@ -574,16 +581,22 @@ def main():
                     }
 
                     Example output:
-                    "local: 1 ('password')"
+                    "local: 1 ('password':str)"
 
                     Another sample output (when max_no_of_listed_keys=3):
-                    "local: 4 ('foo' | 'bar' | 'baz' | ...) | sync: 1 ('boo')"
+                    "local: 4 ('foo' | 'bar':bool | 'baz' | ...) | sync: 1 ('boo')"
                     """
-                    return " | ".join(f"{k}: {len(v)} "
-                                      f"({" | ".join([f"'{re.sub(r"[,\n'\"]", "?", v_)}'"
-                                                       for v_ in v.keys()][:max_no_of_listed_keys]
-                                                     + (['...'] if len(v.keys()) > max_no_of_listed_keys else []))})"
-                                      for k, v in extension_storage_accesses.items())
+                    def data_type(v) -> str:
+                        if "values" in v and len(v["values"]) > 0:
+                            return ":" + type(v["values"][0]).__name__  # e.g.: 'int', 'float', 'bool', 'str', 'list'
+                        else:
+                            return ""
+
+                    return " | ".join(f"{area}: {len(keys)} "
+                                      f"({" | ".join([f"'{re.sub(r"[,\n'\"]", "?", k)}'{data_type(v)}"
+                                                       for k, v in keys.items()][:max_no_of_listed_keys]
+                                                     + (['...'] if len(keys.keys()) > max_no_of_listed_keys else []))})"
+                                      for area, keys in extension_storage_accesses.items())
 
                 # BP:
                 bp_exfiltration_dangers = len(analysis_result['bp']['exfiltration_dangers'])\
