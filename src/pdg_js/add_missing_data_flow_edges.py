@@ -207,47 +207,49 @@ def add_basic_data_flow_edges(pdg: Node, identifier_of_interest: Optional[Node] 
                                 useful for lazy data flow generation!!!
         debug: boolean; whether to print debug prints to console
     """
-    identifier_of_interest_name: Optional[str] = None
     if identifier_of_interest is not None:
         assert identifier_of_interest.name == "Identifier"
-        identifier_of_interest_name = identifier_of_interest.attributes['name']
 
     data_flow_edges_added: int = 0
 
     # Collect *all* Identifier Nodes and group them by their name
     #   (we'll only create DF edged between Identifiers with the same name in this function)
     #   => to avoid continuous re-computation in lazy mode, the result will be cached within the PDG root node:
-    if pdg.identifiers_by_name is None:
+    root: Node = pdg.root()
+    if root.identifiers_by_name is None:
         identifiers_by_name: Dict[str, List[Node]] = dict()
         for identifier in pdg.get_all_as_iter("Identifier"):
-            # When identifier_of_interest_name=None, non-lazy basic data flow creation is used.
+            # When identifier_of_interest=None, non-lazy basic data flow creation is used.
             # To avoid *additional* redundant "lazy" re-computation in data_dep_parents()/data_dep_children(),
             # we set the `basic_data_dep_computed` of all Identifiers to True.
-            if identifier_of_interest_name is None:
+            if identifier_of_interest is None:
                 identifier.basic_data_dep_computed = True  # => technically not yet, but we are going to below :)
 
             identifier_name: str = identifier.attributes['name']
-            if identifier_of_interest_name is None or identifier_name == identifier_of_interest_name:
-                if identifier_name not in identifiers_by_name:
-                    identifiers_by_name[identifier_name] = list()
-                identifiers_by_name[identifier_name].append(identifier)
+            if identifier_name not in identifiers_by_name:
+                identifiers_by_name[identifier_name] = list()
+            identifiers_by_name[identifier_name].append(identifier)
         # => O(n) where: n = the total number of identifier nodes
-        # Cache result for next time:
-        pdg.identifiers_by_name = identifiers_by_name
-    else:  # Retrieve cached result:
-        identifiers_by_name: Dict[str, List[Node]] = pdg.identifiers_by_name
 
-    if debug:
-        print(f"Identifiers found: {sum(len(v) for v in identifiers_by_name.values())}")
-        print(f"Distinct identifier names found: {len(identifiers_by_name)}")
-        if len(identifiers_by_name.values()) > 0:
-            print(f"Min. no. of occurrences per identifier name: {min(len(v) for v in identifiers_by_name.values())}")
-            print(f"Avg. no. of occurrences per identifier name: {statistics.mean([len(v) for v in identifiers_by_name.values()])}")
-            print(f"Max. no. of occurrences per identifier name: {max(len(v) for v in identifiers_by_name.values())}")
-        print(f"Actual no. of loop iterations (upper limit): {sum(len(v)*len(v) for v in identifiers_by_name.values())}")
+        if debug:
+            print(f"Identifiers found: {sum(len(v) for v in identifiers_by_name.values())}")
+            print(f"Distinct identifier names found: {len(identifiers_by_name)}")
+            if len(identifiers_by_name.values()) > 0:
+                print(f"Min. no. of occurrences per identifier name: {min(len(v) for v in identifiers_by_name.values())}")
+                print(f"Avg. no. of occurrences per identifier name: {statistics.mean([len(v) for v in identifiers_by_name.values()])}")
+                print(f"Max. no. of occurrences per identifier name: {max(len(v) for v in identifiers_by_name.values())}")
+            print(f"Actual no. of loop iterations (upper limit): {sum(len(v) * len(v) for v in identifiers_by_name.values())}")
+
+        # Cache result for next time:
+        root.identifiers_by_name = identifiers_by_name
+    else:  # Retrieve cached result:
+        identifiers_by_name: Dict[str, List[Node]] = root.identifiers_by_name
 
     for identifier_name, identifiers in identifiers_by_name.items():
         # => O(k) iterations where: k = the total number of distinct identifier names
+        # => however, just one iteration will do anything at all if identifier_of_interest is not None:
+        if identifier_of_interest is not None and identifier_name != identifier_of_interest.attributes['name']:
+            continue
 
         # All [id1] candidates with name `identifier_name`:
         identifiers1: List[Node] = [id1 for id1 in identifiers
@@ -270,7 +272,7 @@ def add_basic_data_flow_edges(pdg: Node, identifier_of_interest: Optional[Node] 
         identifiers2: List[Node] = [id2 for id2 in identifiers
                                     if
                                        # * [id2] may appear in a MemberExpression, but it must be on the very left of it:
-                                       # ToDo: allow "this." in front for variables of global scope ("var" or "="):
+                                       # ToDo: allow "this." in front for variables of global scope (but only if declared using "var" or "="!!!):
                                        not id2.is_nth_child_of_a(1, ["MemberExpression"]) and
                                        # * [id1] or [id2] may occur in the Property of an ObjectPattern, but it must be on the RHS of the Property:
                                        not id2.is_nth_child_of_a(0, ["Property"])
