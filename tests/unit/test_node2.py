@@ -2286,6 +2286,24 @@ class TestNodeClass2(unittest.TestCase):
         self.assertTrue(y.is_in_same_loop_as(y))
         self.assertFalse(z.is_in_same_loop_as(z))
 
+    def test_get_all_identifiers_not_inside_a_as_iter(self):
+        code = """
+        let compute_and_print = (x) => {console.log(x**2);}; 
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        variable_declarator = pdg.get_child("VariableDeclaration")\
+                                 .get_child("VariableDeclarator")
+        arrow_func_expr = variable_declarator.get("init")[0]
+        self.assertEqual(0, len(list(arrow_func_expr.get_all_identifiers_not_inside_a_as_iter(
+            forbidden_parent_names=["ArrowFunctionExpression"],
+            include_self=True,
+        ))))
+        self.assertEqual(4, len(list(arrow_func_expr.get_all_identifiers_not_inside_a_as_iter(
+            forbidden_parent_names=["ArrowFunctionExpression"],
+            include_self=False,
+        ))))  # the 4 identifiers being "x", "console", "log", and, again, "x"
+
 
 if __name__ == '__main__':
     unittest.main()

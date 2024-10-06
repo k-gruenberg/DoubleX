@@ -683,7 +683,7 @@ class Node:
         The optional `stop_at_parent` is None by default but may be set to one of the parents of `self`.
         In that case, only the parents of `self` below `stop_at_parent` (exclusive!) will be checked.
 
-        Raises an AssertionError when `stop_at_parent not in parents` !!!
+        Raises an AssertionError when `stop_at_parent not in self.get_parents()` !!!
         """
         if stop_at_parent is None:
             return any(name in [parent.name for parent in self.get_parents()] for name in names)
@@ -960,17 +960,27 @@ class Node:
         return self.get_all("Identifier")
 
     # ADDED BY ME:
-    def get_all_identifiers_not_inside_a_as_iter(self, forbidden_parent_names: List[str]):
+    def get_all_identifiers_not_inside_a_as_iter(self,
+                                                 forbidden_parent_names: List[str],
+                                                 include_self: bool = True):
         """
         Returns an iterator over all the Identifier Nodes inside `self` that do *not* have a parent, which is (a) a
         descendant of `self` and (b) whose name is in `forbidden_parent_names`.
+
+        If `include_self == True` (which is the default), the name of `self` is checked against the
+          `forbidden_parent_names` as well.
+        If `include_self == True and self.name in forbidden_parent_names`, this method returns an empty iterator.
+
+        If `self.name == "Identifier"`, this method yields a single element: `self`
         """
         if self.name == "Identifier":
             # This special case is necessary as otherwise the code below will raise an AssertionError!
             yield self
+        elif include_self and self.name in forbidden_parent_names:
+            pass  # do not yield anything
         else:
             for identifier in self.get_all_as_iter("Identifier"):
-                if not identifier.is_inside_a(forbidden_parent_names, stop_at_parent=self):
+                if not identifier.is_inside_a(forbidden_parent_names, stop_at_parent=self):  # stop_at_parent=exclusive!
                     yield identifier
 
     # ADDED BY ME:
