@@ -1119,6 +1119,8 @@ def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  #
             continue
 
         obj: Node = pattern_match.children[1]
+        if obj.name == "MemberExpression":
+            obj = obj.member_expression_get_leftmost_identifier()  # This method does not necessarily return an Identifier!!!
         if obj.name == "Identifier":
             descriptor: Node = pattern_match.children[3]
             if descriptor.name == "ObjectExpression":  # Object.defineProperty(x, 'prop1', {value: y, writable: false});
@@ -1139,12 +1141,13 @@ def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  #
             else:
                 print(f"[Warning] descriptor parameter found in Object.defineProperty(obj, prop, descriptor) call "
                       f"(in line {pattern_match.get_line()}, file {pattern_match.get_file()}) is neither an "
-                      f"ObjectExpression nor an Identifier; no data flow added.")
+                      f"ObjectExpression nor an Identifier (rather it's a {descriptor.name}); no data flow added.")
 
         else:
             print(f"[Warning] obj parameter found in Object.defineProperty(obj, prop, descriptor) call "
                   f"(in line {pattern_match.get_line()}, file {pattern_match.get_file()}) is not an "
-                  f"Identifier; no data flow added.")
+                  f"Identifier (rather it's a {obj.name}) (note that MemberExpressions are resolved to their leftmost "
+                  f"Node); no data flow added.")
 
     # ##### ##### ##### ##### ##### Object.defineProperties(): ##### ##### ##### ##### #####
 
