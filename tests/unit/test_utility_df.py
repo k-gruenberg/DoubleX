@@ -3,7 +3,7 @@ import unittest
 from pdg_js.utility_df import cross_product
 
 
-class TesUtilityDF(unittest.TestCase):
+class TestUtilityDF(unittest.TestCase):
     def test_cross_product(self):
         xs = [1, 2]
         ys = [3, 4, 5]
