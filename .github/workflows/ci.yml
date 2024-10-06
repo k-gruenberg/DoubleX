@@ -30,6 +30,7 @@ jobs:
     - name: Install Node dependencies
       run: |
         npm install espree
+        npm install escodegen
     - name: Test with unittest
       run: |
         PYTHONPATH=src python -m unittest discover -s tests -p "test_*.py"
