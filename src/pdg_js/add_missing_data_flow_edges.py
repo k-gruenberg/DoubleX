@@ -564,6 +564,9 @@ def add_missing_data_flow_edges_declarations_and_assignments(pdg: Node) -> int:
     #                 [15] [Identifier:"b"] (0 children)
     #                 [16] [Literal:"42"] (0 children)
 
+    IGNORE_LHS_IDENTIFIERS_IN: List[str] = ["BlockStatement", "FunctionExpression", "ArrowFunctionExpression"]
+    IGNORE_RHS_IDENTIFIERS_IN: List[str] = ["BlockStatement", "FunctionExpression", "ArrowFunctionExpression"]
+
     data_flow_edges_added = 0
 
     if (pdg.name == "VariableDeclarator" or pdg.name == "AssignmentExpression") and len(pdg.children) > 1:
@@ -572,7 +575,7 @@ def add_missing_data_flow_edges_declarations_and_assignments(pdg: Node) -> int:
 
         if lhs.name == "Identifier":  # "let cookies2 = cookies;" or "var cookies2 = cookies;" or "const cookies2 = cookies;" or "cookies2 = cookies;"
             # For each identifier in the right-hand side...:
-            for identifier in rhs.get_all_identifiers_not_inside_a_as_iter(["FunctionExpression", "ArrowFunctionExpression"]):  # (exception #1)
+            for identifier in rhs.get_all_identifiers_not_inside_a_as_iter(IGNORE_RHS_IDENTIFIERS_IN):  # (exception #1)
                 # ...add a data flow edge *from* that identifier *to* the left-hand side:
                 data_flow_edges_added += identifier.set_data_dependency(lhs)  # includes call: identifier._data_dep_children.append(extremity=lhs)
 
@@ -596,7 +599,7 @@ def add_missing_data_flow_edges_declarations_and_assignments(pdg: Node) -> int:
 
             if leftmost_identifier.name == "Identifier":  # could also be a "ThisExpression" but we're not handling that for now!
                 # cf. if-case above:
-                for identifier in rhs.get_all_identifiers_not_inside_a_as_iter(["BlockStatement"]):  # For each identifier in the right-hand side...:
+                for identifier in rhs.get_all_identifiers_not_inside_a_as_iter(IGNORE_RHS_IDENTIFIERS_IN):  # For each identifier in the right-hand side...:
                     # ...add a data flow edge *from* that identifier *to* the leftmost identifier of the left-hand side:
                     data_flow_edges_added += identifier.set_data_dependency(leftmost_identifier)  # includes call: identifier._data_dep_children.append(extremity=lhs)
 
@@ -619,28 +622,109 @@ def add_missing_data_flow_edges_declarations_and_assignments(pdg: Node) -> int:
                             data_flow_edges_added += leftmost_identifier.set_data_dependency(func_param_identifier)
 
         elif lhs.name == "ArrayPattern" and rhs.name == "ArrayExpression":  # "let [cookies2, forty_two] = [cookies, 42];" (the "let" being optional)
+            # BEWARE: The children of the ArrayPattern on the LHS need not be Identifiers !!!
+            #         They can be AssignmentPatterns, too, e.g.: "let [x=1, y] = [a,b];"
+            #         They can be None, too, e.g.:               "let [x, , y] = [a,b,c];"
+            #         They can be RestElements, too, e.g.:       "let [x, y, ...rest] = [a,b,c,d];"
+            #                                                    "let [x, y, ...[z, w]] = [a,b,c,d];"
+            #                                                    "let [x, y, ...[z, w]] = [a,b,c,d,e];"
+            #                                                    "let [x, y, ...[z, w]] = [a,b,c];"
+            #                                                    "let [x, y, ...{ length }] = [a,b,c,d];" => length==2
+            # => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment
             for i in range(min(len(lhs.children), len(rhs.children))):
-                for identifier in rhs.children[i].get_all_identifiers_not_inside_a_as_iter(["BlockStatement"]):
-                    data_flow_edges_added += identifier.set_data_dependency(lhs.children[i])
+                # NOTE: We take the min of the two lengths as both of the following two cases are possible:
+                #       1.) let [x,y]   = [a,b,c];  // discards the value of c
+                #       2.) let [x,y,z] = [a,b];    // z becomes undefined
+                #       In both cases, there are only 2 data flows: a --data--> x and b --data--> y.
+                match lhs.children[i].name:
+                    case "Identifier":  # "let [x, y] = [a,b];"
+                        for rhs_identifier in rhs.children[i].get_all_identifiers_not_inside_a_as_iter(IGNORE_RHS_IDENTIFIERS_IN):
+                            data_flow_edges_added += rhs_identifier.set_data_dependency(lhs.children[i])
+
+                    case "AssignmentPattern":  # e.g.: "let [x=1, y] = [a,b];"
+                        # interface AssignmentPattern {
+                        #     left: Identifier | BindingPattern;
+                        #     right: Expression;
+                        # }
+                        # where: type BindingPattern = ArrayPattern | ObjectPattern;
+                        assignment_pattern: Node = lhs.children[i]
+                        match assignment_pattern.lhs().name:
+                            case "Identifier":  # "let [x=1, y] = [a,b];" => add DF: a --data--> x
+                                lhs_identifier: Node = assignment_pattern.lhs()
+                                for rhs_identifier in rhs.children[i].get_all_identifiers_not_inside_a_as_iter(IGNORE_RHS_IDENTIFIERS_IN):
+                                    data_flow_edges_added += rhs_identifier.set_data_dependency(lhs_identifier)
+                            case "ArrayPattern":  # "let [[x1,x2]=[1,2], y] = [a,b];" => add DFs: a --data--> x1 & a --data--> x2
+                                lhs_array_pattern: Node = assignment_pattern.lhs()
+                                rhs_item: Node = rhs.children[i]
+                                for identifier1 in rhs_item.get_all_identifiers_not_inside_a_as_iter(IGNORE_RHS_IDENTIFIERS_IN):
+                                    for identifier2 in lhs_array_pattern.get_all_identifiers_not_inside_a_as_iter(IGNORE_LHS_IDENTIFIERS_IN):
+                                        data_flow_edges_added += identifier1.set_data_dependency(identifier2)
+                            case "ObjectPattern":  # "let [{x1,x2}={x1:1,x2:2}, y] = [a,b];" => add DFs: a --data--> x1 & a --data--> x2
+                                lhs_object_pattern: Node = assignment_pattern.lhs()
+                                rhs_item: Node = rhs.children[i]
+                                for identifier1 in rhs_item.get_all_identifiers_not_inside_a_as_iter(IGNORE_RHS_IDENTIFIERS_IN):
+                                    for identifier2 in lhs_object_pattern.get_all_identifiers_not_inside_a_as_iter(IGNORE_LHS_IDENTIFIERS_IN):
+                                        data_flow_edges_added += identifier1.set_data_dependency(identifier2)
+
+                    case "None":  # "let [x, , y] = [a,b,c];"
+                        continue  # There's no data flow to create as there's nothing on the LHS!
+
+                    case "RestElement":  # e.g.: "let [x, y, ...rest] = [a,b,c,d];"
+                        rest_element: Node = lhs.children[i]
+                        # interface RestElement {
+                        #     argument: Identifier | BindingPattern;
+                        # }
+                        # where: type BindingPattern = ArrayPattern | ObjectPattern;
+                        match rest_element.children[0].name:
+                            case "Identifier":  # "let [x, y, ...rest] = [a,b,c,d];" => add DFs: c --data--> rest & d --data--> rest
+                                rest_identifier: Node = rest_element.children[0]
+                                for j in range(i, len(rhs.children)):
+                                    for rhs_identifier in rhs.children[j].get_all_identifiers_not_inside_a_as_iter(IGNORE_RHS_IDENTIFIERS_IN):
+                                        data_flow_edges_added += rhs_identifier.set_data_dependency(rest_identifier)
+                            case "ArrayPattern":  # "let [x, y, ...[z, w]] = [a,b,c,d];"  => add DFs: c --data--> z, ...
+                                # NOTE: Again, both of the following two cases are possible:
+                                #       1.) let [x, y, ...[z, w]] = [a,b,c,d,e];  // discards the value of e
+                                #       2.) let [x, y, ...[z, w]] = [a,b,c];      // w becomes undefined
+                                array_pattern: Node = rest_element.children[0]
+                                for j in range(min(len(array_pattern.children), len(rhs.children)-i)):
+                                    for identifier1 in rhs.children[i+j].get_all_identifiers_not_inside_a_as_iter(IGNORE_RHS_IDENTIFIERS_IN):
+                                        for identifier2 in array_pattern.children[j].get_all_identifiers_not_inside_a_as_iter(IGNORE_LHS_IDENTIFIERS_IN):
+                                            data_flow_edges_added += identifier1.set_data_dependency(identifier2)
+                            case "ObjectPattern":  # "let [x, y, ...{ length }] = [a,b,c,d];"
+                                pass  # Not adding any data flows here; too obscure!
+
+        elif lhs.name == "ArrayPattern":  # "let [x, y] = array;" => treat DF like "let x = array;" and "let y = array;"
+            # For each identifier in the right-hand side...:
+            for identifier1 in rhs.get_all_identifiers_not_inside_a_as_iter(IGNORE_RHS_IDENTIFIERS_IN):
+                # ...add a data flow edge *from* that identifier *to* each identifier in the left-hand side:
+                for identifier2 in lhs.get_all_identifiers_not_inside_a_as_iter(IGNORE_LHS_IDENTIFIERS_IN):
+                    data_flow_edges_added += identifier1.set_data_dependency(identifier2)
+                    # => includes call: identifier1._data_dep_children.append(extremity=identifier2)
 
         elif lhs.name == "ObjectPattern" and rhs.name == "ObjectExpression":  # "const { a: cookies2, b: forty_two } = {a:cookies, b:42};" (the "const" is optional, note however that parentheses around the assignment will be required instead then!)
             # Note that, unlike in the example, the keys of the LHS and RHS might be in a different order!
-            lhs_keys = [property_.children[0].attributes['name'] for property_ in lhs.children if
-                        property_.name == "Property" and property_.children[0].name == "Identifier"]
-            rhs_keys = [property_.children[0].attributes['name'] for property_ in rhs.children if
-                        property_.name == "Property" and property_.children[0].name == "Identifier"]
+            lhs_keys = [property_.children[0].attributes['name']
+                        for property_ in lhs.children
+                        if property_.name == "Property" and property_.children[0].name == "Identifier"]
+            rhs_keys = [property_.children[0].attributes['name']
+                        for property_ in rhs.children
+                        if property_.name == "Property" and property_.children[0].name == "Identifier"]
             data_flow_keys = set.intersection(set(lhs_keys), set(rhs_keys))  # in the example: set("a", "b")
             for key in data_flow_keys:
-                lhs_value = [property_.children[1] for property_ in lhs.children if
-                             property_.name == "Property" and len(property_.children) > 1 and property_.children[
-                                 0].name == "Identifier" and property_.children[0].attributes['name'] == key][0]
-                rhs_value = [property_.children[1] for property_ in rhs.children if
-                             property_.name == "Property" and len(property_.children) > 1 and property_.children[
-                                 0].name == "Identifier" and property_.children[0].attributes['name'] == key][0]
-                for identifier in rhs_value.get_all_identifiers_not_inside_a_as_iter(["BlockStatement"]):
+                lhs_value = [property_.children[1]
+                             for property_ in lhs.children
+                             if property_.name == "Property" and len(property_.children) > 1
+                                                             and property_.children[0].name == "Identifier"
+                                                             and property_.children[0].attributes['name'] == key][0]
+                rhs_value = [property_.children[1]
+                             for property_ in rhs.children
+                             if property_.name == "Property" and len(property_.children) > 1
+                                                             and property_.children[0].name == "Identifier"
+                                                             and property_.children[0].attributes['name'] == key][0]
+                for identifier in rhs_value.get_all_identifiers_not_inside_a_as_iter(IGNORE_RHS_IDENTIFIERS_IN):
                     data_flow_edges_added += identifier.set_data_dependency(lhs_value)
 
-        elif lhs.name == "ObjectPattern" and rhs.name == "Identifier":  # "({url} = sender);" or "({url:url} = sender);"
+        elif lhs.name == "ObjectPattern":  # "({url} = sender);" or "({url:url} = sender);"
             # Note that both "({url} = sender);" and "({url:url} = sender);" result in the same PDG being generated:
             # [1] [AssignmentExpression:"="] (2 children)
             #     [2] [ObjectPattern] (1 child)
@@ -648,8 +732,16 @@ def add_missing_data_flow_edges_declarations_and_assignments(pdg: Node) -> int:
             #             [4] [Identifier:"url"] (0 children)
             #             [5] [Identifier:"url"] (0 children)
             #     [6] [Identifier:"sender"] (0 children)
-            for lhs_identifier in lhs.get_all_identifiers_not_inside_a_as_iter(["BlockStatement"]):
-                data_flow_edges_added += rhs.set_data_dependency(lhs_identifier)  # Note how both ends of the new data flow edge are Identifiers!
+            #
+            # Note that the RHS does not have to be an Identifier; even just within the Kim+Lee extension set, wee see
+            # the RHS also being:
+            #   * an AwaitExpression
+            #   * a MemberExpression
+            #   * a Literal
+            #   * a CallExpression
+            for rhs_identifier in rhs.get_all_identifiers_not_inside_a_as_iter(IGNORE_RHS_IDENTIFIERS_IN):
+                for lhs_identifier in lhs.get_all_identifiers_not_inside_a_as_iter(IGNORE_LHS_IDENTIFIERS_IN):
+                    data_flow_edges_added += rhs_identifier.set_data_dependency(lhs_identifier)
 
         else:
             print(f"[Warning] Unknown type of {pdg.name} (LHS: {lhs.__class__}/{lhs.name}; "
