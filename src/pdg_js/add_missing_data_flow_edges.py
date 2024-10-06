@@ -245,11 +245,14 @@ def add_basic_data_flow_edges(pdg: Node, identifier_of_interest: Optional[Node] 
     else:  # Retrieve cached result:
         identifiers_by_name: Dict[str, List[Node]] = root.identifiers_by_name
 
-    for identifier_name, identifiers in identifiers_by_name.items():
+    for identifier_name, identifiers in (
+            identifiers_by_name.items()
+            if identifier_of_interest is None
+            else [(identifier_of_interest.attributes['name'],
+                   identifiers_by_name[identifier_of_interest.attributes['name']])]
+    ):
         # => O(k) iterations where: k = the total number of distinct identifier names
-        # => however, just one iteration will do anything at all if identifier_of_interest is not None:
-        if identifier_of_interest is not None and identifier_name != identifier_of_interest.attributes['name']:
-            continue
+        # => just 1 iteration if identifier_of_interest is not None
 
         # All [id1] candidates with name `identifier_name`:
         identifiers1: List[Node] = [id1 for id1 in identifiers
