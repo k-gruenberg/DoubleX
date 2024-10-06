@@ -558,6 +558,34 @@ class TestFunc(unittest.TestCase):
         self.assertIsNotNone(func.get_body())
         self.assertFalse(func.calls_itself_recursively())
 
+    def test_get_all_param_identifiers(self):
+        code = """
+        x = function (a,b,c) {}
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        x: Node = pdg.get_identifier_by_name("x")
+        func: Func = Func(x)
+        all_param_identifiers = func.get_all_param_identifiers()
+        self.assertEqual(len(all_param_identifiers), 3)
+        self.assertEqual(
+            [p.attributes['name'] for p in all_param_identifiers],
+            ["a", "b", "c"]
+        )
+
+        code = """
+        x = function (a, b=42, [c,d], [e,f]=[1,2], {g,h}, {i,j}={i:3,j:4}, {foo:k,bar:l}, {foo:m,bar:n}={foo:5,bar:6}) {}
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        x: Node = pdg.get_identifier_by_name("x")
+        func: Func = Func(x)
+        all_param_identifiers = func.get_all_param_identifiers()
+        self.assertEqual(
+            [p.attributes['name'] for p in all_param_identifiers],
+            ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n"]
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

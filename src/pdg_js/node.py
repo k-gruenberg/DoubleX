@@ -3734,6 +3734,8 @@ class Node:
         * function foo([x,y]=[1,2]) {}
         * function foo({x,y}) {}
         * function foo({x,y}={x:1,y:2}) {}
+        * function foo({a:x,b:y}) {}
+        * function foo({a:x,b:y}={a:1,b:2}) {}
         For all of these, this method simply returns `None`.
         If you want those returned as well, use the function_param_get_identifiers() instead!
         """
@@ -3756,6 +3758,8 @@ class Node:
         * function foo([x,y]=[1,2]) {}
         * function foo({x,y}) {}
         * function foo({x,y}={x:1,y:2}) {}
+        * function foo({a:x,b:y}) {}
+        * function foo({a:x,b:y}={a:1,b:2}) {}
 
         This method returns all LHS Identifiers corresponding to the function parameter represented by this Node.
         Returns an empty list on error.
@@ -4315,7 +4319,7 @@ class Node:
             return -1, -1, -1, -1
 
     # ADDED BY ME:
-    def functional_arg_get_args(self, resolve_args_to_identifiers: bool) -> List[Self]:  # ToDo: write custom Exception classes?
+    def functional_arg_get_args(self, resolve_args_to_identifiers: bool) -> List[Self]:
         """
         Example 1:
             self                 = (message, sender, sendResponse) => { /* ... */ }
@@ -4331,58 +4335,17 @@ class Node:
 
         Returns:
             the list of Nodes representing the arguments of this functional argument (see examples above);
-            when resolve_args_to_identifiers=True, the returned list will only contain Identifiers and None values as
-            more complex parameters (e.g., "{}") cannot be resolved to a *single* identifier(!);
-            in all cases, the returned list will contain *exactly* as many items as the function has parameters(!)
+            the returned list will contain *exactly* as many items as the function has parameters(!)
 
         Raises:
-            a TypeError when this is neither a FunctionExpression nor an ArrowFunctionExpression nor an Identifier;
-            a KeyError when this is an Identifier but the Identifier couldn't be resolved to a FunctionDeclaration
+            a FuncError when this Node couldn't be resolved into a function
         """
-        if self.name in ["FunctionExpression", "ArrowFunctionExpression"]:  # cases 1 and 2: (Arrow)FunctionExpression:
-            params = self.arrow_function_expression_get_params()
-        elif self.name == "Identifier":  # case 3: Identifier (function reference):
-            function_declaration = self.function_Identifier_get_FunctionDeclaration(True)
-            if function_declaration is None:
-                raise KeyError()
-            else:
-                assert function_declaration.name == "FunctionDeclaration"
-                # interface FunctionDeclaration {
-                #     id: Identifier | null;       // == null
-                #     params: FunctionParameter[];
-                #     body: BlockStatement;
-                # }
-                # Note that in case of nested functions, there might be additional FunctionDeclaration children(!!!)
-                #
-                # [1] [FunctionDeclaration] (5 children) --e--> [6]
-                # 		[2] [Identifier:"msg_handler"] (0 children) --data--> [...]
-                # 		[3] [Identifier:"msg"] (0 children)
-                # 		[4] [Identifier:"sender"] (0 children) --data--> [...]
-                # 		[5] [Identifier:"sendResponse"] (0 children) --data--> [...] --data--> [...]
-                # 		[6] [BlockStatement]
-                params = function_declaration.function_declaration_get_params()
-        else:
-            raise TypeError()
+        from .Func import Func
 
-        if not resolve_args_to_identifiers:
-            return params
-        else:
-            # Instead of an Identifier, the FunctionParameter may also be an ArrayPattern or ObjectPattern, or
-            #     an AssignmentPattern (whose left hand side in turn may be
-            #     an Identifier, ArrayPattern or ObjectPattern; the right hand side may be any Expression):
-            # * ArrayPattern:                         function msg_handler(msg, sender, [sendResp1, sendResp2]) { ... }
-            # * ObjectPattern:                        function msg_handler(msg, sender, {x:x, y:y}) { ... }
-            # * AssignmentPattern, LHS=Identifier:    function msg_handler(msg, sender, sendResponse=null) { ... }
-            # * AssignmentPattern, LHS=ArrayPattern:  function msg_handler(msg, sender, [x,y]=[1,2]) { ... }
-            # * AssignmentPattern, LHS=ObjectPattern: function msg_handler(msg, sender, {x, y}={x:1,y:2}) { ... }
-            # => Here were only handle the AssignmentPattern, LHS=Identifier case using the
-            #    function_param_get_identifier() method:  # ToDo: also handle all the other cases!
-            return [param.function_param_get_identifier() for param in params]
-            # necessary for "sendResponse=null" cases (default param values)
-            # for more complex cases (e.g., "{x, y}" destructurings), function_param_get_identifier() returns `None`
+        return Func(self).get_params(resolve_params_to_identifiers=resolve_args_to_identifiers)
 
     # ADDED BY ME:
-    def functional_arg_get_arg(self, arg_index: int, resolve_arg_to_identifier: bool) -> Self:  # ToDo: write custom Exception classes?
+    def functional_arg_get_arg(self, arg_index: int, resolve_arg_to_identifier: bool) -> Self:
         """
         Example 1 (used by get_all_sendResponse_sinks()):
             self                 = (message, sender, sendResponse) => { /* ... */ }
@@ -4403,21 +4366,19 @@ class Node:
             the Node representing the n-th argument of this functional argument (see examples above)
 
         Raises:
-            a TypeError when this is neither a FunctionExpression nor an ArrowFunctionExpression nor an Identifier;
-            a KeyError when this is an Identifier but the Identifier couldn't be resolved to a FunctionDeclaration;
+            a FuncError when this Node couldn't be resolved into a function;
             an IndexError when the given `arg_index` >= # of. arguments;
             an AttributeError when resolve_arg_to_identifier=True but resolving the arg to an Identifier failed
         """
-        args = self.functional_arg_get_args(resolve_args_to_identifiers=resolve_arg_to_identifier)
-        # The call above may raise a TypeError, or a KeyError.
+        from .Func import Func
 
-        if arg_index >= len(args):
-            raise IndexError()
-        else:
-            arg = args[arg_index]  # (arg1, arg2, *arg3*)
-            if arg is None:  # (can only occur if resolve_arg_to_identifier=True)
-                raise AttributeError()
-            return arg
+        return Func(self).get_nth_param(n=arg_index, resolve_param_to_identifier=resolve_arg_to_identifier)
+        # => Func() will throw...
+        #    ...a FuncError when function resolution failed!
+        # => Func.get_nth_param() will throw...
+        #    ...an IndexError when n is out of range!
+        #    ...an AttributeError when resolve_param_to_identifier=True
+        #       but resolving the n-th arg to a single Identifier Node failed!
 
     # ADDED BY ME:
     def get_lowest_common_ancestor(self, other: Self) -> Self:

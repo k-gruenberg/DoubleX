@@ -170,18 +170,107 @@ class Func:
         """
         return self.node.name == "ArrowFunctionExpression"
 
-    def get_params(self) -> List[Node]:
+    def get_params(self, resolve_params_to_identifiers: bool = False) -> List[Optional[Node]]:
         """
         Returns a list of all the parameters of this function.
         Note that while any simple parameters will be Identifier Nodes, more complex parameters may also be
         * AssignmentPatterns,
         * ArrayPatterns,
         * ObjectPatterns.
-        """
-        return self.node.get("params")
 
-    def get_nth_param(self, n: int) -> Node:
-        return self.get_params()[n]
+        Parameters:
+            resolve_params_to_identifiers: for AssignmentPattern parameters, i.e., those with a default value, e.g.,
+                                           "x=42" in "function f(x=42)", return the Identifier on the LHS of this
+                                            assignment instead of the AssignmentPattern; if the parameter is an
+                                            ArrayPattern or ObjectPattern, however, that cannot be resolved into a
+                                            single parameter, the returned list will return `None` for that parameter
+                                            instead of a Node object; the total length of the returned list will
+                                            remain equal to the number of parameters however!
+
+        Returns:
+            When resolve_params_to_identifiers=False (default):
+              the parameters of this Function as a list of Nodes, these Nodes may be Identifiers, AssignmentPattern,
+              ArrayPatterns, or ObjectPatterns.
+            When resolve_params_to_identifiers=True:
+              the parameters of this Function as a list of Identifier Nodes / None values, all values in the returned
+              list will be either an Identifier Node or `None`.
+            Either way, the length of the returned list will be the same!
+        """
+        params = self.node.get("params")
+
+        if resolve_params_to_identifiers:
+            params = [param.function_param_get_identifier() for param in params]
+
+        return params
+
+    def get_nth_param(self, n: int, resolve_param_to_identifier: bool = False) -> Node:
+        """
+        Parameters:
+            n: the (0-based) index of the parameter to retrieve; IndexError will be thrown when out of range!!!
+            resolve_param_to_identifier: for AssignmentPattern parameters, i.e., those with a default value, e.g.,
+                                         "x=42" in "function f(x=42)", return the Identifier on the LHS of this
+                                         assignment instead of the AssignmentPattern;
+                                         note that when resolve_param_to_identifier=True, this method may throw an
+                                         AttributeError if the parameter is an ArrayPattern or ObjectPattern that
+                                         cannot be resolved into a single parameter!!!
+
+        Returns:
+            the n-th parameter to this Function; will never(!) be None!
+
+        Throws:
+            - IndexError when `n` is out of range
+            - AttributeError when resolve_param_to_identifier=True but resolving the n-th arg to a single Identifier
+              Node failed (this is the case for destructuring function parameters!)
+        """
+        nth_param = self.node.get("params")[n]
+
+        if resolve_param_to_identifier:
+            nth_param = nth_param.function_param_get_identifier()
+            if nth_param is None:
+                raise AttributeError()
+
+        return nth_param
+
+    def get_all_param_identifiers(self) -> List[Node]:
+        """
+        Function parameters will usually look like this:
+        * function foo(x) {}
+
+        However, they may also look like this:
+        * function foo(x=42) {}
+        * function foo([x,y]) {}
+        * function foo([x,y]=[1,2]) {}
+        * function foo({x,y}) {}
+        * function foo({x,y}={x:1,y:2}) {}
+        * function foo({a:x,b:y}) {}
+        * function foo({a:x,b:y}={a:1,b:2}) {}
+
+        This method returns *all* LHS Identifiers of *all* parameters to this function; as a list.
+        """
+        identifiers: List[Node] = []
+
+        for param in self.get_params():
+            identifiers.extend(param.function_param_get_identifiers())
+
+        return identifiers
+
+    def get_param_identifiers(self, n: int) -> List[Node]:
+        """
+        Function parameters will usually look like this:
+        * function foo(x) {}
+
+        However, they may also look like this:
+        * function foo(x=42) {}
+        * function foo([x,y]) {}
+        * function foo([x,y]=[1,2]) {}
+        * function foo({x,y}) {}
+        * function foo({x,y}={x:1,y:2}) {}
+        * function foo({a:x,b:y}) {}
+        * function foo({a:x,b:y}={a:1,b:2}) {}
+
+        This method returns *all* LHS Identifiers of the n-th parameter to this function; as a list.
+        """
+        return self.get_nth_param(n=n).function_param_get_identifiers()
 
     def get_nth_param_or_none(self, n: int) -> Optional[Node]:
         params = self.get_params()
