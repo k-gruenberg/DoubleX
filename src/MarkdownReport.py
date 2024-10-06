@@ -244,4 +244,10 @@ class MarkdownReport:
             print(f"[Error] Exception occurred during MarkdownReport.add_extension(): {e}")
 
     def close_file(self):
+        self.f.write(
+            "\n"
+            "\n"
+            "\n"
+            f"Finished: {time.strftime('%Y-%m-%d %H:%M:%S')}  \n"
+        )
         self.f.close()
