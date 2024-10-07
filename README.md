@@ -249,10 +249,11 @@ Despite the fact that it focuses on different kinds of vulnerabilities, this too
 functionality/fixes to DoubleX:
 1. supports direct input of (a folder of) multiple CRX files 
 2. one joint output in CSV format, in addition to the per-extension JSON output
-3. replacement of the Esprima parser, which isn't maintained anymore and therefore does not support newer JavaScript 
+3. additional human-readable output of vulnerabilities in Markdown format
+4. replacement of the Esprima parser, which isn't maintained anymore and therefore does not support newer JavaScript 
    syntax features, with the Espree parser
-4. data flows are now computed lazily on-demand, providing a speed-up, especially for large obfuscated extension code
-5. improved (in fact, completely re-implemented) data flow generation; see below:
+5. data flows are now computed lazily on-demand, providing a speed-up, especially for large obfuscated extension code
+6. improved (in fact, completely re-implemented) data flow generation; see below:
 
 The following examples were mishandled by DoubleX, their data flows are now correctly handled:
 
