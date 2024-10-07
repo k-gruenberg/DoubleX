@@ -5,6 +5,19 @@ import multiprocessing
 import os
 import json
 import traceback
+import re
+
+
+def markdown_escape(unescaped_str: str) -> str:
+    """
+    Markdown has special characters, which you need to escape if you want to output a string literally.
+    """
+    # List of characters that need to be escaped in Markdown
+    #   (see also: https://github.com/mattcone/markdown-guide/blob/master/_basic-syntax/escaping-characters.md):
+    special_chars: List[str] =\
+        ["\\", "`", "*", "_", "{", "}", "[", "]", "<", ">", "(", ")", "#", "+", "-", ".", "!", "|"]
+    trans = str.maketrans({char: f"\\{char}" for char in special_chars})
+    return unescaped_str.translate(trans)
 
 
 def read_from_source_file(filename: str, location: str,
@@ -60,11 +73,11 @@ class MarkdownReport:
             f"Start: {time.strftime('%Y-%m-%d %H:%M:%S')}  \n"
             "\n"
             "**Machine:**  \n"
-            f"Hostname: {socket.gethostname()}  \n"
+            f"Hostname: {markdown_escape(socket.gethostname())}  \n"
             f"No. of cores: {multiprocessing.cpu_count()}  \n"
             "\n"
             f"No. of worker processes used: {no_worker_processes_used}  \n"
-            f"Timeout used: {timeout_used}s  \n"
+            f"Timeout used: {timeout_used} sec  \n"
             "\n"
         )
         self.f.flush()
@@ -152,13 +165,13 @@ class MarkdownReport:
                        and 'crashes' in analysis_result['benchmarks']['cs'] else None
 
                 self.f.write(
-                    f"## {extension_name} (version {ext_version}, MV{ext_manifest_version})\n"
+                    f"## {markdown_escape(extension_name)} (version {markdown_escape(ext_version)}, MV{ext_manifest_version})\n"
                     "\n"
-                    f"**Description:** {ext_description}  \n"
-                    f"**Extension Path:** {info.get('crx')}  \n"
-                    f"**Extension Path (unpacked):** {unpacked_ext_dir}  \n"
+                    f"**Description:** {markdown_escape(ext_description)}  \n"
+                    f"**Extension Path:** {markdown_escape(info.get('crx'))}  \n"
+                    f"**Extension Path (unpacked):** {markdown_escape(unpacked_ext_dir)}  \n"
                     "\n"
-                    f"**CS injected into:** {content_script_injected_into}  \n"
+                    f"**CS injected into:** {markdown_escape(str(content_script_injected_into))}  \n"
                     "\n"
                     "**Extension stats:**  \n"
                     f"**JavaScript LoC:** {info.get('js_loc')}  \n"
@@ -167,9 +180,9 @@ class MarkdownReport:
                     "\n"
                     "**Analysis:**  \n"
                     f"**Analysis time:** {info.get('analysis_time')} sec  \n"
-                    f"**BP Crashes:** {crashes_bp}  \n"
-                    f"**CS Crashes:** {crashes_cs}  \n"
-                    f"**Other Crashes:** {crashes}  \n"
+                    f"**BP Crashes:** {markdown_escape(str(crashes_bp))}  \n"
+                    f"**CS Crashes:** {markdown_escape(str(crashes_cs))}  \n"
+                    f"**Other Crashes:** {markdown_escape(str(crashes))}  \n"
                     "\n"
                 )
 
