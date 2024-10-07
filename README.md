@@ -243,17 +243,40 @@ A digest of all analysis results for all extensions analyzed will be stored in a
 Its path is specified via the `--csv-out` command line argument. 
 No CSV file will be created when no `--csv-out` argument is supplied.
 
+## GUI
+
+You may start the GUI with `python3 gui_generate_pdg.py`.
+
+First, enter the JavaScript source code on the left-hand side. 
+Basic syntax highlighting is supported (red for keywords, green for string literals, blue for numeric literals).
+
+When clicking the "Generate PDG" button, a string representation of the PDG (Program Dependence Graph) 
+will be shown on the right-hand side. When selecting a piece of code on the left-hand side, the 
+corresponding PDG nodes on the right-hand side will be highlighted as well (in **blue** color). 
+When selecting just a single identifier on the left-hand side, data flows will be displayed using 
+highlighting as well: **green** for all data flow children and **red** for all (direct!) data flow parents:
+![Screenshot Example Generate PDG](screenshot_gui_generate_pdg.png "Screenshot Example Generate PDG")
+
+When clicking the "Analyze as BP" button, the JavaScript code on the left-hand side will be analyzed 
+as if it were the code of the background page of a Chrome extension. The right-hand side will display 
+the analysis result in JSON format, as would normally be saved in the `analysis_renderer_attacker.json` 
+file:
+![Screenshot Example Analyze as BP](screenshot_gui_analyze_as_bp.png "Screenshot Example Analyze as BP")
+
+The "Analyze as CS" button works analogously.
+
 ## Improvements made upon DoubleX
 
 Despite the fact that it focuses on different kinds of vulnerabilities, this tool adds some 
 functionality/fixes to DoubleX:
-1. supports direct input of (a folder of) multiple CRX files 
-2. one joint output in CSV format, in addition to the per-extension JSON output
-3. additional human-readable output of vulnerabilities in Markdown format
-4. replacement of the Esprima parser, which isn't maintained anymore and therefore does not support newer JavaScript 
+1. added a GUI, which is extremely useful for (quick) testing and debugging (see above)
+2. supports direct input of (a folder of) multiple CRX files 
+3. one joint output in CSV format, in addition to the per-extension JSON output
+4. additional human-readable output of vulnerabilities in Markdown format
+5. replacement of the Esprima parser, which isn't maintained anymore and therefore does not support newer JavaScript 
    syntax features, with the Espree parser
-5. data flows are now computed lazily on-demand, providing a speed-up, especially for large obfuscated extension code
-6. improved (in fact, completely re-implemented) data flow generation; see below:
+6. data flows are now computed lazily on-demand, providing a speed-up, especially for large obfuscated extension code
+7. improved (in fact, completely re-implemented) data flow generation; see below:
 
 The following examples were mishandled by DoubleX, their data flows are now correctly handled:
 
