@@ -247,7 +247,7 @@ No CSV file will be created when no `--csv-out` argument is supplied.
 
 Despite the fact that it focuses on different kinds of vulnerabilities, this tool adds some 
 functionality/fixes to DoubleX:
-1. supports input of multiple CRX files, as well as parallelization of the analysis 
+1. supports direct input of (a folder of) multiple CRX files 
 2. one joint output in CSV format, in addition to the per-extension JSON output
 3. replacement of the Esprima parser, which isn't maintained anymore and therefore does not support newer JavaScript 
    syntax features, with the Espree parser
