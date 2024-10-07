@@ -2327,6 +2327,48 @@ class TestNodeClass2(unittest.TestCase):
             include_self=False,
         ))))  # the 4 identifiers being "x", "console", "log", and, again, "x"
 
+    def test_call_expression_is_IIFE(self):
+        # Negative example:
+        code = "foo(bar, baz);"
+        pdg = generate_pdg(code)
+        print(pdg)
+        call_expression: Node = pdg.find_pattern(Node("CallExpression"),
+                                                 match_identifier_names=False,
+                                                 match_literals=False,
+                                                 match_operators=False,
+                                                 allow_additional_children=True,
+                                                 allow_different_child_order=False)[0]
+        self.assertFalse(call_expression.call_expression_is_IIFE())
+
+        # Positive examples:
+        for code in [
+            # Examples taken from: https://en.wikipedia.org/wiki/Immediately_invoked_function_expression
+            "(function () { /* ... */ })();",
+            "(function () { /* ... */ }());",
+            "(() => { /* ... */ })();",
+            "!function () { /* ... */ }();",
+            "~function () { /* ... */ }();",
+            "-function () { /* ... */ }();",
+            "+function () { /* ... */ }();",
+            "void function () { /* ... */ }();",
+            "delete function () { /* ... */ }();",
+            "typeof function () { /* ... */ }();",
+            "await function () { /* ... */ }();",
+            "let f = function () { /* ... */ }();",
+            "true && function () { /* ... */ }();",
+            "0, function () { /* ... */ }();",
+            "(function(a, b) { /* ... */ })('hello', 'world');",
+        ]:
+            pdg = generate_pdg(code)
+            print(pdg)
+            call_expression: Node = pdg.find_pattern(Node("CallExpression"),
+                                                     match_identifier_names=False,
+                                                     match_literals=False,
+                                                     match_operators=False,
+                                                     allow_additional_children=True,
+                                                     allow_different_child_order=False)[0]
+            self.assertTrue(call_expression.call_expression_is_IIFE())
+
 
 if __name__ == '__main__':
     unittest.main()

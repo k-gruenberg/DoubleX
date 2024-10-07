@@ -1355,6 +1355,27 @@ class Node:
         assert self.name == "CallExpression"
         return self.children[1:]
 
+    # ADDED BY ME:
+    def call_expression_is_IIFE(self) -> bool:
+        """
+        Returns True if and only if this CallExpression calls an (Arrow)FunctionExpression,
+        i.e., whether it is an IIFE (Immediately Invoked Function Expression).
+
+        Here's an example for an IIFE:
+        ```
+        !function () { console.log("hi") }();
+        ```
+
+        Throws an AssertionError when this Node is not a CallExpression.
+        """
+        assert self.name == "CallExpression"
+        # interface CallExpression {
+        #     callee: Expression | Import;
+        #     arguments: ArgumentListElement[];
+        # }
+        callee: Node = self.get("callee")[0]
+        return callee.name in ["FunctionExpression", "ArrowFunctionExpression"]
+
     DEFAULT_SENSITIVE_APIS = ["chrome.cookies", "chrome.scripting", "chrome.tabs.executeScript",
                               "browser.cookies", "browser.scripting", "browser.tabs.executeScript",
                               "indexedDB", "fetch"]  # Note: indexedDB is called as indexedDB.open()!
