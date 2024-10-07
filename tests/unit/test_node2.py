@@ -1981,6 +1981,28 @@ class TestNodeClass2(unittest.TestCase):
             self.assertEqual(23, expr('parseInt(null, 24)').static_eval(allow_partial_eval))
             self.assertTrue(math.isnan(expr('parseInt(null, 23)').static_eval(allow_partial_eval)))
             self.assertTrue(math.isnan(expr('parseInt(null, 22)').static_eval(allow_partial_eval)))
+            # btoa() for Base64 encoding:
+            self.assertEqual("SGVsbG8gV29ybGQh", expr('btoa("Hello World!")').static_eval(allow_partial_eval))
+            self.assertEqual("SGVsbG8gV29ybGQh", expr('btoa("Hello " + "World!")').static_eval(allow_partial_eval))
+            self.assertEqual("NDI=", expr('btoa("42")').static_eval(allow_partial_eval))
+            self.assertEqual("NDI=", expr('btoa(42)').static_eval(allow_partial_eval))
+            self.assertEqual("My4xNA==", expr('btoa("3.14")').static_eval(allow_partial_eval))
+            self.assertEqual("My4xNA==", expr('btoa(3.14)').static_eval(allow_partial_eval))
+            self.assertEqual("dHJ1ZQ==", expr('btoa("true")').static_eval(allow_partial_eval))
+            self.assertEqual("dHJ1ZQ==", expr('btoa(true)').static_eval(allow_partial_eval))
+            self.assertEqual("ZmFsc2U=", expr('btoa("false")').static_eval(allow_partial_eval))
+            self.assertEqual("ZmFsc2U=", expr('btoa(false)').static_eval(allow_partial_eval))
+            self.assertEqual("bnVsbA==", expr('btoa("null")').static_eval(allow_partial_eval))
+            self.assertEqual("bnVsbA==", expr('btoa(null)').static_eval(allow_partial_eval))
+            # Test additional redundant argument:
+            self.assertEqual("SGVsbG8gV29ybGQh", expr('btoa("Hello World!", 42)').static_eval(allow_partial_eval))
+            self.assertEqual("SGVsbG8gV29ybGQh", expr('btoa("Hello World!", foo)').static_eval(allow_partial_eval))
+            # atob() for Base64 decoding:
+            self.assertEqual("Hello World!", expr('atob("SGVsbG8gV29ybGQh")').static_eval(allow_partial_eval))
+            self.assertEqual("Hello World!", expr('atob("SGVsb"+"G8gV2"+"9ybGQh")').static_eval(allow_partial_eval))
+            # Test additional redundant argument:
+            self.assertEqual("Hello World!", expr('atob("SGVsbG8gV29ybGQh", 42)').static_eval(allow_partial_eval))
+            self.assertEqual("Hello World!", expr('atob("SGVsbG8gV29ybGQh", foo)').static_eval(allow_partial_eval))
             # Test behavior of these functions when no arguments are supplied:
             self.assertEqual(False, expr("isFinite()").static_eval(allow_partial_eval))
             self.assertEqual(True, expr("isNaN()").static_eval(allow_partial_eval))
@@ -1988,6 +2010,7 @@ class TestNodeClass2(unittest.TestCase):
             self.assertEqual(True, expr("isNaN(parseInt())").static_eval(allow_partial_eval))
             self.assertTrue(math.isnan(expr("parseFloat()").static_eval(allow_partial_eval)))
             self.assertTrue(math.isnan(expr("parseInt()").static_eval(allow_partial_eval)))
+            # btoa() and atob() require at least 1 argument, otherwise they raise a type error
 
             # Test JavaScript quirks:
             self.assertEqual(0, expr("+''").static_eval(allow_partial_eval))

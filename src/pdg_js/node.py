@@ -27,7 +27,6 @@
         - FunctionDeclaration(Statement, Function);
         - FunctionExpression(Node, Function)
 """
-
 # Note: going significantly beyond the node structure of HideNoSeek:
 # semantic information to the nodes, which have different properties, e.g., DF on Identifier,
 # parameter flows, value handling, provenance tracking, etc
@@ -42,6 +41,7 @@ import re
 import statistics
 import tempfile
 import timeit
+import base64
 from collections import defaultdict
 from functools import total_ordering
 from typing import Set, Tuple, Optional, Self, List, Any, Dict, DefaultDict
@@ -3669,6 +3669,51 @@ class Node:
                                         continue
 
                         return float('nan')  # both parseInt('') and parseInt('xxx') return NaN
+
+                    case "btoa":
+                        # https://developer.mozilla.org/en-US/docs/Web/API/Window/btoa:
+                        # Syntax:
+                        #     btoa(stringToEncode)
+                        if len(arguments) == 0:  # btoa()
+                            raise StaticEvalException("TypeError: btoa requires at least 1 argument")
+                        else:  # btoa(stringToEncode) (+ optional redundant extra parameters)
+                            string_arg_evaluated = arguments[0].static_eval(allow_partial_eval=allow_partial_eval)
+                            # btoa() casts its argument to a string:
+                            if string_arg_evaluated is None:
+                                string_arg_evaluated = "null"
+                            elif isinstance(string_arg_evaluated, bool):
+                                string_arg_evaluated = "true" if string_arg_evaluated else "false"
+                            elif isinstance(string_arg_evaluated, (int, float)):
+                                string_arg_evaluated = str(string_arg_evaluated)
+                            elif isinstance(string_arg_evaluated, list):
+                                raise StaticEvalException("static eval of btoa(<list>) not yet implemented")  # todo
+                            elif isinstance(string_arg_evaluated, dict):
+                                raise StaticEvalException("static eval of btoa(<dict>) not yet implemented")  # todo
+                            try:
+                                return base64.b64encode(string_arg_evaluated.encode("ascii")).decode("ascii")
+                            except (UnicodeEncodeError, UnicodeDecodeError):
+                                raise StaticEvalException("static eval for btoa() cannot handle non-ASCII yet")
+                                # ToDo: handle non-ASCII strings
+                                #       => difficulty however: JavaScript uses UTF-16 and Python uses UTF-8 !!!
+
+                    case "atob":
+                        # https://developer.mozilla.org/en-US/docs/Web/API/Window/atob:
+                        # Syntax:
+                        #     atob(encodedData)
+                        if len(arguments) == 0:  # atob()
+                            raise StaticEvalException("TypeError: atob requires at least 1 argument")
+                        else:  # atob(stringToEncode) (+ optional redundant extra parameters)
+                            string_arg_evaluated = arguments[0].static_eval(allow_partial_eval=allow_partial_eval)
+                            if not isinstance(string_arg_evaluated, str):
+                                raise StaticEvalException("static eval of atob(<not str>) not yet implemented")
+                                # ToDo: handle weird edge cases like atob(42), atob(true) and atob(null)
+                                #       => difficulty however: encoding (JavaScript uses UTF-16 and Python uses UTF-8)
+                            try:
+                                return base64.b64decode(string_arg_evaluated.encode("ascii")).decode("ascii")
+                            except (UnicodeEncodeError, UnicodeDecodeError):
+                                raise StaticEvalException("static eval for atob() cannot handle non-ASCII yet")
+                                # ToDo: handle non-ASCII strings
+                                #       => difficulty however: JavaScript uses UTF-16 and Python uses UTF-8 !!!
 
                     case other:
                         raise StaticEvalException(f"static eval failed: '{other}' built-in (or dynamically defined) "

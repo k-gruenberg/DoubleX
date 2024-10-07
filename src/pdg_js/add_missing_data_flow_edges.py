@@ -25,6 +25,7 @@ JAVASCRIPT_BUILT_IN_FUNCTIONS = [  # ToDo: refactor the place where I use this?!
     # => Source: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects
     "clearInterval", "setInterval", "setTimeout",
     # => https://developer.mozilla.org/en-US/docs/Web/API/clearInterval
+    "btoa", "atob",
 ]
 
 
