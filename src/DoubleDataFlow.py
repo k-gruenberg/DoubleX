@@ -73,7 +73,8 @@ class DoubleDataFlow:
                                  to_node: Node,
                                  rendezvous_nodes: List[str],
                                  return_multiple=True,
-                                 allow_unreachable_rendezvous=False) -> List[Self]:
+                                 allow_unreachable_rendezvous=False,
+                                 allow_IIFE_rendezvous=False) -> List[Self]:
         """
         Returns the empty list `[]` if no data flow exists from `from_node` to `to_node`.
         Otherwise, returns the data flow(s) from `from_node` to `to_node` as DoubleDataFlow objects.
@@ -98,6 +99,10 @@ class DoubleDataFlow:
                              set to True when you later want to filter the returned data flows, e.g., only for the
                              unprotected/un-checked/un-sanitized ones (!!!)
             allow_unreachable_rendezvous: whether to allow the rendezvous to be unreachable (default: False)
+            allow_IIFE_rendezvous: whether to allow the rendezvous CallExpression to be an IIFE; only has an effect
+                                   when `"CallExpression" in rendezvous_nodes`
+                                   (default: False, to prevent false positives!)
+                                   (this type of false positive often occurred for the Kim+Lee extensions tested)
 
         Returns:
             Returns the empty list `[]` if no data flow exists from `from_node` to `to_node`.
@@ -129,7 +134,8 @@ class DoubleDataFlow:
                 #       => it's not enough to just check each last_node() then!!!
                 #       => problem however: might *further* increase the FPR!!!
                 if from_flow_final_expr == to_flow_final_expr and from_flow_final_expr is not None:
-                    if allow_unreachable_rendezvous or (not from_flow_final_expr.is_unreachable()):
+                    if ((allow_unreachable_rendezvous or (not from_flow_final_expr.is_unreachable())) and
+                            (allow_IIFE_rendezvous or (not from_flow_final_expr.is_IIFE_call_expression()))):
                         result = DoubleDataFlow(from_flow=from_flow, to_flow=to_flow, rendezvous_nodes=rendezvous_nodes)
                         if return_multiple:
                             results.append(result)
