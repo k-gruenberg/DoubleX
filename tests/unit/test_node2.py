@@ -1768,6 +1768,10 @@ class TestNodeClass2(unittest.TestCase):
             self.assertEqual(True, expr("!(false || (true && false))").static_eval(allow_partial_eval))
             self.assertEqual(False, expr("!(true || (false && true))").static_eval(allow_partial_eval))
             self.assertEqual(True, expr("(0 <= 10) && (10 <= 100)").static_eval(allow_partial_eval))
+
+            # Test the equality operator:
+            self.assertEqual(True, expr("42 == 42").static_eval(allow_partial_eval))
+            self.assertEqual(False, expr("42 == 43").static_eval(allow_partial_eval))
             
             # Test tilde operator:
             self.assertEqual(~42, expr("~42").static_eval(allow_partial_eval))
@@ -1785,7 +1789,7 @@ class TestNodeClass2(unittest.TestCase):
             self.assertEqual(42, expr("foo(x) ? 42 : 42").static_eval(allow_partial_eval))
             self.assertEqual(42, expr("foo(x) ? (40+2) : (84/2)").static_eval(allow_partial_eval))
 
-            # Test MemberExpressions:
+            # Test MemberExpressions (LHS=array):
             self.assertEqual(111, expr("[111, 222, 333][0]").static_eval(allow_partial_eval))
             self.assertEqual(222, expr("[111, 222, 333][1]").static_eval(allow_partial_eval))
             self.assertEqual(333, expr("[111, 222, 333][2]").static_eval(allow_partial_eval))
@@ -1806,6 +1810,12 @@ class TestNodeClass2(unittest.TestCase):
             self.assertEqual(2, expr("[1,2]['length']").static_eval(allow_partial_eval))
             self.assertEqual(3, expr("[1,2,3]['length']").static_eval(allow_partial_eval))
             self.assertEqual(4, expr("['a', 'b', 'c', 'd']['length']").static_eval(allow_partial_eval))
+
+            # Test MemberExpressions (LHS=object):
+            self.assertEqual(42, expr("({'a': 42}.a)").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("({'a': 42}['a'])").static_eval(allow_partial_eval))
+            self.assertEqual(42, expr("({1: 42, 2: 43}[1])").static_eval(allow_partial_eval))
+            self.assertEqual(43, expr("({1: 42, 2: 43}[2])").static_eval(allow_partial_eval))
 
             # Test SequenceExpressions (evaluate to the value of the last operand):
             self.assertEqual(222, expr("111, 222").static_eval(allow_partial_eval))
@@ -2011,6 +2021,37 @@ class TestNodeClass2(unittest.TestCase):
             self.assertTrue(math.isnan(expr("parseFloat()").static_eval(allow_partial_eval)))
             self.assertTrue(math.isnan(expr("parseInt()").static_eval(allow_partial_eval)))
             # btoa() and atob() require at least 1 argument, otherwise they raise a type error
+
+            # Test static evaluation of an IIFE:
+            self.assertEqual(42, expr('(function() {return 40+2;}())').static_eval(allow_partial_eval))
+            self.assertEqual(42, expr('((() => {return 40+2;})())').static_eval(allow_partial_eval))
+            # ToDo: handle IIFEs that take parameters that can be statically evaluated
+
+            # Test static evaluation of calls to "foo.bar()"-type JavaScript built-in functions:
+            self.assertEqual(
+                {"a": 1, "b": 2},
+                expr("Object.defineProperty({a:1}, 'b', {value:2})")
+                     .static_eval(allow_partial_eval)
+            )
+            self.assertEqual(
+                {"a": 1, "b": 2},
+                expr("Object.defineProperty({a:1}, 'b', {get: function() {return 2;}})")
+                    .static_eval(allow_partial_eval)
+            )
+            self.assertEqual(
+                False,
+                expr(
+                    # Seen in the background page of the ClassLink extension (ID jgfbgkjjlonelmpenhpfeeljjlcgnkpe),
+                    #   line 107:
+                    """
+                    7 != Object.defineProperty({}, "a", {
+                        get: function() {
+                            return 7
+                        }
+                    }).a
+                    """
+                ).static_eval(allow_partial_eval)
+            )
 
             # Test JavaScript quirks:
             self.assertEqual(0, expr("+''").static_eval(allow_partial_eval))

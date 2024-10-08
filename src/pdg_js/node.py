@@ -44,7 +44,7 @@ import timeit
 import base64
 from collections import defaultdict
 from functools import total_ordering
-from typing import Set, Tuple, Optional, Self, List, Any, Dict, DefaultDict
+from typing import Set, Tuple, Optional, Self, List, Any, Dict, DefaultDict, Callable
 
 from . import utility_df
 from .LHSException import LHSException
@@ -2752,7 +2752,7 @@ class Node:
         return declaration_identifier in other_node_identifiers_declared_in_scope
 
     # ADDED BY ME:
-    def static_eval(self, allow_partial_eval: bool) -> str | int | float | bool | list | dict | None:
+    def static_eval(self, allow_partial_eval: bool) -> str | int | float | bool | list | dict | None | Callable:
         """
         Attempts to statically evaluate the value of this JavaScript expression.
         Returns the Python equivalent of the JavaScript value, which may be a string, an integer, a float, a boolean,
@@ -2797,11 +2797,12 @@ class Node:
         # Literal                      |
         # ArrayExpression              |
         # ObjectExpression             |
-        #                              | FunctionExpression
-        #                              | ArrowFunctionExpression
+        # FunctionExpression           |
+        # ArrowFunctionExpression      |
         #                              | ClassExpression
         #                              | TaggedTemplateExpression
         # MemberExpression (LHS=array) |
+        # MemberExpression (LHS=obj)   |
         #                              | Super
         #                              | MetaProperty
         #                              | NewExpression
@@ -3073,6 +3074,15 @@ class Node:
                     return left.static_eval(allow_partial_eval) ^ right.static_eval(allow_partial_eval)
                 case '&':
                     return left.static_eval(allow_partial_eval) & right.static_eval(allow_partial_eval)
+                # NOTE: The problem with equality is that, for objects, even "==" already tests the objects
+                #       for reference equality, not for value equality:
+                #       >> ({} == {})
+                #       <- false
+                #       >> x = {}
+                #       <- Object {  }
+                #       >> (x == x)
+                #       <- true
+                # ToDo: use heuristic and always assume inequality when one of the 2 values compared is a dict?!
                 case '==':
                     return left.static_eval(allow_partial_eval) == right.static_eval(allow_partial_eval)
                 case '!=':
@@ -3431,9 +3441,23 @@ class Node:
                     else:
                         raise StaticEvalException(f"static eval failed: unsupported type of MemberExpression; "
                                                   f"only supporting <array>.length non-computed MemberExpressions")
+
+            elif isinstance(object_evaluated, dict):
+                if computed:  # e.g.: ({'a': 42}['a'])
+                    key_accessed = property_.static_eval(allow_partial_eval=allow_partial_eval)
+                elif property_.name == "Identifier":  # e.g.: ({'a': 42}.a)
+                    key_accessed = property_.attributes['name']
+                else:
+                    raise StaticEvalException(f"static eval failed: unsupported type of non-computed MemberExpression; "
+                                              f"LHS=object but RHS is not an Identifier")
+                try:
+                    return object_evaluated[key_accessed]
+                except KeyError as key_error:
+                    raise StaticEvalException(f"static eval failed: KeyError: {key_error}")
+
             else:
                 raise StaticEvalException(f"static eval failed: unsupported type of MemberExpression; "
-                                          f"only supporting LHS=array")
+                                          f"only supporting LHS=array and LHS=object")
 
         elif self.name == "CallExpression":
             # interface CallExpression {
@@ -3441,6 +3465,13 @@ class Node:
             #     arguments: ArgumentListElement[];
             # }
             callee: Node = self.get("callee")[0]
+            try:
+                arguments: List[Node] = self.get("arguments")
+                return callee.static_eval(allow_partial_eval=allow_partial_eval)(
+                    *[arg.static_eval(allow_partial_eval=allow_partial_eval) for arg in arguments]
+                )
+            except (TypeError, StaticEvalException):
+                pass
             if callee.name == "Identifier":
                 if (len(callee.data_dep_parents()) > 0
                         or callee.function_Identifier_get_FunctionDeclaration(False) is not None):
@@ -3770,9 +3801,129 @@ class Node:
                     case other:
                         raise StaticEvalException(f"static eval failed: '{other}' built-in (or dynamically defined) "
                                                   f"function not supported")
+
+            elif callee.name == "MemberExpression":
+                callee_as_str: str = callee.member_expression_to_string()
+                match callee_as_str:
+                    case "Object.defineProperty":
+                        # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty:
+                        #   "The Object.defineProperty() static method defines a new property directly on an object,
+                        #    or modifies an existing property on an object, and returns the object."
+                        # Syntax:
+                        #   Object.defineProperty(obj, prop, descriptor)
+                        # Parameters:
+                        #   obj:        The object on which to define the property.
+                        #   prop:       A string or Symbol specifying the key of the property to be defined or modified.
+                        #   descriptor: The descriptor for the property being defined or modified.
+                        #               => Property descriptors present in objects come in two main flavors:
+                        #                  data descriptors and accessor descriptors.
+                        #                  A data descriptor is a property with a value that may or may not be writable.
+                        #                  An accessor descriptor is a property described by a getter-setter pair of
+                        #                  functions. A descriptor must be one of these two flavors; it cannot be both
+                        #               => both data descriptors and accessor descriptors share the following optional
+                        #                  keys: - configurable (default: false)
+                        #                        - enumerable   (default: false)
+                        #               => A data descriptor also has the following optional keys:
+                        #                        - value        (default: undefined)
+                        #                        - writable     (default: false)
+                        #               => An accessor descriptor also has the following optional keys:
+                        #                        - get: A function which serves as a getter for the property,
+                        #                               or undefined if there is no getter.
+                        #                               When the property is accessed, this function is called without
+                        #                               arguments and with this set to the object through which the
+                        #                               property is accessed (this may not be the object on which the
+                        #                               property is defined due to inheritance). The return value will
+                        #                               be used as the value of the property. Defaults to undefined.
+                        #                        - set: A function which serves as a setter for the property, or
+                        #                               undefined if there is no setter. When the property is assigned,
+                        #                               this function is called with one argument (the value being
+                        #                               assigned to the property) and with this set to the object
+                        #                               through which the property is assigned. Defaults to undefined.
+                        #               => If a descriptor doesn't have any of the value, writable, get, and set keys,
+                        #                  it is treated as a data descriptor.
+                        #               => If a descriptor has both [value or writable] and [get or set] keys,
+                        #                  an exception is thrown.
+                        #               => example data descriptor: {value:2}
+                        #               => example accessor descriptor: {get: function() {return 2;}}
+                        # Return value:
+                        #   The object that was passed to the function, with the specified property added or modified.
+                        arguments: List[Node] = self.get("arguments")
+                        if len(arguments) < 3:
+                            raise StaticEvalException(f"static eval failed: Object.defineProperty() must take >=3 args")
+                        obj = arguments[0].static_eval(allow_partial_eval=allow_partial_eval)
+                        prop = arguments[1].static_eval(allow_partial_eval=allow_partial_eval)
+                        descriptor = arguments[2].static_eval(allow_partial_eval=allow_partial_eval)
+                        new_obj = dict(obj)
+                        if (("value" in descriptor or "writable" in descriptor)
+                                and ("get" in descriptor or "set" in descriptor)):
+                            raise StaticEvalException(f"static eval failed: invalid descriptor in "
+                                                      f"Object.defineProperty()")
+                        elif "get" in descriptor or "set" in descriptor:
+                            # Accessor descriptor:
+                            if "get" in descriptor:
+                                try:
+                                    new_obj[prop] = descriptor["get"]()
+                                except TypeError as type_error:
+                                    raise StaticEvalException(f"static eval failed: Object.defineProperty(): "
+                                                              f"'get' field of accessor descriptor doesn't seem to be "
+                                                              f"a function: TypeError: {type_error}")
+                            else:
+                                raise StaticEvalException(f"static eval failed: Object.defineProperty(): "
+                                                          f"cannot handle accessor descriptor where 'get' is undefined")
+                        else:
+                            # Data descriptor:
+                            if "value" in descriptor:
+                                new_obj[prop] = descriptor["value"]
+                            else:
+                                raise StaticEvalException(f"static eval failed: Object.defineProperty(): "
+                                                          f"cannot handle data descriptor where 'value' is undefined")
+                                # ToDo: create an 'Undefined' singleton class in Java and enable static_eval() to return
+                                #       that as well ?!
+                        return new_obj
+
+                    case other:
+                        raise StaticEvalException(f"static eval failed: '{other}' built-in (or dynamically defined) "
+                                                  f"function not supported")
+
             else:
                 raise StaticEvalException(f"static eval failed: unsupported type of CallExpression: callee is a "
-                                          f"{callee.name} and not an Identifier")
+                                          f"{callee.name} and neither an Identifier nor a MemberExpression")
+
+        elif self.name in ["FunctionExpression", "ArrowFunctionExpression"]:
+            # interface FunctionExpression {
+            #     id: Identifier | null;
+            #     params: FunctionParameter[];
+            #     body: BlockStatement;
+            #     generator: boolean;
+            #     async: boolean;
+            #     expression: boolean;
+            # }
+            # interface ArrowFunctionExpression {
+            #     id: Identifier | null;
+            #     params: FunctionParameter[];
+            #     body: BlockStatement | Expression;
+            #     generator: boolean;
+            #     async: boolean;
+            #     expression: false;
+            # }
+            # ...will be transformed into a Python lambda (if possible);
+            #    we can handle all (arrow) function expressions that only consist of only a single ReturnStatement:
+            body: Node = self.get("body")[0]
+            if body.name == "BlockStatement" and len(body.children) == 1 and body.children[0].name == "ReturnStatement":
+                return_statement: Node = body.children[0]
+                # interface ReturnStatement {
+                #     argument: Expression | null;
+                # }
+                return_statement_argument: List[Node] = return_statement.get("argument")
+                if len(return_statement_argument) == 0:
+                    raise StaticEvalException(f"static eval failed: ReturnStatement must return something")
+                else:
+                    return_statement_argument: Node = return_statement_argument[0]
+                    return lambda: return_statement_argument.static_eval(allow_partial_eval=allow_partial_eval)
+                # ToDo: handle (Arrow)FunctionExpressions that take parameters
+            else:
+                raise StaticEvalException(f"static eval failed: only supporting (Arrow)FunctionExpressions that "
+                                          f"consist of a single ReturnStatement")
 
         else:
             raise StaticEvalException(f"static eval failed: unsupported type of Expression: {self.name}")
