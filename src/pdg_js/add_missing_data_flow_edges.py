@@ -4,6 +4,7 @@ import timeit
 from typing import List, Dict, Set, Tuple, Optional
 
 from .node import Node
+from .Func import Func
 from .utility_df import cross_product
 
 JAVASCRIPT_BUILT_IN_FUNCTIONS = [  # ToDo: refactor the place where I use this?!!!
@@ -98,6 +99,14 @@ def add_missing_data_flow_edges(pdg: Node, add_basic_df_edges: bool = False, ben
     benchmarks["add_missing_data_flow_edges_call_expressions"] = timeit.default_timer() - start
     print(f"[Adding data flows] {edges_added_call_expressions} edges added to call expressions.")
     total_data_flow_edges_added += edges_added_call_expressions
+
+    # !!! Should happen at the end (esp. after add_missing_data_flow_edges_declarations_and_assignments())
+    # !!!   as it uses .data_dep_children():
+    start = timeit.default_timer()
+    edges_added_function_returns = add_missing_data_flow_edges_function_returns(pdg)
+    benchmarks["add_missing_data_flow_edges_function_returns"] = timeit.default_timer() - start
+    print(f"[Adding data flows] {edges_added_function_returns} edges added to function returns.")
+    total_data_flow_edges_added += edges_added_function_returns
 
     # ToDo: handle "this" flows somehow (problem: "this" becomes a ThisExpression and not an Identifier...):
     #       Example #1: let x=42; (function(){ console.log("This is: " + this); }.bind(x))();  // prints: "This is: 42"
@@ -1404,5 +1413,76 @@ def add_missing_data_flow_edges_chrome_apis(pdg: Node) -> int:
                           f"line {func_property.get_line()} (file {func_property.get_file()}) "
                           f"is an identifier that couldn't be resolved to a function: "
                           f"'{func_property.attributes['name']}'")
+
+    return data_flow_edges_added
+
+
+def add_missing_data_flow_edges_function_returns(pdg: Node) -> int:
+    """
+    (A) Ensures there's a data flow from `x` to `y` in the following code:
+    ```
+    let x = 42;
+    function foo() {
+        return x;
+    }
+    let y = foo();
+    ```
+    More formally, a DF edge x --data--> y is created whenever:
+      (1) `x` occurs in the return expression of some declared function `f`
+      (2) there exists a DF edge f --data--> f' where f' is being called (i.e., the callee of a CallExpression)
+      (3) there exists a DF edge f' --data--> y
+
+    (B) ...but also from `a` to `b` in the following code (IIFEs):
+    ```
+    let b = function() {return a;}();
+    ```
+    More formally, a DF edge a --data--> b is created whenever:
+      (1) `a` occurs in the return expression of some (arrow) function expression `f`
+      (2) that (arrow) function expression `f` is immediately invoked (we say it is an IIFE)
+      (3) the return value of that IIFE is assigned to `b` in a declaration or assignment statement
+          => Note that non-assignment cases like "foo(function() {return bar;}())" are already handled elsewhere!
+             Only the assignment case is normally left out during data flow generation in
+             add_missing_data_flow_edges_declarations_and_assignments() to avoid false positives.
+             => ToDo: leave out elsewhere to?^^ (to avoid false positives)
+    """
+    data_flow_edges_added: int = 0
+
+    for return_statement in pdg.get_all_as_iter("ReturnStatement"):
+        # interface ReturnStatement {
+        #     argument: Expression | null;
+        # }
+        argument: List[Node] = return_statement.get("argument")
+        if len(argument) > 0:  # There's no data flow for a simple "return;" w/o any return value.
+            argument: Node = argument[0]
+            f: Func = Func(return_statement.return_statement_get_function())
+            # The line above shouldn't throw any Exception, therefore we're not catching any!
+
+            # (A) If function is declared and has a name, i.e., can be referred to from outside at all:
+            if f.is_function_declaration() and f.get_id_node() is not None:
+                # Find all calls to that function:
+                for f_ in map(lambda c: c.extremity, f.get_id_node().data_dep_children()):
+                    if f_.is_callee_of_a_call_expression():
+                        for y in map(lambda c: c.extremity, f_.data_dep_children()):
+                            for x in argument.get_all_identifiers():
+                                data_flow_edges_added += x.set_data_dependency(y)
+                                # => includes call: x._data_dep_children.append(extremity=y)
+
+            # (B) If function is an IIFE, i.e., an (arrow) function expression that is immediately called:
+            elif f.is_immediately_invoked():  # (only (arrow) function expressions can be immediately invoked)
+                call_expr: Node = f.get_immediate_invocation()
+                if call_expr.is_rhs_of_a("VariableDeclarator") or call_expr.is_rhs_of_a("AssignmentExpression"):
+                    # interface VariableDeclarator {
+                    #     id: Identifier | BindingPattern;
+                    #     init: Expression | null;
+                    # }
+                    # interface AssignmentExpression {
+                    #     operator: '=' | '*=' | '**=' | '/=' | '%=' | '+=' | '-=' |
+                    #               '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|=';
+                    #     left: Expression;
+                    #     right: Expression;
+                    # }
+                    for b in call_expr.parent.lhs().get_all_identifiers():
+                        for a in argument.get_all_identifiers():
+                            data_flow_edges_added += a.set_data_dependency(b)
 
     return data_flow_edges_added

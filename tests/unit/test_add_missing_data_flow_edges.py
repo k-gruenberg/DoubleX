@@ -272,3 +272,29 @@ class TestAddMissingDataFlowEdges(unittest.TestCase):
         self.assertEqual(third_w, second_w._data_dep_children[0].extremity)
         self.assertEqual(0, len(first_w._data_dep_children))
         self.assertEqual(0, len(third_w._data_dep_children))
+
+    def test_add_missing_data_flow_edges_function_returns(self):
+        # Case (A):
+        #   relies on existing DF edges as it calls .data_dep_children():
+        code = """
+        let x = 42;
+        function foo() {
+            return x;
+        }
+        let y = foo();
+        """
+        ast = generate_ast(code)
+        print(f"Before: {ast}")
+        add_missing_data_flow_edges_declarations_and_assignments(ast)  # required for the next call to work!
+        self.assertEqual(1, add_missing_data_flow_edges_function_returns(ast))
+        print(f"After: {ast}")
+
+        # Case (B):
+        #   does not rely on any existing DF edges:
+        code = """
+        let b = function() {return a;}();
+        """
+        ast = generate_ast(code)
+        print(f"Before: {ast}")
+        self.assertEqual(1, add_missing_data_flow_edges_function_returns(ast))
+        print(f"After: {ast}")

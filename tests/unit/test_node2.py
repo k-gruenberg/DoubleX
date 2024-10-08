@@ -2390,6 +2390,15 @@ class TestNodeClass2(unittest.TestCase):
         f = return_statement.return_statement_get_function()
         self.assertEqual(f.name, "FunctionDeclaration")
 
+    def test_is_callee_of_a_call_expression(self):
+        code = "foo(x)"
+        pdg = generate_pdg(code)
+        print(pdg)
+        foo = pdg.get_identifier_by_name("foo")
+        x = pdg.get_identifier_by_name("x")
+        self.assertTrue(foo.is_callee_of_a_call_expression())
+        self.assertFalse(x.is_callee_of_a_call_expression())
+
 
 if __name__ == '__main__':
     unittest.main()

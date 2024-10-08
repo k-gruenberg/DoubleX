@@ -355,3 +355,21 @@ class Func:
                             return True
 
         return False
+
+    def is_immediately_invoked(self) -> bool:
+        # interface CallExpression {
+        #      callee: Expression | Import;
+        #      arguments: ArgumentListElement[];
+        # }
+        return ((self.is_function_expression() or self.is_arrow_function_expression())
+                and self.node.parent is not None
+                and self.node.parent.name == "CallExpression"
+                and self.node == self.node.parent.get("callee")[0])
+
+    def get_immediate_invocation(self) -> Node:
+        """
+        Asserts that `self.is_immediately_invoked()`.
+        Returns the CallExpression Node of this immediate invocation.
+        """
+        assert self.is_immediately_invoked()
+        return self.node.parent

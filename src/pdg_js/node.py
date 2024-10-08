@@ -1380,6 +1380,14 @@ class Node:
     def is_IIFE_call_expression(self) -> bool:
         return self.name == "CallExpression" and self.call_expression_is_IIFE()
 
+    # ADDED BY ME:
+    def is_callee_of_a_call_expression(self) -> bool:
+        # interface CallExpression {
+        #     callee: Expression | Import;
+        #     arguments: ArgumentListElement[];
+        # }
+        return self.parent is not None and self.parent.name == "CallExpression" and self == self.parent.get("callee")[0]
+
     DEFAULT_SENSITIVE_APIS = ["chrome.cookies", "chrome.scripting", "chrome.tabs.executeScript",
                               "browser.cookies", "browser.scripting", "browser.tabs.executeScript",
                               "indexedDB", "fetch"]  # Note: indexedDB is called as indexedDB.open()!
@@ -1482,6 +1490,15 @@ class Node:
 
     # ADDED BY ME:
     def return_statement_get_function(self) -> Self:
+        """
+        Returns the function (FunctionDeclaration, FunctionExpression or ArrowFunctionExpression) to which this
+        ReturnStatement belongs.
+
+        Throws:
+            * an AssertionError if this Node is not a ReturnStatement;
+            * an Exception if this ReturnStatement is not inside a function (actually, this should have raised a
+              parse error long before calling this method!);
+        """
         assert self.name == "ReturnStatement"
         function_ancestor: Optional[Node] = self.get_ancestor_or_none(
             ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]

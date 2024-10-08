@@ -586,6 +586,29 @@ class TestFunc(unittest.TestCase):
             ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n"]
         )
 
+    def test_is_immediately_invoked(self):
+        # Negative example:
+        code = """
+        function foo() {
+            return 42;
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        foo: Node = pdg.get_identifier_by_name("foo")
+        func: Func = Func(foo)
+        self.assertFalse(func.is_immediately_invoked())
+
+        # Positive example:
+        code = """
+        !function foo() { return 42; }();
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        foo: Node = pdg.get_identifier_by_name("foo")
+        func: Func = Func(foo)
+        self.assertTrue(func.is_immediately_invoked())
+
 
 if __name__ == '__main__':
     unittest.main()
