@@ -115,6 +115,7 @@ def add_missing_data_flow_edges(pdg: Node, add_basic_df_edges: bool = False, ben
     #       => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind
     #
 
+    print(f"[Adding data flows] Done for PDG with root node [{pdg.id}].")
     return total_data_flow_edges_added
 
 
