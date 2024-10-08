@@ -4,7 +4,7 @@ import timeit
 from typing import List, Dict, Set, Tuple, Optional
 
 from .node import Node
-from .Func import Func
+from .Func import Func, FuncError
 from .utility_df import cross_product
 
 JAVASCRIPT_BUILT_IN_FUNCTIONS = [  # ToDo: refactor the place where I use this?!!!
@@ -1393,6 +1393,7 @@ def add_missing_data_flow_edges_chrome_apis(pdg: Node) -> int:
                 args_supplied: List[Node] = args_property.children
                 try:
                     args_used: List[Node] = func_property.functional_arg_get_args(resolve_args_to_identifiers=True)
+                    # => ToDo: handle more complex/destructured arguments!!!
 
                     for i in range(min(len(args_supplied), len(args_used))):
                         arg_supplied: Node = args_supplied[i]  # in the example (see above): msg["user_name"]
@@ -1402,17 +1403,11 @@ def add_missing_data_flow_edges_chrome_apis(pdg: Node) -> int:
                                 # Add data flow:
                                 data_flow_edges_added += arg_supplied_identifier.set_data_dependency(arg_used)
                                 # => includes call: arg_supplied._data_dep_children.append(extremity=arg_used)
-                except TypeError:
-                    # when func_property is neither an (Arrow)FunctionExpression nor an Identifier:
+                except FuncError as err:
+                    # when func_property couldn't be resolved into a function:
                     print(f"[Warning] 'func' argument of chrome.scripting.executeScript() call in "
                           f"line {func_property.get_line()} (file {func_property.get_file()}) "
-                          f"has unknown form: {func_property.name}")
-                except KeyError:
-                    # when func_property is an Identifier but couldn't be resolved to a FunctionDeclaration:
-                    print(f"[Warning] 'func' argument of chrome.scripting.executeScript() call in "
-                          f"line {func_property.get_line()} (file {func_property.get_file()}) "
-                          f"is an identifier that couldn't be resolved to a function: "
-                          f"'{func_property.attributes['name']}'")
+                          f"couldn't be resolved into a function: {err}")
 
     return data_flow_edges_added
 
