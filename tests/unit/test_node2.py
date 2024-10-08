@@ -2023,6 +2023,7 @@ class TestNodeClass2(unittest.TestCase):
             # btoa() and atob() require at least 1 argument, otherwise they raise a type error
 
             # Test static evaluation of an IIFE:
+            self.assertEqual(42, expr('(function() {return 40+2;})').static_eval(allow_partial_eval)())
             self.assertEqual(42, expr('(function() {return 40+2;}())').static_eval(allow_partial_eval))
             self.assertEqual(42, expr('((() => {return 40+2;})())').static_eval(allow_partial_eval))
             # ToDo: handle IIFEs that take parameters that can be statically evaluated
