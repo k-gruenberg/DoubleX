@@ -2327,7 +2327,9 @@ class TestNodeClass2(unittest.TestCase):
             include_self=False,
         ))))  # the 4 identifiers being "x", "console", "log", and, again, "x"
 
-    def test_call_expression_is_IIFE(self):
+    def test_call_expression_is_IIFE_and_is_IIFE_call_expression(self):
+        self.assertFalse(Node.identifier("foo").is_IIFE_call_expression())
+
         # Negative example:
         code = "foo(bar, baz);"
         pdg = generate_pdg(code)
@@ -2339,6 +2341,7 @@ class TestNodeClass2(unittest.TestCase):
                                                  allow_additional_children=True,
                                                  allow_different_child_order=False)[0]
         self.assertFalse(call_expression.call_expression_is_IIFE())
+        self.assertFalse(call_expression.is_IIFE_call_expression())
 
         # Positive examples:
         for code in [
@@ -2368,6 +2371,7 @@ class TestNodeClass2(unittest.TestCase):
                                                      allow_additional_children=True,
                                                      allow_different_child_order=False)[0]
             self.assertTrue(call_expression.call_expression_is_IIFE())
+            self.assertTrue(call_expression.is_IIFE_call_expression())
 
 
 if __name__ == '__main__':

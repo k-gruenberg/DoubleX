@@ -1376,6 +1376,10 @@ class Node:
         callee: Node = self.get("callee")[0]
         return callee.name in ["FunctionExpression", "ArrowFunctionExpression"]
 
+    # ADDED BY ME:
+    def is_IIFE_call_expression(self) -> bool:
+        return self.name == "CallExpression" and self.call_expression_is_IIFE()
+
     DEFAULT_SENSITIVE_APIS = ["chrome.cookies", "chrome.scripting", "chrome.tabs.executeScript",
                               "browser.cookies", "browser.scripting", "browser.tabs.executeScript",
                               "indexedDB", "fetch"]  # Note: indexedDB is called as indexedDB.open()!
