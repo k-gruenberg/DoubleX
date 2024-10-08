@@ -1481,6 +1481,16 @@ class Node:
         return self.name == "ReturnStatement"
 
     # ADDED BY ME:
+    def return_statement_get_function(self) -> Self:
+        assert self.name == "ReturnStatement"
+        function_ancestor: Optional[Node] = self.get_ancestor_or_none(
+            ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]
+        )
+        if function_ancestor is None:
+            raise Exception("Error: 'return' outside of function")
+        return function_ancestor
+
+    # ADDED BY ME:
     def is_inside_return_statement(self) -> bool:
         """
         Returns True iff this node is either a ReturnStatement itself or is inside of one inside the AST, by

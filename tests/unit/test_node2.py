@@ -2373,6 +2373,23 @@ class TestNodeClass2(unittest.TestCase):
             self.assertTrue(call_expression.call_expression_is_IIFE())
             self.assertTrue(call_expression.is_IIFE_call_expression())
 
+    def test_return_statement_get_function(self):
+        code = """
+        function double(x) {
+            return 2*x;
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        return_statement: Node = pdg.find_pattern(Node("ReturnStatement"),
+                                                  match_identifier_names=False,
+                                                  match_literals=False,
+                                                  match_operators=False,
+                                                  allow_additional_children=True,
+                                                  allow_different_child_order=False)[0]
+        f = return_statement.return_statement_get_function()
+        self.assertEqual(f.name, "FunctionDeclaration")
+
 
 if __name__ == '__main__':
     unittest.main()
