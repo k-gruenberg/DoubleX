@@ -2441,6 +2441,22 @@ class TestNodeClass2(unittest.TestCase):
         self.assertTrue(foo.is_callee_of_a_call_expression())
         self.assertFalse(x.is_callee_of_a_call_expression())
 
+    def test_get_innermost_surrounding_if_statement(self):
+        code = """
+        if (a==1) {
+            if (b==2) {
+                foobar();
+            }
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        b = pdg.get_identifier_by_name("b")
+        foobar = pdg.get_identifier_by_name("foobar")
+        innermost_surrounding_if_statement = foobar.get_innermost_surrounding_if_statement()
+        self.assertEqual("IfStatement", innermost_surrounding_if_statement.name)
+        self.assertTrue(b.is_inside(innermost_surrounding_if_statement.get("test")[0]))
+
 
 if __name__ == '__main__':
     unittest.main()

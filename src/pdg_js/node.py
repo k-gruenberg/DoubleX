@@ -1455,7 +1455,7 @@ class Node:
         if self.name == "IfStatement":
             return self
         elif self.parent is not None:
-            return self.parent.get_surrounding_if_statement()
+            return self.parent.get_innermost_surrounding_if_statement()
         else:
             return None
 
