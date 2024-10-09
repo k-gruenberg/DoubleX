@@ -2053,6 +2053,20 @@ class TestNodeClass2(unittest.TestCase):
                     """
                 ).static_eval(allow_partial_eval)
             )
+            self.assertEqual(
+                False,
+                expr(
+                    # Seen in the background page of the ClassLink extension (ID jgfbgkjjlonelmpenhpfeeljjlcgnkpe),
+                    #   line 1709:
+                    """
+                    7 != Object.defineProperty(e(60)("div"), "a", {
+                        get: function() {
+                            return 7
+                        }
+                    }).a
+                    """
+                ).static_eval(allow_partial_eval=True)
+            )
 
             # Test JavaScript quirks:
             self.assertEqual(0, expr("+''").static_eval(allow_partial_eval))

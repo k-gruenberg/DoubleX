@@ -2806,10 +2806,12 @@ class Node:
         3. within Node.member_expression_to_string() to normalize "a['b']" into "a.b"
 
         Parameters:
-            allow_partial_eval: when this parameter is set to True, the returned Python object may be the result of an
+            allow_partial_eval: When this parameter is set to True, the returned Python object may be the result of an
                                 incomplete evaluation, most notably it may be a dictionary where some keys, whose value
                                 couldn't be statically evaluated, are mapped to `None`, or an array/list where some
                                 items, whose value couldn't be statically evaluated, are mapped to `None`.
+                                Also, `Object.defineProperty(obj, prop, descriptor)` will be evaluated even when `obj`
+                                cannot; `{}` will be used for `obj` then.
 
         Returns:
             the Python equivalent of this statically evaluated JavaScript expression
@@ -3884,7 +3886,21 @@ class Node:
                         arguments: List[Node] = self.get("arguments")
                         if len(arguments) < 3:
                             raise StaticEvalException(f"static eval failed: Object.defineProperty() must take >=3 args")
-                        obj = arguments[0].static_eval(allow_partial_eval=allow_partial_eval)
+                        try:
+                            obj = arguments[0].static_eval(allow_partial_eval=allow_partial_eval)
+                        except StaticEvalException as e:
+                            if allow_partial_eval:
+                                obj = {}
+                                # An example from the ClassLink extension (ID jgfbgkjjlonelmpenhpfeeljjlcgnkpe):
+                                # 7 != Object.defineProperty(e(60)("div"), "a", {
+                                #     get: function() {
+                                #         return 7
+                                #     }
+                                # }).a
+                                # => `e(60)("div")` cannot be statically evaluated;
+                                #    nonetheless we can clearly evaluate the whole expression to `false`
+                            else:
+                                raise e
                         prop = arguments[1].static_eval(allow_partial_eval=allow_partial_eval)
                         descriptor = arguments[2].static_eval(allow_partial_eval=allow_partial_eval)
                         new_obj = dict(obj)
