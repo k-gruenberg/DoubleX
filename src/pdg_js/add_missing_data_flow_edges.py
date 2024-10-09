@@ -58,6 +58,8 @@ def add_missing_data_flow_edges(pdg: Node, add_basic_df_edges: bool = False, ben
 
     total_data_flow_edges_added = 0
 
+    start_total = timeit.default_timer()
+
     # The following is essentially an attempt at re-implementing DoubleX's data flow creation:
     if add_basic_df_edges:
         start = timeit.default_timer()
@@ -115,7 +117,9 @@ def add_missing_data_flow_edges(pdg: Node, add_basic_df_edges: bool = False, ben
     #       => https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind
     #
 
-    print(f"[Adding data flows] Done for PDG with root node [{pdg.id}].")
+    time_total = timeit.default_timer() - start_total
+    benchmarks["add_missing_data_flow_edges_total"] = time_total
+    print(f"[Adding data flows] Done for PDG with root node [{pdg.id}]. Total time: {time_total} sec")
     return total_data_flow_edges_added
 
 
