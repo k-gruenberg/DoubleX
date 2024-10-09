@@ -1013,6 +1013,17 @@ class Node:
         return self.get_all("IfStatement")
 
     # ADDED BY ME:
+    def get_all_if_statements_inside_as_iter(self):
+        """
+        Returns an iterator over all if-statements ("IfStatement" nodes) inside this piece of code.
+        Cf. Node.get_all_if_statements_inside() which does the same but returns a list instead of an iterator.
+
+        Note that else-if branches are modelled as nested IfStatements (IfStatements inside the else-branches of other
+        IfStatements) and will therefore be returned as well!
+        """
+        return self.get_all_as_iter("IfStatement")
+
+    # ADDED BY ME:
     def get_all_return_statements_inside(self) -> List[Self]:
         """
         Returns all return-statements ("ReturnStatement" nodes) inside this piece of code as a list.
