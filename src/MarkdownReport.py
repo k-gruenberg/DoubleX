@@ -66,7 +66,7 @@ class MarkdownReport:
             timeout_used: the timeout used (in seconds)
         """
         self.f = open(md_path, "w")
-        print(f"[Info] Created Markdown report file: {self.f}")
+        print(f"[Info] Created Markdown report file: {md_path}")
         self.f.write(
             "# Vulnerability Report\n"
             "\n"
