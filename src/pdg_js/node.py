@@ -109,6 +109,7 @@ class Node:
         self.is_wildcard = False  # <== ADDED BY ME
         self.is_identifier_regex = False  # <== ADDED BY ME
         self.identifiers_by_name: Optional[Dict[str, List[Node]]] = None  # <== ADDED BY ME (shall only be not None for the root Node)
+        self.height = -1  # <== ADDED BY ME; used for caching the result of .get_height()
 
     # ADDED BY ME:
     @classmethod
@@ -1889,9 +1890,13 @@ class Node:
         Height will be 1 for leaf nodes.
         """
         if len(self.children) == 0:
-            return 1
+            return 1  # end of recursion
         else:
-            return 1 + max(child.get_height() for child in self.children)
+            # Compute the height using recursion and cache the result, unless it has already been cached:
+            if self.height == -1:
+                self.height = 1 + max(child.get_height() for child in self.children)
+                # => Note how all the child height will become cached as well!
+            return self.height
 
     # ADDED BY ME:
     def promise_returning_function_call_get_all_then_calls(self, resolve_function_references=True) -> List[Self]:
