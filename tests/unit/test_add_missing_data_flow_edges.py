@@ -298,3 +298,70 @@ class TestAddMissingDataFlowEdges(unittest.TestCase):
         print(f"Before: {ast}")
         self.assertEqual(1, add_missing_data_flow_edges_function_returns(ast))
         print(f"After: {ast}")
+
+    def test_add_missing_data_flow_edges_standard_library_functions(self):
+        # ##### ##### ##### ##### ##### Object.assign(): ##### ##### ##### ##### #####
+        # Example from https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/assign:
+        code = """
+        const target = { a: 1, b: 2 };
+        const source = { b: 4, c: 5 };    
+        const returnedTarget = Object.assign(target, source);   
+        // console.log(target); // Expected output: Object { a: 1, b: 4, c: 5 }  
+        // console.log(returnedTarget === target); // Expected output: true
+        """
+        ast = generate_ast(code)
+        print(f"Before: {ast}")
+        # add_missing_data_flow_edges_standard_library_functions() shall add a DF edge source --data--> target
+        self.assertEqual(1, add_missing_data_flow_edges_standard_library_functions(ast))
+        print(f"After: {ast}")
+        all_df_edges = ast.get_all_data_flow_edges()
+        print(all_df_edges)
+        self.assertEqual(1, len(all_df_edges))
+        self.assertEqual("source", all_df_edges[0][0].attributes['name'])
+        self.assertEqual("target", all_df_edges[0][1].attributes['name'])
+
+        # ##### ##### ##### ##### ##### Object.defineProperty(): ##### ##### ##### ##### #####
+        # Example from https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty:
+        code = """
+        const object1 = {};
+        Object.defineProperty(object1, 'property'+'1', {
+          value: forty_two,
+          writable: false,
+        });
+        // object1.property1 = 77; // Throws an error in strict mode    
+        // console.log(object1.property1); // Expected output: 42
+        """
+        ast = generate_ast(code)
+        print(f"Before: {ast}")
+        # add_missing_data_flow_edges_standard_library_functions() shall add a DF edge forty_two --data--> object1
+        self.assertEqual(1, add_missing_data_flow_edges_standard_library_functions(ast))
+        print(f"After: {ast}")
+        all_df_edges = ast.get_all_data_flow_edges()
+        print(all_df_edges)
+        self.assertEqual(1, len(all_df_edges))
+        self.assertEqual("forty_two", all_df_edges[0][0].attributes['name'])
+        self.assertEqual("object1", all_df_edges[0][1].attributes['name'])
+
+        # ##### ##### ##### ##### ##### Object.defineProperties(): ##### ##### ##### ##### #####
+        # Example from https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperties:
+        code = """
+        const object1 = {};
+        Object.defineProperties(object1, {
+          property1: {
+            value: forty_two,
+            writable: true,
+          },
+          property2: {},
+        });
+        // console.log(object1.property1); // Expected output: 42
+        """
+        ast = generate_ast(code)
+        print(f"Before: {ast}")
+        # add_missing_data_flow_edges_standard_library_functions() shall add a DF edge forty_two --data--> object1
+        self.assertEqual(1, add_missing_data_flow_edges_standard_library_functions(ast))
+        print(f"After: {ast}")
+        all_df_edges = ast.get_all_data_flow_edges()
+        print(all_df_edges)
+        self.assertEqual(1, len(all_df_edges))
+        self.assertEqual("forty_two", all_df_edges[0][0].attributes['name'])
+        self.assertEqual("object1", all_df_edges[0][1].attributes['name'])

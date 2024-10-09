@@ -475,6 +475,24 @@ class Node:
         return len(set.intersection(self_data_dep_parents, other_data_dep_parents)) > 0
 
     # ADDED BY ME:
+    def get_all_data_flow_edges(self) -> List[Tuple[Self, Self]]:
+        """
+        A method intended for writing test cases!
+        Returns a list of all data flow edges currently in this PDG.
+        Data flows are represented as (Identifier, Identifier) tuples/pairs.
+
+        Calling this method does *not* trigger any form of (lazy) data flow generation.
+        Only data flow edges that have *already* been generated are returned.
+        """
+        if self.name == "Identifier":
+            return [(self, df_child.extremity) for df_child in self._data_dep_children]
+        else:
+            result = []
+            for child in self.children:
+                result.extend(child.get_all_data_flow_edges())
+            return result
+
+    # ADDED BY ME:
     @classmethod
     def identifier(cls, name: str) -> Self:
         n = cls("Identifier")
