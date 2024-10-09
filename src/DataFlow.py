@@ -151,8 +151,7 @@ class DataFlow:
             return DataFlow(self.nodes[self.nodes.index(first_node):self.nodes.index(last_node) + 1])
 
     def has_cycle(self):
-        ids = [node.id for node in self.nodes]
-        return len(ids) != len(set(ids))
+        return len(set(self.nodes)) != len(self.nodes)
 
     def get_accessed_members(self, include_method_calls=False):
         r"""
