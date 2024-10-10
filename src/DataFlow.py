@@ -1,3 +1,4 @@
+import sys
 from typing import List, Self
 
 from pdg_js.node import Node
@@ -133,6 +134,8 @@ class DataFlow:
 
         Returns `[self]` if this DataFlow cannot be continued any further.
         """
+        print("[Warning] Using get_all_continued_flows() which has exponential runtime!!!", file=sys.stderr)
+
         data_flows = [self]  # may remain a list of 1 item if there's just 1 flow, may split up
         while any(df.may_continue() and not df.has_cycle() for df in data_flows):
             df_to_continue_index = next(i for i in range(len(data_flows)) if data_flows[i].may_continue()
