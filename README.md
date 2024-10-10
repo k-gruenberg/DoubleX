@@ -71,7 +71,7 @@ See `/tests/integration/test_kim_and_lee_vulnerability_detection.py` for many, m
 ## Setup (cf. DoubleX)
 
 ```
-install python3 # (tested with 3.12)
+install python3 # (tested with 3.12.3)
 install nodejs
 install npm
 cd src
