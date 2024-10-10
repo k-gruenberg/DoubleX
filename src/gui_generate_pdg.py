@@ -265,21 +265,31 @@ def main():
                     text_left.tag_configure("df_parent_tag", background="red", foreground="black")
                     print("Highlighted all data flow parents in red.")
 
+                    # Highlight *all* data flow descendents in pale green:
+                    print("Highlighted all data flow descendents in pale green...")
+                    for df_descendent in identifier.get_all_data_flow_descendents():
+                        start_line, start_column, end_line, end_column = df_descendent.get_location_as_tuple()
+                        highlight_start = f"{start_line}.{start_column}"
+                        highlight_end = f"{end_line}.{end_column}"
+                        text_left.tag_add("df_descendent_tag", highlight_start, highlight_end)
+                    text_left.tag_configure("df_descendent_tag", background="pale green", foreground="black")
+                    print("Highlighted all data flow descendents in pale green.")
+
                     print("Computing all continued data flows beginning at identifier...")
                     data_flows: List[DataFlow] = DataFlow.all_continued_beginning_at(identifier)
                     print("Computed all continued data flows beginning at identifier.")
                 else:
                     return
-                # Highlight all data flow children in green:
-                print("Highlighting all data flow children in green...")
+                # Highlight all data flows *considered* in lime green:
+                print("Highlighting all data flows in lime green...")
                 for data_flow in data_flows:
                     for df_child_node in data_flow.nodes:
                         start_line, start_column, end_line, end_column = df_child_node.get_location_as_tuple()
                         highlight_start = f"{start_line}.{start_column}"
                         highlight_end = f"{end_line}.{end_column}"
-                        text_left.tag_add("df_child_tag", highlight_start, highlight_end)
-                text_left.tag_configure("df_child_tag", background="pale green", foreground="black")
-                print("Highlighted all data flow children in green.")
+                        text_left.tag_add("df_tag", highlight_start, highlight_end)
+                text_left.tag_configure("df_tag", background="lime green", foreground="black")
+                print("Highlighted all data flows in lime green.")
 
         except tk.TclError:
             # (A): reset:
