@@ -211,7 +211,8 @@ def main():
             #      RHS text area (displaying the PDG) whenever some code is selected in the LHS text area:
             # (C): highlight all data flow children within the LHS source code:
             text_right.tag_delete("pdg_tag")  # (B)
-            text_left.tag_delete("df_child_tag")  # (C)
+            text_left.tag_delete("df_descendent_tag")  # (C)
+            text_left.tag_delete("df_tag")  # (C)
             text_left.tag_delete("df_parent_tag")  # (C)
             global generated_pdg
             if generated_pdg is not None:
@@ -297,8 +298,9 @@ def main():
             # (B): reset:
             text_right.tag_delete("pdg_tag")
             # (C): reset:
-            text_left.tag_delete("df_child_tag")
             text_left.tag_delete("df_parent_tag")
+            text_left.tag_delete("df_descendent_tag")
+            text_left.tag_delete("df_tag")
 
     root = tk.Tk()
     root.title("PDG Generator")
