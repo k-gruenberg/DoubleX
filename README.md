@@ -239,9 +239,13 @@ For the example given above, the JSON output will look like this:
 }
 ```
 
-A digest of all analysis results for all extensions analyzed will be stored in a CSV file as well. 
+A machine-readable digest of all analysis results for all extensions analyzed will be stored in a CSV file as well. 
 Its path is specified via the `--csv-out` command line argument. 
 No CSV file will be created when no `--csv-out` argument is supplied.
+
+In addition, a human-readable digest of all vulnerabilities found will be stored in a Markdown file, too. 
+Its path is specified via the `--md-out` command line argument. 
+No Markdown file will be created when no `--md-out` argument is supplied.
 
 ## GUI
 
