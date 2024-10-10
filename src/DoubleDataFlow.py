@@ -115,7 +115,7 @@ class DoubleDataFlow:
 
         data_flows_from = DataFlow.all_continued_beginning_at(from_node)  # from_node may be an ObjectPattern
 
-        data_flows_to = DataFlow.beginning_at(to_node)[0].get_all_continued_flows()\
+        data_flows_to = DataFlow.beginning_at(to_node)[0].get_continued_flows()\
                             if to_node.name == "Identifier"\
                             else [DataFlow.pseudo(to_node)]
         # No actual data flow may begin at a MemberExpression, hence a "pseudo" data flow!

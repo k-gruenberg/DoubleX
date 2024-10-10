@@ -493,6 +493,23 @@ class Node:
             return result
 
     # ADDED BY ME:
+    def get_all_data_flow_descendents(self) -> Set[Self]:
+        """
+        When this is Node `a`, this method returns all Nodes `b` such that there is a data flow from `a` to `b`:
+            a --data--> ... --data--> b
+        The result will contain `a` itself as well!
+        """
+        assert self.name == "Identifier"
+        result: Set[Node] = {self}
+        df_edges_followed_for: Set[Node] = set()
+        while df_edges_followed_for != result:
+            df_edges_not_yet_followed_for: Set[Node] = result.difference(df_edges_followed_for)
+            for node in df_edges_not_yet_followed_for:
+                result.update(df_child.extremity for df_child in node.data_dep_children())
+            df_edges_followed_for.update(df_edges_not_yet_followed_for)
+        return result
+
+    # ADDED BY ME:
     @classmethod
     def identifier(cls, name: str) -> Self:
         n = cls("Identifier")
@@ -1015,6 +1032,17 @@ class Node:
             raise LookupError(f"get_identifier_by_name(): no identifier with name '{name}' found!")
         else:
             raise LookupError(f"get_identifier_by_name(): identifier name '{name}' is ambiguous, {len(result)} found!")
+
+    # ADDED BY ME:
+    def get_first_identifier_by_name(self, name: str) -> Self:
+        """
+        A function mostly for testing purposes, e.g., for use in unit tests.
+        Unlike Node.get_identifier_by_name(), which raises a LookupError, unless the identifier with name `name`
+        occurs exactly *once* inside this PDG, this function always returns the 1st occurrence of an Identifier
+        with the given name.
+        """
+        result = [identifier for identifier in self.get_all("Identifier") if identifier.attributes['name'] == name]
+        return min(result, key=lambda node: node.code_occurrence())
 
     # ADDED BY ME:
     def get_all_literals(self) -> List[Self]:

@@ -4,11 +4,18 @@ from pdg_js.node import Node
 
 
 class DataFlow:
-    def __init__(self, nodes):
+    def __init__(self, nodes: List[Node]):
         self.nodes = nodes
 
     def __str__(self):
         return " -> ".join(f"[{node.id}]" for node in self.nodes)
+
+    def verbose_string(self) -> str:
+        return " -> ".join(
+            f'[{node.id}] [{node.name}:"{node.attributes.get('name')}"] <<< {node.body} '
+            f'(line {node.get_line()}, parent: [{node.parent.id if node.parent is not None else None}])'
+            for node in self.nodes
+        )
 
     def pretty(self):  # => result is used later by json.dump()
         return [{
@@ -21,7 +28,7 @@ class DataFlow:
         } for i in range(len(self.nodes))]
 
     @classmethod
-    def from_node_list(cls, node_list):
+    def from_node_list(cls, node_list: List[Node]):
         return DataFlow(node_list)
 
     @classmethod
@@ -74,17 +81,17 @@ class DataFlow:
         """
         Equivalent to
         ```
-        DataFlow.beginning_at(initial_node)[0].get_all_continued_flows()
+        DataFlow.beginning_at(initial_node)[0].get_continued_flows()
         ```
         when `DataFlow.beginning_at(initial_node)` only returns one DataFlow.
         `DataFlow.beginning_at(initial_node)` may return multiple DataFlows however, when given an ObjectPattern with
-        >1 children. In this case, this function returns the concatenated result of calling get_all_continued_flows()
+        >1 children. In this case, this function returns the concatenated result of calling get_continued_flows()
         on each of them.
         """
         all_data_flows_beginning_at_initial_node = DataFlow.beginning_at(initial_node=initial_node)
         all_continued_data_flows = []
         for df in all_data_flows_beginning_at_initial_node:
-            all_continued_data_flows.extend(df.get_all_continued_flows())
+            all_continued_data_flows.extend(df.get_continued_flows())
         return all_continued_data_flows
 
     @classmethod
@@ -102,7 +109,7 @@ class DataFlow:
         """
         return len(self.nodes[-1].data_dep_children()) > 0
 
-    def continue_flow(self) -> List[Self]:
+    def continue_flow(self) -> List[Self]: # todo: fix type
         """
         Returns a list of all possible (1-step) continuations of this DataFlow (being DataFlows themselves),
         or `None` if this DataFlow cannot be continued any further.
@@ -119,6 +126,11 @@ class DataFlow:
         """
         Returns a list of all possible (n-step) continuations of this DataFlow (being DataFlows themselves).
         Because of repeated branching, the list returned can, in theory, be arbitrarily long.
+
+        IN FACT, THE NUMBER OF DATA FLOWS MIGHT BE MASSIVE, GROWING EXPONENTIALLY WITH EACH BRANCHING!!!
+        THEREFORE, IT IS HIGHLY RECOMMENDED TO USE THE get_continued_flows() METHOD FOR ANY NON-TESTING
+        PURPOSES INSTEAD!!!
+
         Returns `[self]` if this DataFlow cannot be continued any further.
         """
         data_flows = [self]  # may remain a list of 1 item if there's just 1 flow, may split up
@@ -131,6 +143,24 @@ class DataFlow:
             data_flows = data_flows[:df_to_continue_index] + continued_flow + data_flows[df_to_continue_index + 1:]
         return data_flows
         # Note that the code above seems a bit ugly, but we need to *replace* each data flow once continued!
+
+    def get_continued_flows(self) -> List[Self]:
+        """
+        Similar to get_all_continued_flows() but only returns a subset of flows, namely one flow for each
+        "final node", where we define a "final node" as a node with no *outgoing* data flow edges.
+
+        Unlike get_all_continued_flows(), which has worst-case exponential runtime (in the no. of nodes),
+        this method has linear runtime (in the no. of nodes, assuming data flow edges have already been generated).
+
+        May return an empty list, even when there are data flows, when there are no final nodes,
+        i.e., nodes with no *outgoing* data flow edges.
+        """
+        from DataFlowGraph import DataFlowGraph
+
+        last_node: Node = self.last_node()
+        return self.nodes[:-1] + DataFlowGraph(start_node=last_node).get_data_flows()
+        # Note: self.nodes[:-1] will be the empty list when this DataFlow has just been created using
+        #       DateFlow.beginning_at(initial_node)
 
     def last_node(self):
         return self.nodes[-1]

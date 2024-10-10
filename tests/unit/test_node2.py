@@ -1,7 +1,7 @@
 import os
 import unittest
 import math
-from typing import List
+from typing import List, Set
 
 from src.pdg_js.node import Node
 from src.pdg_js.StaticEvalException import StaticEvalException
@@ -2470,6 +2470,49 @@ class TestNodeClass2(unittest.TestCase):
         innermost_surrounding_if_statement = foobar.get_innermost_surrounding_if_statement()
         self.assertEqual("IfStatement", innermost_surrounding_if_statement.name)
         self.assertTrue(b.is_inside(innermost_surrounding_if_statement.get("test")[0]))
+
+    def test_get_all_data_flow_descendents(self):
+        # A simple example:
+        code = """
+        let x = 42;
+        let y = x;
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        x = pdg.get_first_identifier_by_name("x")
+        all_df_descendents: Set[Node] = x.get_all_data_flow_descendents()
+        self.assertEqual(3, len(all_df_descendents))
+        self.assertEqual({"x", "y"}, {df_descendent.attributes['name'] for df_descendent in all_df_descendents})
+
+        # An example with a split:
+        code = """
+        let _1 = "data";
+        let _2 = _1, _3 = _1;
+        let _4 = _2 + _3;
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        _1 = pdg.get_first_identifier_by_name("_1")
+        all_df_descendents: Set[Node] = _1.get_all_data_flow_descendents()
+        self.assertEqual(8, len(all_df_descendents))
+        self.assertEqual(
+            {"_1", "_2", "_3", "_4"},
+            {df_descendent.attributes['name'] for df_descendent in all_df_descendents}
+        )
+
+        # An example with a loop:
+        code = """
+        while (1) {
+            x = y
+            y = x
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        x = pdg.get_first_identifier_by_name("x")
+        all_df_descendents: Set[Node] = x.get_all_data_flow_descendents()
+        self.assertEqual(4, len(all_df_descendents))
+        self.assertEqual({"x", "y"}, {df_descendent.attributes['name'] for df_descendent in all_df_descendents})
 
 
 if __name__ == '__main__':

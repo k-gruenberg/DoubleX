@@ -248,11 +248,14 @@ def main():
                 #   ObjectPattern is selected, exactly *one* Identifier:
                 if len(object_patterns) == 1:
                     object_pattern: Node = object_patterns[0]
+                    print("Computing all continued data flows beginning at object pattern...")
                     data_flows: List[DataFlow] = DataFlow.all_continued_beginning_at(object_pattern)
+                    print("Computed all continued data flows beginning at object pattern.")
                 elif len(object_patterns) == 0 and len(identifiers) == 1:
                     identifier: Node = identifiers[0]
 
                     # Highlight all data flow parents in red:
+                    print("Highlighting all data flow parents in red...")
                     for df_parent in identifier.data_dep_parents():
                         df_parent_node = df_parent.extremity
                         start_line, start_column, end_line, end_column = df_parent_node.get_location_as_tuple()
@@ -260,11 +263,15 @@ def main():
                         highlight_end = f"{end_line}.{end_column}"
                         text_left.tag_add("df_parent_tag", highlight_start, highlight_end)
                     text_left.tag_configure("df_parent_tag", background="red", foreground="black")
+                    print("Highlighted all data flow parents in red.")
 
+                    print("Computing all continued data flows beginning at identifier...")
                     data_flows: List[DataFlow] = DataFlow.all_continued_beginning_at(identifier)
+                    print("Computed all continued data flows beginning at identifier.")
                 else:
                     return
                 # Highlight all data flow children in green:
+                print("Highlighting all data flow children in green...")
                 for data_flow in data_flows:
                     for df_child_node in data_flow.nodes:
                         start_line, start_column, end_line, end_column = df_child_node.get_location_as_tuple()
@@ -272,6 +279,7 @@ def main():
                         highlight_end = f"{end_line}.{end_column}"
                         text_left.tag_add("df_child_tag", highlight_start, highlight_end)
                 text_left.tag_configure("df_child_tag", background="pale green", foreground="black")
+                print("Highlighted all data flow children in green.")
 
         except tk.TclError:
             # (A): reset:
