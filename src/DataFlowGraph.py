@@ -2,6 +2,7 @@ from typing import Dict, List, Tuple, Set
 
 from pdg_js.node import Node
 from DataFlow import DataFlow
+from DataFlowsConsidered import DataFlowsConsidered
 
 
 class DataFlowGraph:
@@ -75,6 +76,7 @@ class DataFlowGraph:
         self.dijkstra_distances: Dict[Node, float] =\
             {node: (0 if node == self.start_node else float('inf')) for node in self.get_nodes()}
         self.dijkstra_predecessors: Dict[Node, Node] = dict()
+        self.dijkstra_successors: Dict[Node, Node] = dict()
         unvisited_nodes: Set[Node] = set(self.get_nodes())  # does not add any non-determinism here!!!
         while len(unvisited_nodes) > 0:
             u: Node = min(unvisited_nodes, key=lambda node: (self.dijkstra_distances[node], node.id))
@@ -87,6 +89,7 @@ class DataFlowGraph:
                     if dist < self.dijkstra_distances[df_child_v]:
                         self.dijkstra_distances[df_child_v] = dist
                         self.dijkstra_predecessors[df_child_v] = u
+                        self.dijkstra_successors[u] = df_child_v
         # => cf. https://de.wikipedia.org/wiki/Dijkstra-Algorithmus
         # Note: I also implemented a version of the Dijkstra algorithm using a heapq,
         #       that one actually turned out to be SLOWER, however!
@@ -125,44 +128,65 @@ class DataFlowGraph:
         """
         return self.start_node
 
-    def get_all_data_flows(self) -> List[DataFlow]:
+    def get_data_flows(self,
+                       data_flows_considered: DataFlowsConsidered) -> List[DataFlow]:
         """
-        Returns **all** possible data flows starting at `start_node`:
-            start_node --data--> x1 --data--> x2 --data--> ... --data--> xn
-        When a loop is detected, the data flow is cut off at the first repeating Node:
-            start_node --data--> ... --data--> xk --data--> ... --data--> xk [STOP]
-
-        WARNING: This function has exponential runtime!!! Do not call this in production code!!!
-        """
-        raise NotImplementedError("todo")
-
-    def get_data_flows(self) -> List[DataFlow]:
-        """
-        Unlike DataFlowGraph.get_all_data_flows(), this method does *not* have exponential runtime!!!
-        If not has_cycle() and not has_split(), i.e., when this graph is a tree, the result will be the same, however.
-        Otherwise, this method returns a subset of the DataFlows as returned by DataFlowGraph.get_all_data_flows(),
-        namely...
-        (A) only those that end in a "final node" `x`, meaning in a node without any *outgoing* data flow edges.
-        (B) for each such final node `x` only *one* data flow from `start_node` will be returned, even when there
-            might be multiple ones (as there might be exponentially many!).
-            => The Dijkstra algorithm will be used to determine the shortest path from the `start_node` to
-               each final node `x`.
-
-        All DataFlows returned will have the following properties:
-            1. each DataFlows begins in the start node as returned by `get_start_node()`
-            2. each DataFlow ends in an Identifier w/o any outgoing data flow edges
-            3. no DataFlow will have any cycles (otherwise it wouldn't be the shortest path :))
+        Enumerates data flows based on this DataFlowGraph.
+        The DataFlowsConsidered enum passed as an argument dictates which data flows to enumerate.
+        Cf. doc comments in DataFlowsConsidered, but note that this is a question of trade-off: runtime vs. recall.
+        Also beware that some of the variants of DataFlowsConsidered will have worst-case exponential runtime!!!
         """
         result: List[DataFlow] = []
-        for final_node in self.get_all_final_nodes():
-            # Use the Dijkstra algorithm that has already been performed during __init__() to determine the
-            #   shortest path from self.start_node to final_node; turn the path into a DataFlow object and
-            #   append it to the result list:
-            reverse_df: List[Node] = [final_node]
-            while reverse_df[-1] != self.start_node:
-                reverse_df.append(self.dijkstra_predecessors[reverse_df[-1]])
-            # Reverse [final_node, ..., start_node] into [start_node, ..., final_node] and append to result list:
-            result.append(DataFlow(list(reversed(reverse_df))))
+
+        match data_flows_considered:
+            case DataFlowsConsidered.ALL:
+                raise NotImplementedError("todo")
+
+            case DataFlowsConsidered.ALL_STOP_AT_CYCLE_INCLUSIVE:
+                raise NotImplementedError("todo")
+
+            case DataFlowsConsidered.ALL_STOP_AT_CYCLE_EXCLUSIVE:
+                raise NotImplementedError("todo")
+
+            case DataFlowsConsidered.ONE_PER_NODE_SHORTEST:  # (cf. ONE_PER_FINAL_NODE_SHORTEST below)
+                for node in self.get_nodes():
+                    reverse_df: List[Node] = [node]
+                    while reverse_df[-1] != self.start_node:
+                        reverse_df.append(self.dijkstra_predecessors[reverse_df[-1]])
+                    result.append(DataFlow(list(reversed(reverse_df))))
+
+            case DataFlowsConsidered.ONE_PER_FINAL_NODE_SHORTEST:
+                for final_node in self.get_all_final_nodes():
+                    # Use the Dijkstra algorithm that has already been performed during __init__() to determine the
+                    #   shortest path from self.start_node to final_node; turn the path into a DataFlow object and
+                    #   append it to the result list:
+                    reverse_df: List[Node] = [final_node]
+                    while reverse_df[-1] != self.start_node:
+                        reverse_df.append(self.dijkstra_predecessors[reverse_df[-1]])
+                    # Reverse [final_node, ..., start_node] into [start_node, ..., final_node] and append to result list:
+                    result.append(DataFlow(list(reversed(reverse_df))))
+
+            case DataFlowsConsidered.DIJKSTRA_LEAVES:  # (cf. ONE_PER_FINAL_NODE_SHORTEST above)
+                for dijkstra_leaf in self.get_all_dijkstra_leaves():
+                    reverse_df: List[Node] = [dijkstra_leaf]
+                    while reverse_df[-1] != self.start_node:
+                        reverse_df.append(self.dijkstra_predecessors[reverse_df[-1]])
+                    result.append(DataFlow(list(reversed(reverse_df))))
+
+            case DataFlowsConsidered.JUST_ONE:
+                flow: List[Node] = [self.start_node]
+                while True:
+                    df_children: List[Node] = self.node_df_children[flow[-1]]
+                    if len(df_children) == 0:
+                        break  # stop when there's nowhere to go anymore
+                    next_df_child: Node = min(df_children, key=lambda node: node.id)
+                    if next_df_child in flow:
+                        flow.append(next_df_child)
+                        break  # stop after having added the first duplicate Node
+                    else:
+                        flow.append(next_df_child)
+                result.append(DataFlow.from_node_list(flow))
+
         return result
 
     def get_all_final_nodes(self) -> List[Node]:
@@ -172,6 +196,15 @@ class DataFlowGraph:
         ...but `x` has no further *outgoing* data flow edges.
         """
         return [node for node, df_children in self.node_df_children.items() if len(df_children) == 0]
+
+    def get_all_dijkstra_leaves(self) -> List[Node]:
+        """
+        Returns all leave nodes of the Dijkstra tree internally stored by this DataFlowGraph.
+        Will be a superset of the Nodes returned by get_all_final_nodes(), as every "final node" is necessarily also
+        a leaf of the Dijkstra tree (as it has no outgoing data flow edges)!
+        """
+        # Return all Nodes that a not the Dijkstra predecessor of another Node (a.k.a. all leaves of the Dijkstra tree):
+        return [node for node in self.get_nodes() if node not in self.dijkstra_predecessors.values()]
 
     def has_cycle(self) -> bool:
         """

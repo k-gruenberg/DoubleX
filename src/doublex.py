@@ -32,6 +32,8 @@ from multiprocessing import Process
 import queue
 import re
 from typing import Tuple, Any
+
+from DataFlowsConsidered import DataFlowsConsidered
 # Original DoubleX extension analysis:
 from vulnerability_detection import analyze_extension as doublex_analyze_extension
 
@@ -353,6 +355,10 @@ def main():
                         help="Generate all basic data flow edges eagerly in the beginning; instead of only computing "
                              "them lazily on demand, which is the default. SLOW!!! NOT RECOMMENDED!!!")
 
+    parser.add_argument("--data-flows-considered", metavar="DF_ENUMERATION_METHOD", type=str,
+                        default=DataFlowsConsidered.default(),
+                        help=f"One of: {list(DataFlowsConsidered.__members__.keys())}")
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
@@ -420,6 +426,8 @@ def main():
 
     if args.eager_df_gen:
         os.environ['EAGER_DF_GEN'] = "yes"
+
+    os.environ['DATA_FLOWS_CONSIDERED'] = args.data_flows_considered
 
     if args.crx is None:  # No --crx argument supplied: Use -cs and -bp arguments:
         print("Analyzing a single, unpacked extension...")

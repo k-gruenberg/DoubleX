@@ -1,6 +1,8 @@
+import os
 import sys
-from typing import List, Self
+from typing import List, Self, Optional
 
+from DataFlowsConsidered import DataFlowsConsidered
 from pdg_js.node import Node
 
 
@@ -110,7 +112,7 @@ class DataFlow:
         """
         return len(self.nodes[-1].data_dep_children()) > 0
 
-    def continue_flow(self) -> List[Self]: # todo: fix type
+    def continue_flow(self) -> Optional[List[Self]]:
         """
         Returns a list of all possible (1-step) continuations of this DataFlow (being DataFlows themselves),
         or `None` if this DataFlow cannot be continued any further.
@@ -128,6 +130,10 @@ class DataFlow:
         Returns a list of all possible (n-step) continuations of this DataFlow (being DataFlows themselves).
         Because of repeated branching, the list returned can, in theory, be arbitrarily long.
 
+        Generate all data flows
+            ... --data--> self.last_node()=x0 --data--> x1 --data--> x2 --data--> ... --data--> xn
+        where xi != xj for 0<=i<=n, 0<=j<=n, i != j.
+
         IN FACT, THE NUMBER OF DATA FLOWS MIGHT BE MASSIVE, GROWING EXPONENTIALLY WITH EACH BRANCHING!!!
         THEREFORE, IT IS HIGHLY RECOMMENDED TO USE THE get_continued_flows() METHOD FOR ANY NON-TESTING
         PURPOSES INSTEAD!!!
@@ -136,34 +142,33 @@ class DataFlow:
         """
         print("[Warning] Using get_all_continued_flows() which has exponential runtime!!!", file=sys.stderr)
 
-        data_flows = [self]  # may remain a list of 1 item if there's just 1 flow, may split up
-        while any(df.may_continue() and not df.has_cycle() for df in data_flows):
-            df_to_continue_index = next(i for i in range(len(data_flows)) if data_flows[i].may_continue()
-                                                                          and not data_flows[i].has_cycle())
-            df_to_continue = data_flows[df_to_continue_index]
-            # Continue data flow, might result in a split into multiple new data flows:
-            continued_flow = df_to_continue.continue_flow()  # (not None because df_to_continue.may_continue())
-            data_flows = data_flows[:df_to_continue_index] + continued_flow + data_flows[df_to_continue_index + 1:]
-        return data_flows
-        # Note that the code above seems a bit ugly, but we need to *replace* each data flow once continued!
+        return self.get_continued_flows(data_flows_considered=DataFlowsConsidered.ALL)
 
-    def get_continued_flows(self) -> List[Self]:
+    def get_continued_flows(self,
+                            data_flows_considered: Optional[DataFlowsConsidered] = None) -> List[Self]:
         """
-        Similar to get_all_continued_flows() but only returns a subset of flows, namely one flow for each
-        "final node", where we define a "final node" as a node with no *outgoing* data flow edges.
-
-        Unlike get_all_continued_flows(), which has worst-case exponential runtime (in the no. of nodes),
-        this method has linear runtime (in the no. of nodes, assuming data flow edges have already been generated).
-
-        May return an empty list, even when there are data flows, when there are no final nodes,
-        i.e., nodes with no *outgoing* data flow edges.
+        Returns a list of numerous possible (n-step) continuations of this DataFlow (being DataFlows themselves).
+        Which continuations these will be is determined via the `data_flows_considered` parameter.
+        By default (when the `data_flows_considered` parameter is not supplied or set to None), whatever the user
+        supplied via the --data-flows-considered command line argument will be used. If that also wasn't supplied
+        (e.g., when using this method in a test case), `DataFlowsConsidered.default()` will be used.
+        Cf. doc comments of the DataFlowsConsidered enum for further info.
+        But beware that some of the variants of DataFlowsConsidered will have worst-case exponential runtime!
         """
         from DataFlowGraph import DataFlowGraph
 
         last_node: Node = self.last_node()
-        return self.nodes[:-1] + DataFlowGraph(start_node=last_node).get_data_flows()
-        # Note: self.nodes[:-1] will be the empty list when this DataFlow has just been created using
-        #       DateFlow.beginning_at(initial_node)
+
+        continuations: List[DataFlow] = DataFlowGraph(start_node=last_node).get_data_flows(
+            data_flows_considered=(DataFlowsConsidered[
+                os.environ.get('DATA_FLOWS_CONSIDERED', DataFlowsConsidered.default())  # string to enum
+            ] if data_flows_considered is None else data_flows_considered)
+        )
+
+        if len(self.nodes) == 1:  # when this DataFlow has just been created => self.nodes[:-1] will be empty
+            return continuations
+        else:  # This case should be purely hypothetical and not actually occur in my code:
+            return [DataFlow.from_node_list(self.nodes[:-1] + df.nodes) for df in continuations]
 
     def last_node(self):
         return self.nodes[-1]

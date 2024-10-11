@@ -2,6 +2,7 @@ import unittest
 import os
 
 from DataFlowGraph import DataFlowGraph
+from DataFlowsConsidered import DataFlowsConsidered
 from src.pdg_js.node import Node
 
 
@@ -79,11 +80,17 @@ class TestDataFlowGraph(unittest.TestCase):
         # get_all_final_nodes() should only return one "final node": _40
         _40 = pdg.get_identifier_by_name("_40")
         self.assertEqual(df_graph.get_all_final_nodes(), [_40])
-        # get_data_flows() should only return 1 data flow, as there's only one "final node": _40
-        data_flows = df_graph.get_data_flows()
+        # get_data_flows(ONE_PER_FINAL_NODE_SHORTEST) should only return 1 data flow, as there's only one "final node": _40
+        data_flows = df_graph.get_data_flows(DataFlowsConsidered.ONE_PER_FINAL_NODE_SHORTEST)
         self.assertEqual(len(data_flows), 1)
         print(f"data_flows[0] = {data_flows[0]}")
         self.assertEqual(data_flows[0].last_node(), _40)
+        # get_data_flows(ONE_PER_NODE_SHORTEST) should only return as many data flows as there are nodes:
+        data_flows = df_graph.get_data_flows(DataFlowsConsidered.ONE_PER_NODE_SHORTEST)
+        self.assertEqual(len(data_flows), len(pdg.get_all_identifiers()))
+        # get_data_flows(JUST_ONE) should, as the name suggests, return just 1 data flow:
+        data_flows = df_graph.get_data_flows(DataFlowsConsidered.JUST_ONE)
+        self.assertEqual(len(data_flows), 1)
 
         # An example with a loop and 0 "final nodes":
         code = """
@@ -103,9 +110,20 @@ class TestDataFlowGraph(unittest.TestCase):
         self.assertEqual(len(df_graph.get_nodes()), len(pdg.get_all_identifiers()))
         # get_all_final_nodes() should return no "final nodes":
         self.assertEqual(len(df_graph.get_all_final_nodes()), 0)
-        # get_data_flows() should return 0 data flows, as there are no "final nodes":
-        data_flows = df_graph.get_data_flows()
+        # get_data_flows(ONE_PER_FINAL_NODE_SHORTEST) should return 0 data flows, as there are no "final nodes":
+        data_flows = df_graph.get_data_flows(DataFlowsConsidered.ONE_PER_FINAL_NODE_SHORTEST)
         self.assertEqual(len(data_flows), 0)
+        # get_data_flows(ONE_PER_NODE_SHORTEST) should only return as many data flows as there are nodes:
+        data_flows = df_graph.get_data_flows(DataFlowsConsidered.ONE_PER_NODE_SHORTEST)
+        self.assertEqual(len(data_flows), len(pdg.get_all_identifiers()))
+        # get_data_flows(JUST_ONE) should, as the name suggests, return just 1 data flow:
+        data_flows = df_graph.get_data_flows(DataFlowsConsidered.JUST_ONE)
+        self.assertEqual(len(data_flows), 1)
+        # Even when there are 0 final nodes, get_data_flows(DIJKSTRA_LEAVES) should return more than 0 data flows:
+        data_flows = df_graph.get_data_flows(DataFlowsConsidered.DIJKSTRA_LEAVES)
+        print(f"No. of Dijkstra leaves: {len(data_flows)}")
+        # => 1 is correct (Dijkstra tree will actually be a "degenerate" graph/a line)
+        self.assertGreater(len(data_flows), 0)
 
         # An example with a loop and 1 "final node":
         code = """
@@ -127,8 +145,14 @@ class TestDataFlowGraph(unittest.TestCase):
         self.assertEqual(len(df_graph.get_nodes()), len(pdg.get_all_identifiers()))
         # get_all_final_nodes() should return 1 "final node":
         self.assertEqual(len(df_graph.get_all_final_nodes()), 1)
-        # get_data_flows() should return 1 data flow:
-        data_flows = df_graph.get_data_flows()
+        # get_data_flows(ONE_PER_FINAL_NODE_SHORTEST) should return 1 data flow:
+        data_flows = df_graph.get_data_flows(DataFlowsConsidered.ONE_PER_FINAL_NODE_SHORTEST)
         self.assertEqual(len(data_flows), 1)
         print(f"data_flows[0] = {data_flows[0]}")
         self.assertEqual(data_flows[0].last_node(), z)
+        # get_data_flows(ONE_PER_NODE_SHORTEST) should only return as many data flows as there are nodes:
+        data_flows = df_graph.get_data_flows(DataFlowsConsidered.ONE_PER_NODE_SHORTEST)
+        self.assertEqual(len(data_flows), len(pdg.get_all_identifiers()))
+        # get_data_flows(JUST_ONE) should, as the name suggests, return just 1 data flow:
+        data_flows = df_graph.get_data_flows(DataFlowsConsidered.JUST_ONE)
+        self.assertEqual(len(data_flows), 1)
