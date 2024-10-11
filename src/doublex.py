@@ -699,4 +699,14 @@ def main():
 
 
 if __name__ == "__main__":
+    # # Comment the following code in when you want to call this program with cProfile; problem however:
+    # #   Even then, cProfile won't give any meaningful results, probably because of the way multiprocessing works...
+    # import cProfile
+    # import sys
+    # if sys.modules['__main__'].__file__ == cProfile.__file__:
+    #     import doublex  # Imports you again (does *not* use cache or execute as __main__)
+    #     globals().update(vars(doublex))  # Replaces current contents with newly imported stuff
+    #     sys.modules['__main__'] = doublex  # Ensures pickle lookups on __main__ find matching version
+    # # Source: ShadowRanger:
+    # # https://stackoverflow.com/questions/53890693/cprofile-causes-pickling-error-when-running-multiprocessing-python-code
     main()
