@@ -1668,6 +1668,8 @@ class TestNodeClass2(unittest.TestCase):
     def test_try_static_eval(self):
         self.assertEqual(333, expr("111+222").try_static_eval(allow_partial_eval=False))
         self.assertEqual(333, expr("111+222").try_static_eval(allow_partial_eval=True))
+        self.assertIsNone(expr("x+y").try_static_eval(allow_partial_eval=False))
+        self.assertIsNone(expr("x+y").try_static_eval(allow_partial_eval=True))
 
     def test_static_eval(self):
         for allow_partial_eval in [True, False]:
