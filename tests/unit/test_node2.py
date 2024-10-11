@@ -1665,6 +1665,10 @@ class TestNodeClass2(unittest.TestCase):
             .member_expression_get_leftmost_identifier().attributes['name']
         )
 
+    def test_try_static_eval(self):
+        self.assertEqual(333, expr("111+222").try_static_eval(allow_partial_eval=False))
+        self.assertEqual(333, expr("111+222").try_static_eval(allow_partial_eval=True))
+
     def test_static_eval(self):
         for allow_partial_eval in [True, False]:
             self.assertEqual(42, expr("42").static_eval(allow_partial_eval))
