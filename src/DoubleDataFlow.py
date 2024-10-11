@@ -129,10 +129,13 @@ class DoubleDataFlow:
                 #   AssignmentExpression); if so, append to result:
                 from_flow_final_expr = from_flow.last_node().get_ancestor_or_none(rendezvous_nodes)
                 to_flow_final_expr = to_flow.last_node().get_ancestor_or_none(rendezvous_nodes)
-                # ToDo: what if data flow continues beyond the CallExpression,
-                #       e.g., when the function's return value is used?!!!
-                #       => it's not enough to just check each last_node() then!!!
-                #       => problem however: might *further* increase the FPR!!!
+                # => Q: What if data flow continues *beyond* the rendezvous node?
+                #    A: This depends on the DataFlowsConsidered mode used, cf. the DataFlowsConsidered enum,
+                #       DataFlowGraph.get_data_flows() and the --data-flows-considered command line argument.
+                #       Using ALL or ONE_PER_NODE_SHORTEST, there will be always be a data flow
+                #       start --data--> ... --data--> X, ending in X, generated, for each X that is reachable from
+                #       `start` via data flow edges.
+                #       This is *not* the case for all the other modes, however!!!
                 if from_flow_final_expr == to_flow_final_expr and from_flow_final_expr is not None:
                     if ((allow_unreachable_rendezvous or (not from_flow_final_expr.is_unreachable())) and
                             (allow_IIFE_rendezvous or (not from_flow_final_expr.is_IIFE_call_expression()))):
