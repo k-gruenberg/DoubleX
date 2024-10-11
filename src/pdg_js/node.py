@@ -1090,6 +1090,13 @@ class Node:
         return False
 
     # ADDED BY ME:
+    def has_descendent(self, child_names: List[str]) -> bool:
+        for descendent in self.get_all_as_iter(None):
+            if descendent.name in child_names:
+                return True
+        return False
+
+    # ADDED BY ME:
     def get_child(self, child_name: str) -> Optional[Self]:
         for child in self.children:
             if child.name == child_name:

@@ -2514,6 +2514,16 @@ class TestNodeClass2(unittest.TestCase):
         self.assertEqual(4, len(all_df_descendents))
         self.assertEqual({"x", "y"}, {df_descendent.attributes['name'] for df_descendent in all_df_descendents})
 
+    def test_has_descendent(self):
+        code = "x.y"
+        pdg = generate_pdg(code)
+        print(pdg)
+        member_expr = pdg.get_all("MemberExpression")[0]
+        self.assertEqual(member_expr.name, "MemberExpression")
+        self.assertTrue(member_expr.has_descendent(["Identifier"]))
+        self.assertTrue(member_expr.has_descendent(["Identifier", "Literal"]))
+        self.assertFalse(member_expr.has_descendent(["Literal"]))
+
 
 if __name__ == '__main__':
     unittest.main()

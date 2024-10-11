@@ -72,9 +72,13 @@ class DoubleDataFlow:
                                  from_node: Node,
                                  to_node: Node,
                                  rendezvous_nodes: List[str],
+                                 rendezvous_forbidden_descendents: List[str] =
+                                    ["FunctionExpression", "ArrowFunctionExpression", "BlockStatement",
+                                     "FunctionDeclaration"],
                                  return_multiple=True,
                                  allow_unreachable_rendezvous=False,
-                                 allow_IIFE_rendezvous=False) -> List[Self]:
+                                 allow_IIFE_rendezvous=False,
+                                 ) -> List[Self]:
         """
         Returns the empty list `[]` if no data flow exists from `from_node` to `to_node`.
         Otherwise, returns the data flow(s) from `from_node` to `to_node` as DoubleDataFlow objects.
@@ -92,6 +96,10 @@ class DoubleDataFlow:
                      no data flow will be followed then, however
             rendezvous_nodes: the list of allowed rendezvous Node names as strings,
                               e.g.: ["CallExpression", "AssignmentExpression"]
+            rendezvous_forbidden_descendents: the rendezvous node may not have any of these descendents (i.e., none of
+                                              the names of its descendents may be inside this list); the purpose of
+                                              this is to prevent overly complex rendezvous which are very likely false
+                                              positives
             return_multiple: a boolean indicating whether to return multiple data flows if multiple data flows exist
                              from the given `from_node` to the given `to_node`; when set to False, the returned list
                              will either be empty or contain exactly 1 element; when set to True, the returned list
@@ -137,8 +145,11 @@ class DoubleDataFlow:
                 #       `start` via data flow edges.
                 #       This is *not* the case for all the other modes, however!!!
                 if from_flow_final_expr == to_flow_final_expr and from_flow_final_expr is not None:
-                    if ((allow_unreachable_rendezvous or (not from_flow_final_expr.is_unreachable())) and
-                            (allow_IIFE_rendezvous or (not from_flow_final_expr.is_IIFE_call_expression()))):
+                    if (
+                        (allow_unreachable_rendezvous or (not from_flow_final_expr.is_unreachable())) and
+                        (allow_IIFE_rendezvous or (not from_flow_final_expr.is_IIFE_call_expression())) and
+                        not from_flow_final_expr.has_descendent(rendezvous_forbidden_descendents)
+                    ):
                         result = DoubleDataFlow(from_flow=from_flow, to_flow=to_flow, rendezvous_nodes=rendezvous_nodes)
                         if return_multiple:
                             results.append(result)
