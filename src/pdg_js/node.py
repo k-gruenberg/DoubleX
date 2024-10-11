@@ -2827,6 +2827,17 @@ class Node:
         return declaration_identifier in other_node_identifiers_declared_in_scope
 
     # ADDED BY ME:
+    def try_static_eval(self, allow_partial_eval: bool, default_value: Any = None) -> Any:
+        """
+        Wraps static_eval() and, instead of raising a StaticEvalException (or some other Exception, possibly),
+        returns the provided default value on error (which is equal to `None` by default).
+        """
+        try:
+            return self.static_eval(allow_partial_eval=allow_partial_eval)
+        except:
+            return default_value
+
+    # ADDED BY ME:
     def static_eval(self, allow_partial_eval: bool) -> str | int | float | bool | list | dict | None | Callable:
         """
         Attempts to statically evaluate the value of this JavaScript expression.
