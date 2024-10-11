@@ -7,7 +7,7 @@ from src.pdg_js.node import Node
 
 os.environ['PARSER'] = "espree"
 os.environ['SOURCE_TYPE'] = "module"
-os.environ['DEBUG'] = "yes"
+os.environ['DEBUG'] = "no"
 os.environ['TIMEOUT'] = "600"
 
 
@@ -67,12 +67,12 @@ class TestDataFlowGraph(unittest.TestCase):
         let _40 = _38 + _39;
         """
         pdg = generate_pdg(code)
-        print(f"pdg = {pdg}")
+        print(f"pdg =\n{pdg}")
         _1 = pdg.get_first_identifier_by_name("_1")
         print(f"_1 = {_1}")
 
         df_graph = DataFlowGraph(start_node=_1)
-        print(f"df_graph = {df_graph}")
+        print(f"df_graph =\n{df_graph}")
         self.assertEqual(df_graph.get_start_node(), _1)
         print(f"len(df_graph.get_nodes()) = {len(df_graph.get_nodes())}")
         self.assertEqual(len(df_graph.get_nodes()), len(pdg.get_all_identifiers()))
@@ -93,11 +93,11 @@ class TestDataFlowGraph(unittest.TestCase):
         }
         """
         pdg = generate_pdg(code)
-        print(f"pdg = {pdg}")
+        print(f"pdg =\n{pdg}")
         x = pdg.get_first_identifier_by_name("x")
         print(f"x = {x}")
         df_graph = DataFlowGraph(start_node=x)
-        print(f"df_graph = {df_graph}")
+        print(f"df_graph =\n{df_graph}")
         self.assertEqual(df_graph.get_start_node(), x)
         print(f"len(df_graph.get_nodes()) = {len(df_graph.get_nodes())}")
         self.assertEqual(len(df_graph.get_nodes()), len(pdg.get_all_identifiers()))
@@ -116,12 +116,12 @@ class TestDataFlowGraph(unittest.TestCase):
         z = x
         """
         pdg = generate_pdg(code)
-        print(f"pdg = {pdg}")
+        print(f"pdg =\n{pdg}")
         x = pdg.get_first_identifier_by_name("x")
         z = pdg.get_identifier_by_name("z")
         print(f"x = {x}")
         df_graph = DataFlowGraph(start_node=x)
-        print(f"df_graph = {df_graph}")
+        print(f"df_graph =\n{df_graph}")
         self.assertEqual(df_graph.get_start_node(), x)
         print(f"len(df_graph.get_nodes()) = {len(df_graph.get_nodes())}")
         self.assertEqual(len(df_graph.get_nodes()), len(pdg.get_all_identifiers()))
