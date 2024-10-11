@@ -952,7 +952,7 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
         sum(add_missing_data_flow_edges_call_expressions(child) for child in pdg.children)
 
 
-def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  # ToDo: create test cases
+def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:
     """
     Some dataflows are non-obvious without knowing the semantics of certain functions from JavaScript's standard
     library.
@@ -1126,6 +1126,10 @@ def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  #
         #    (or rather for each identifier occurring within `value`)
 
         assert pattern_match.name == "CallExpression"
+        # interface CallExpression {
+        #     callee: Expression | Import;
+        #     arguments: ArgumentListElement[];
+        # }
 
         if len(pattern_match.children) < 4:
             # 0th child of CallExpression = "Object.defineProperty" MemberExpression
@@ -1139,7 +1143,18 @@ def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  #
             continue
 
         obj: Node = pattern_match.children[1]
-        if obj.name == "MemberExpression":
+        if obj.name == "ObjectExpression":
+            # Example:
+            #   const new_obj = Object.defineProperty({x:y}, 'property1', {
+            #     value: forty_two,
+            #     writable: false,
+            #   });
+            # => cannot add a data flow edge from 'forty_two' to '{x:y}' object literal but there's also no need to
+            # => the data flow edges necessary (y --data--> new_obj and forty_two --data--> new_obj)
+            #    are already generated elsewhere :)
+            # => no DF edges to add but also no warning to print :)
+            continue
+        elif obj.name == "MemberExpression":
             obj = obj.member_expression_get_leftmost_identifier()  # This method does not necessarily return an Identifier!!!
         if obj.name == "Identifier":
             descriptor: Node = pattern_match.children[3]
@@ -1163,11 +1178,16 @@ def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  #
                       f"(in line {pattern_match.get_line()}, file {pattern_match.get_file()}) is neither an "
                       f"ObjectExpression nor an Identifier (rather it's a {descriptor.name}); no data flow added.")
 
+        # ToDo: handle LHS of MemberExpression is an ObjectExpression, e.g.: {x:{y:obj}}.x.y => add DF to 'obj' !!!
+
         else:
             print(f"[Warning] obj parameter found in Object.defineProperty(obj, prop, descriptor) call "
                   f"(in line {pattern_match.get_line()}, file {pattern_match.get_file()}) is not an "
-                  f"Identifier (rather it's a {obj.name}) (note that MemberExpressions are resolved to their leftmost "
-                  f"Node); no data flow added.")
+                  f"Identifier, MemberExpression with LHS=Identifier or ObjectExpression "
+                  f"(rather it's a {obj.name};"
+                  f" note that a possible MemberExpressions was resolved to its leftmost Node); "
+                  f"no data flow added.")
+            # ToDo: what about CallExpressions passed as the `obj` parameter?!
 
     # ##### ##### ##### ##### ##### Object.defineProperties(): ##### ##### ##### ##### #####
 
@@ -1236,8 +1256,23 @@ def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  #
         #        accessor descriptor; it cannot be both (see Object.defineProperty() for more details).
         #
         # Return value: The object that was passed to the function.
+        #
+        # Example (from the Mozilla docs):
+        #     const object1 = {};
+        #     Object.defineProperties(object1, {
+        #         property1: {
+        #             value: 42,
+        #             writable: true,
+        #         },
+        #         property2: {},
+        #     });
+        #     console.log(object1.property1); // Expected output: 42
 
         assert pattern_match.name == "CallExpression"
+        # interface CallExpression {
+        #     callee: Expression | Import;
+        #     arguments: ArgumentListElement[];
+        # }
 
         if len(pattern_match.children) < 3:
             # 0th child of CallExpression = "Object.defineProperties" MemberExpression
@@ -1250,6 +1285,21 @@ def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  #
             continue
 
         obj: Node = pattern_match.children[1]
+        if obj.name == "ObjectExpression":
+            # Example:
+            #   const new_obj = Object.defineProperties({x:y}, {
+            #     property1: {
+            #       value: forty_two,
+            #       writable: true,
+            #     },
+            #   });
+            # => cannot add a data flow edge from 'forty_two' to '{x:y}' object literal but there's also no need to
+            # => the data flow edges necessary (y --data--> new_obj and forty_two --data--> new_obj)
+            #    are already generated elsewhere :)
+            # => no DF edges to add but also no warning to print :)
+            continue
+        elif obj.name == "MemberExpression":
+            obj = obj.member_expression_get_leftmost_identifier()  # This method does not necessarily return an Identifier!!!
         if obj.name == "Identifier":
             props: Node = pattern_match.children[2]
             if props.name == "ObjectExpression":
@@ -1266,10 +1316,16 @@ def add_missing_data_flow_edges_standard_library_functions(pdg: Node) -> int:  #
                                     data_flow_edges_added += value_identifier.set_data_dependency(obj)
                                     # => includes call: value_identifier._data_dep_children.append(extremity=obj)
 
+        # ToDo: handle LHS of MemberExpression is an ObjectExpression, e.g.: {x:{y:obj}}.x.y => add DF to 'obj' !!!
+
         else:
             print(f"[Warning] obj parameter found in Object.defineProperties(obj, props) call "
                   f"(in line {pattern_match.get_line()}, file {pattern_match.get_file()}) is not an "
-                  f"Identifier; no data flow added.")
+                  f"Identifier, MemberExpression with LHS=Identifier or ObjectExpression "
+                  f"(rather it's a {obj.name};"
+                  f" note that a possible MemberExpressions was resolved to its leftmost Node); "
+                  f"no data flow added.")
+            # ToDo: what about CallExpressions passed as the `obj` parameter?!
 
     return data_flow_edges_added
 
