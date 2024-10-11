@@ -1,6 +1,6 @@
-from typing import Dict, Set, List, Callable
+from typing import Dict, List, Tuple, Set
 
-from pdg_js.node import Node, Identifier
+from pdg_js.node import Node
 from DataFlow import DataFlow
 
 
@@ -56,24 +56,29 @@ class DataFlowGraph:
         """
         assert start_node.name == "Identifier"
         self.start_node = start_node
-        self.node_df_children: Dict[Node, Set[Node]] = dict()  # maps each Node in this graph to its data flow children
-        self.node_df_parents: Dict[Node, Set[Node]] = dict()  # maps each Node in this graph to its data flow parents
-        # At all times, node_df_children.keys() shall equal node_df_parents.keys() !!!
+        self.node_df_children: Dict[Node, List[Node]] = dict()  # maps each Node in this graph to its data flow children
+        # => Note that we use a List[] instead of a Set[] here to make the behavior of the Dijkstra algorithm
+        #    deterministic (assuming Node.data_dep_children() is deterministic, that is!).
+        # self.node_df_parents: Dict[Node, List[Node]] = dict()  # maps each Node in this graph to its data flow parents
+        # # At all times, node_df_children.keys() shall equal node_df_parents.keys() !!!
 
         # Generate graph:
-        all_nodes: Set[Node] = self.start_node.get_all_data_flow_descendents()  # also includes start_node itself!
+        all_nodes: List[Node] = list(self.start_node.get_all_data_flow_descendents())  # turn set into list
+        # => self.start_node.get_all_data_flow_descendents() will return self.start_node itself, too!
+        all_nodes.sort()  # (to ensure determinism of DataFlowGraph.get_nodes() and get_all_final_nodes())
         for node in all_nodes:
-            self.node_df_children[node] = {df_child.extremity for df_child in node.data_dep_children()}
-            self.node_df_parents[node] = {df_child.extremity for df_child in node.data_dep_parents()}
+            self.node_df_children[node] = [df_child.extremity for df_child in node.data_dep_children()]
+            # self.node_df_parents[node] = [df_child.extremity for df_child in node.data_dep_parents()]
 
         # On the generated DataFlowGraph, perform the Dijkstra algorithm to determine shortest paths to
         # the start_node; this information will then be used by get_data_flows():
         self.dijkstra_distances: Dict[Node, float] =\
             {node: (0 if node == self.start_node else float('inf')) for node in self.get_nodes()}
         self.dijkstra_predecessors: Dict[Node, Node] = dict()
-        unvisited_nodes: Set[Node] = set(self.get_nodes())
+        unvisited_nodes: Set[Node] = set(self.get_nodes())  # does not add any non-determinism here!!!
         while len(unvisited_nodes) > 0:
-            u: Node = min(unvisited_nodes, key=lambda node: self.dijkstra_distances[node])
+            u: Node = min(unvisited_nodes, key=lambda node: (self.dijkstra_distances[node], node.id))
+            # => added `node.id` as 2nd tuple element ("tie-breaker") to ensure deterministic behavior!!!
             unvisited_nodes.remove(u)
             for df_child_v in self.node_df_children[u]:
                 if df_child_v in unvisited_nodes:
@@ -83,7 +88,9 @@ class DataFlowGraph:
                         self.dijkstra_distances[df_child_v] = dist
                         self.dijkstra_predecessors[df_child_v] = u
         # => cf. https://de.wikipedia.org/wiki/Dijkstra-Algorithmus
-        # original implementation consistently takes 0.002 sec to execute each time
+        # Note: I also implemented a version of the Dijkstra algorithm using a heapq,
+        #       that one actually turned out to be SLOWER, however!
+        # Assuming DF edges have already been generated, one __init__() call takes about 0.0015 sec to execute.
 
     def __str__(self):
         """
