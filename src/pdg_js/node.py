@@ -260,6 +260,12 @@ class Node:
             return False
         return self.id == other.id
 
+    # ADDED BY ME:
+    def __lt__(self, other):  # Needed whenever Nodes are stored in a heapq!
+        if other is None:
+            raise TypeError("'<' not supported between Node and None")
+        return self.id < other.id
+
     # ADDED BY ME: # Otherwise, there's a "TypeError: unhashable type: 'Identifier'" in set_provenance_dd().....
     def __hash__(self):
         return hash(self.id)
