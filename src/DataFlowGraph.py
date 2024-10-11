@@ -83,6 +83,7 @@ class DataFlowGraph:
                         self.dijkstra_distances[df_child_v] = dist
                         self.dijkstra_predecessors[df_child_v] = u
         # => cf. https://de.wikipedia.org/wiki/Dijkstra-Algorithmus
+        # original implementation consistently takes 0.002 sec to execute each time
 
     def __str__(self):
         """
@@ -94,7 +95,7 @@ class DataFlowGraph:
                 [successor for successor, predecessor in self.dijkstra_predecessors.items() if predecessor == node]
 
         def to_str(node: Node, indent: int) -> str:
-            s: str = f'[{node.id}] [{node.name}:"{node.attributes.get('name')}"]\n'
+            s: str = f'{'\t' * indent}[{node.id}] [{node.name}:"{node.attributes.get('name')}"]\n'
             for dijkstra_successor in dijkstra_successors[node]:
                 s += to_str(dijkstra_successor, indent=indent+1)
             return s
