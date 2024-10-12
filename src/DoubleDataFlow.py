@@ -93,7 +93,7 @@ class DoubleDataFlow:
                                                         in that ObjectPattern separately)
             to_node: an Identifier Node of a function representing a dangerous sink (e.g., sendResponse);
                      may also be a MemberExpression (e.g., port.postMessage),
-                     no data flow will be followed then, however
+                     no data flow will be followed then, however # todo: where to flow: before or after this?!
             rendezvous_nodes: the list of allowed rendezvous Node names as strings,
                               e.g.: ["CallExpression", "AssignmentExpression"]
             rendezvous_forbidden_descendents: the rendezvous node may not have any of these descendents (i.e., none of
@@ -116,6 +116,7 @@ class DoubleDataFlow:
             Returns the empty list `[]` if no data flow exists from `from_node` to `to_node`.
             Otherwise, returns the data flow(s) from `from_node` to `to_node` as DoubleDataFlow objects.
         """
+        # print(f"to_node.name = {to_node.name}")
         assert to_node.name in ["Identifier", "MemberExpression"]
 
         if os.environ.get('PRINT_PDGS') == "yes":

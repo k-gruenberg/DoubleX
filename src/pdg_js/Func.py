@@ -272,8 +272,30 @@ class Func:
         """
         return self.get_nth_param(n=n).function_param_get_identifiers()
 
-    def get_nth_param_or_none(self, n: int) -> Optional[Node]:
-        params = self.get_params()
+    def get_nth_param_or_none(self,
+                              n: int,
+                              resolve_params_to_identifiers: bool = False) -> Optional[Node]:
+        """
+        Returns the n-th parameter of this function (or `None` when this function has no n-th parameter).
+        Note that while any simple parameters will be Identifier Nodes, more complex parameters may also be
+        * AssignmentPatterns,
+        * ArrayPatterns,
+        * ObjectPatterns.
+
+        Parameter:
+            n: the index of the parameter to get (0-based)
+            resolve_params_to_identifiers: whether to attempt to resolve the n-th param into a single(!) identifier;
+                                           cf. `resolve_params_to_identifiers` parameter of Func.get_params()
+
+        Returns:
+            The n-th parameter of this function (or `None` when this function has no n-th parameter).
+            If resolve_params_to_identifiers=False, the returned Node (if not None) may be an Identifier,
+                                                    AssignmentPattern, ArrayPattern, or ObjectPattern.
+            If resolve_params_to_identifiers=True, either an Identifier or None (when this function has no n-th
+                                                   parameter or the n-th parameter is an ArrayPattern or ObjectPattern)
+                                                   is returned.
+        """
+        params = self.get_params(resolve_params_to_identifiers=resolve_params_to_identifiers)
         if n < len(params):
             return params[n]
         else:
