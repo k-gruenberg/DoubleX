@@ -141,7 +141,7 @@ def analyze_extensions_in_sequence(process_idx: int,
                 # ...but don't forget to still put a result into the results_queue:
                 analysis_result = {
                     "benchmarks": {
-                        "crashes": ["Unpacking failed"]
+                        'crashes': ["Unpacking failed"]
                     }
                 }
                 results_queue.put((info, analysis_result), block=False)
@@ -169,7 +169,7 @@ def analyze_extensions_in_sequence(process_idx: int,
                 # ...but don't forget to still put a result into the results_queue:
                 analysis_result = {
                     "benchmarks": {
-                        "crashes": [f"Python Exception: {repr(e)}"]
+                        'crashes': [f"Python Exception: {repr(e)}"]
                     }
                 }
                 info["analysis_time"] = time.time() - analysis_start
