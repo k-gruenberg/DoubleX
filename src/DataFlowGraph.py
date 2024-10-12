@@ -64,9 +64,9 @@ class DataFlowGraph:
         # # At all times, node_df_children.keys() shall equal node_df_parents.keys() !!!
 
         # Generate graph:
-        all_nodes: List[Node] = list(self.start_node.get_all_data_flow_descendents())  # turn set into list
+        all_nodes: List[Node] = self.start_node.get_all_data_flow_descendents(sort=True)
         # => self.start_node.get_all_data_flow_descendents() will return self.start_node itself, too!
-        all_nodes.sort()  # (to ensure determinism of DataFlowGraph.get_nodes() and get_all_final_nodes())
+        # => sort=True to ensure determinism of DataFlowGraph.get_nodes() and get_all_final_nodes())
         for node in all_nodes:
             self.node_df_children[node] = [df_child.extremity for df_child in node.data_dep_children()]
             # self.node_df_parents[node] = [df_child.extremity for df_child in node.data_dep_parents()]

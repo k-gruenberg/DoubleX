@@ -80,7 +80,8 @@ class DataFlow:
             raise TypeError(f"A data flow must begin at an Identifier or ObjectPattern, not a(n) {initial_node.name}")
 
     @classmethod
-    def all_continued_beginning_at(cls, initial_node: Node) -> List[Self]:
+    def all_continued_beginning_at(cls, initial_node: Node,
+                                   data_flows_considered: Optional[DataFlowsConsidered] = None) -> List[Self]:
         """
         Equivalent to
         ```
@@ -90,11 +91,14 @@ class DataFlow:
         `DataFlow.beginning_at(initial_node)` may return multiple DataFlows however, when given an ObjectPattern with
         >1 children. In this case, this function returns the concatenated result of calling get_continued_flows()
         on each of them.
+
+        Just like get_continued_flows(), this method also takes an optional `data_flows_considered` parameter
+        (cf. DataFlowsConsidered Enum).
         """
-        all_data_flows_beginning_at_initial_node = DataFlow.beginning_at(initial_node=initial_node)
-        all_continued_data_flows = []
+        all_data_flows_beginning_at_initial_node: List[DataFlow] = DataFlow.beginning_at(initial_node=initial_node)
+        all_continued_data_flows: List[DataFlow] = []
         for df in all_data_flows_beginning_at_initial_node:
-            all_continued_data_flows.extend(df.get_continued_flows())
+            all_continued_data_flows.extend(df.get_continued_flows(data_flows_considered=data_flows_considered))
         return all_continued_data_flows
 
     @classmethod

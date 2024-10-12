@@ -261,7 +261,7 @@ class Node:
         return self.id == other.id
 
     # ADDED BY ME:
-    def __lt__(self, other):  # Needed whenever Nodes are stored in a heapq!
+    def __lt__(self, other):  # Needed whenever Nodes are stored in a heapq, or when a list of Nodes is sorted!
         if other is None:
             raise TypeError("'<' not supported between Node and None")
         return self.id < other.id
@@ -499,11 +499,15 @@ class Node:
             return result
 
     # ADDED BY ME:
-    def get_all_data_flow_descendents(self) -> Set[Self]:
+    def get_all_data_flow_descendents(self, sort: bool) -> List[Self]:
         """
         When this is Node `a`, this method returns all Nodes `b` such that there is a data flow from `a` to `b`:
             a --data--> ... --data--> b
         The result will contain `a` itself as well!
+
+        Parameters:
+            sort: whether the list returned shall be sorted (by Node ID);
+                  if False, the order of the returned Nodes will be non-deterministic!!!
         """
         assert self.name == "Identifier"
         result: Set[Node] = {self}
@@ -513,7 +517,7 @@ class Node:
             for node in df_edges_not_yet_followed_for:
                 result.update(df_child.extremity for df_child in node.data_dep_children())
             df_edges_followed_for.update(df_edges_not_yet_followed_for)
-        return result
+        return sorted(list(result)) if sort else list(result)
 
     # ADDED BY ME:
     @classmethod

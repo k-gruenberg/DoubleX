@@ -268,7 +268,7 @@ def main():
 
                     # Highlight *all* data flow descendents in pale green:
                     print("Highlighted all data flow descendents in pale green...")
-                    for df_descendent in identifier.get_all_data_flow_descendents():
+                    for df_descendent in identifier.get_all_data_flow_descendents(sort=True):
                         start_line, start_column, end_line, end_column = df_descendent.get_location_as_tuple()
                         highlight_start = f"{start_line}.{start_column}"
                         highlight_end = f"{end_line}.{end_column}"
