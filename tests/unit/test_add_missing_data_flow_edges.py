@@ -392,7 +392,7 @@ class TestAddMissingDataFlowEdges(unittest.TestCase):
         const data = "data";
         c.foo(data);  // prints "data" // too few arguments supplied
         c.foo(data, 42); // prints "data"
-        c.foo(data, 42, 43);  // prints "data" // too many arguments supplied
+        c['f'+'oo'](data, 42, 43);  // prints "data" // too many arguments supplied
         """
         pdg = generate_pdg(code)
         # Test whether each `data` identifier flows into each `p` identifier:
