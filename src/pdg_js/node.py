@@ -520,6 +520,27 @@ class Node:
         return sorted(list(result)) if sort else list(result)
 
     # ADDED BY ME:
+    def get_all_data_flow_ancestors(self, sort: bool) -> List[Self]:
+        """
+        When this is Node `b`, this method returns all Nodes `a` such that there is a data flow from `a` to `b`:
+            a --data--> ... --data--> b
+        The result will contain `b` itself as well!
+
+        Parameters:
+            sort: whether the list returned shall be sorted (by Node ID);
+                  if False, the order of the returned Nodes will be non-deterministic!!!
+        """
+        assert self.name == "Identifier"
+        result: Set[Node] = {self}
+        df_edges_followed_for: Set[Node] = set()
+        while df_edges_followed_for != result:
+            df_edges_not_yet_followed_for: Set[Node] = result.difference(df_edges_followed_for)
+            for node in df_edges_not_yet_followed_for:
+                result.update(df_child.extremity for df_child in node.data_dep_parents())
+            df_edges_followed_for.update(df_edges_not_yet_followed_for)
+        return sorted(list(result)) if sort else list(result)
+
+    # ADDED BY ME:
     @classmethod
     def identifier(cls, name: str) -> Self:
         n = cls("Identifier")
@@ -876,6 +897,7 @@ class Node:
             "FunctionExpression": ['generator', 'async', 'expression'],  # (all booleans)
             "VariableDeclaration": 'kind',       # 'var' | 'const' | 'let'
             "Property": ['computed', 'method', 'shorthand'],
+            "MethodDefinition": ['computed', 'kind', 'static'],
         }
 
         if self.name in attributes_of_interest.keys():
@@ -1004,6 +1026,12 @@ class Node:
     # ADDED BY ME:
     def get_all_identifiers(self) -> List[Self]:
         return self.get_all("Identifier")
+
+    # ADDED BY ME:
+    def get_all_identifiers_by_name(self, name: str) -> List[Self]:
+        return [identifier
+                for identifier in self.get_all("Identifier")
+                if identifier.attributes['name'] == name]
 
     # ADDED BY ME:
     def get_all_identifiers_not_inside_a_as_iter(self,
@@ -4127,6 +4155,9 @@ class Node:
 
         This method returns all LHS Identifiers corresponding to the function parameter represented by this Node.
         Returns an empty list on error.
+
+        WARNING: Only to be used for parameters of declared functions, *not* for parameters given to function *calls*,
+        use get_all_identifiers() for the latter.
         """
 
         # type FunctionParameter = AssignmentPattern | Identifier | BindingPattern;
@@ -4172,7 +4203,7 @@ class Node:
             return [property_.children[1] for property_ in self.children if property_.children[1].name == "Identifier"]
         else:
             print(f"[Warning] function_param_get_identifiers(): unknown type of Node for function param: "
-                  f"{self.lhs().name}, line {self.lhs().get_line()}, file {self.lhs().get_file()}")
+                  f"{self}, line {self.get_line()}, file {self.get_file()}")
             return []
 
     # ADDED BY ME:

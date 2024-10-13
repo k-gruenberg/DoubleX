@@ -365,3 +365,164 @@ class TestAddMissingDataFlowEdges(unittest.TestCase):
         self.assertEqual(1, len(all_df_edges))
         self.assertEqual("forty_two", all_df_edges[0][0].attributes['name'])
         self.assertEqual("object1", all_df_edges[0][1].attributes['name'])
+
+    def test_add_missing_data_flow_edges_call_expressions(self):
+        # ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### #####
+        # ##### ##### ##### ##### ##### foo.bar() type call expressions: ##### ##### ##### ##### #####
+        # ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### #####
+
+        code = """
+        function sink(x) {console.log(x);} 
+        
+        function bar(p, q) {
+            sink(p);
+        }
+        
+        class C {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+            }
+            foo(a, b) {
+                bar(a, b);
+            }
+        }
+        
+        const c = new C(12, 34);
+        const data = "data";
+        c.foo(data);  // prints "data" // too few arguments supplied
+        c.foo(data, 42); // prints "data"
+        c.foo(data, 42, 43);  // prints "data" // too many arguments supplied
+        """
+        pdg = generate_pdg(code)
+        # Test whether each `data` identifier flows into each `p` identifier:
+        for data in pdg.get_all_identifiers_by_name("data"):
+            for p in pdg.get_all_identifiers_by_name("p"):
+                self.assertIn(p, data.get_all_data_flow_descendents(sort=False))
+
+        # BEWARE: A ClassDeclaration may contain two methods with the same name,
+        #         one static, one non-static!!!
+        code = """
+        function sink(x) {console.log(x);} 
+        
+        function bar(p, q) {
+            sink(p);
+        }
+
+        class C {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+            }
+            static foo(a, b) { // This static method is NEVER referred to!!!
+                return a+b;
+            }
+            foo(a, b) {
+                bar(a, b);
+            }
+        }
+
+        const c = new C(12, 34);
+        const data = "data";
+        c.foo(data, 42); // prints "data"
+        """
+        pdg = generate_pdg(code)
+        # Test whether each `data` identifier flows into each `p` identifier:
+        for data in pdg.get_all_identifiers_by_name("data"):
+            for p in pdg.get_all_identifiers_by_name("p"):
+                self.assertIn(p, data.get_all_data_flow_descendents(sort=False))
+
+        # The same example, with the order of methods swapped:
+        code = """
+        function sink(x) {console.log(x);}
+        
+        function bar(p, q) {
+            sink(p);
+        }
+
+        class C {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+            }
+            foo(a, b) {
+                bar(a, b);
+            }
+            static foo(a, b) { // This static method is NEVER referred to!!!
+                return a+b;
+            }
+        }
+
+        const c = new C(12, 34);
+        const data = "data";
+        c.foo(data, 42); // prints "data"
+        """
+        pdg = generate_pdg(code)
+        # Test whether each `data` identifier flows into each `p` identifier:
+        for data in pdg.get_all_identifiers_by_name("data"):
+            for p in pdg.get_all_identifiers_by_name("p"):
+                self.assertIn(p, data.get_all_data_flow_descendents(sort=False))
+
+        # BEWARE: A ClassDeclaration may contain two methods with the same name (both non-static),
+        #         the latter will overwrite the former!!!
+        code = """
+        function sink(x) {console.log(x);}
+        
+        function bar(p, q) {
+            sink(p);
+        }
+
+        class C {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+            }
+            foo(a, b) { // This method is NEVER referred to as it is overwritten below!!!
+                return a+b;
+            }
+            foo(a, b) {
+                bar(a, b);
+            }
+        }
+
+        const c = new C(12, 34);
+        const data = "data";
+        c.foo(data, 42); // prints "data"
+        """
+        pdg = generate_pdg(code)
+        # Test whether each `data` identifier flows into each `p` identifier:
+        for data in pdg.get_all_identifiers_by_name("data"):
+            for p in pdg.get_all_identifiers_by_name("p"):
+                self.assertIn(p, data.get_all_data_flow_descendents(sort=False))
+
+        # ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### #####
+        # ##### ##### ##### ##### ##### new Foo().bar() type call expressions: ##### ##### ##### ##### #####
+        # ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### #####
+
+        code = """
+        function sink(x) {console.log(x);} 
+
+        function bar(p, q) {
+            sink(p);
+        }
+
+        class C {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+            }
+            foo(a, b) {
+                bar(a, b);
+            }
+        }
+
+        const data = "data";
+        new C(12, 34).foo(data);  // prints "data" // too few arguments supplied
+        new C(12, 34).foo(data, 42); // prints "data"
+        new C(12, 34).foo(data, 42, 43);  // prints "data" // too many arguments supplied
+        """
+        pdg = generate_pdg(code)
+        # Test whether each `data` identifier flows into each `p` identifier:
+        for data in pdg.get_all_identifiers_by_name("data"):
+            for p in pdg.get_all_identifiers_by_name("p"):
+                self.assertIn(p, data.get_all_data_flow_descendents(sort=False))

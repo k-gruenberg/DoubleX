@@ -5,6 +5,7 @@ from typing import List, Dict, Set, Tuple, Optional
 
 from .node import Node
 from .Func import Func, FuncError
+from .JSClass import JSClass
 from .utility_df import cross_product
 
 JAVASCRIPT_BUILT_IN_FUNCTIONS = [  # ToDo: refactor the place where I use this?!!!
@@ -896,20 +897,77 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
         #     ...
         callee_member_expression: Node = pdg.children[0]
         assert callee_member_expression.name == "MemberExpression"  # because of check above
-        callee_lhs: Node = callee_member_expression.lhs()  # an Identifier or another MemberExpression
+        callee_lhs: Node = callee_member_expression.lhs()  # an Identifier, NewExpression, ... or another MemberExpression
         callee_leftmost_identifier: Node = callee_member_expression.member_expression_get_leftmost_identifier()
         callee_rhs_identifier: Node = callee_member_expression.rhs()
-        if callee_leftmost_identifier.name == "Identifier":
+
+        if callee_lhs.name in ["Identifier", "NewExpression"]:
+            # When there's just a single MemberExpression: "foo.bar" or "new Foo().bar":
+
             arguments: List[Node] = pdg.children[1:]
             assert len(arguments) > 0  # because of len(pdg.children) > 1 check above
 
-            # For CallExpressions like `foo.bar(y)`, ...
-            #   1st: try to find the class that "foo" belongs to,
-            #   2nd: try to find the class declaration,
-            #   3rd: try to find the declaration of a method called "bar" inside that class declaration
-            #   4th: add a data flow from `y` to the `x` parameter of the "bar(x)" method declaration from step 3
-            if callee_lhs == callee_leftmost_identifier:
-                pass  # ToDo
+            # For CallExpressions like `foo.bar(y)`, or `new Foo().bar(y)` ...
+            #   1st: try to find the class (declaration) that "foo"/"Foo" belongs to,
+            #   2nd: try to find the declaration of a method called "bar" inside that class declaration
+            #        => the JSClass class handles that for us
+            #   3rd: add a data flow from `y` to the `x` parameter of the "bar(x)" method declaration from step 3
+
+            if callee_lhs.name == "NewExpression":
+                # interface NewExpression {
+                #     callee: Expression;
+                #     arguments: ArgumentListElement[];
+                # }
+                callee_lhs = callee_lhs.get("callee")[0]  # "new Foo" => "Foo"
+
+            class_instance: Node = callee_lhs  # "foo" or "Foo"
+            class_method_name: str = callee_rhs_identifier.attributes['name']  # "bar"
+
+            # (1): try to find the class (declaration) that "foo"/"Foo" belongs to:
+            data_flow_class_decl_ancestors: Set[Node] =\
+                {
+                    df_ancestor
+                    for df_ancestor in class_instance.get_all_data_flow_ancestors(sort=False)
+                    if df_ancestor.parent.name == "ClassDeclaration"
+                       and df_ancestor == df_ancestor.parent.get("id")[0]
+                }
+            if len(data_flow_class_decl_ancestors) == 1:
+                [df_ancestor] = data_flow_class_decl_ancestors
+                class_declaration: Node = df_ancestor.parent
+                # interface ClassDeclaration {
+                #     id: Identifier | null;
+                #     superClass: Identifier | null;
+                #     body: ClassBody;
+                # }
+                # (2): try to find the declaration of a method called "bar" inside that class declaration:
+                js_class: JSClass = JSClass(class_declaration)
+                method: Optional[Func] = js_class.get_non_static_method(
+                    method_name=class_method_name,
+                    return_as_func=True
+                )
+                if method is not None:
+                    # (3): add a data flow from `y` to the `x` parameter
+                    #      of the "bar(x)" method declaration from step 2:
+                    call_arguments: List[Node] = arguments
+                    definition_arguments: List[Node] = method.get_params()
+                    for idx in range(min(len(call_arguments), len(definition_arguments))):
+                        for call_identifier in call_arguments[idx].get_all_identifiers():
+                            for definition_identifier in definition_arguments[idx].function_param_get_identifiers():
+                                data_flow_edges_added += call_identifier.set_data_dependency(definition_identifier)
+            elif len(data_flow_class_decl_ancestors) > 1:
+                print(f"[Warning] found {len(data_flow_class_decl_ancestors)} possible ClassDeclarations the "
+                      f"the LHS identifier of the CallExpression in line {pdg.get_line()} (file {pdg.get_file()}) "
+                      f"could refer to; not adding any data flows.")
+                # ToDo: further improve detection of false positives (right now, I'm just checking if there's *any*
+                #       data flow from a ClassDeclaration and not whether "foo" is actually 100% certain an
+                #       instance of that Class) ???
+
+            # ToDo: add data flows to class constructors, as well!!!
+            # ToDo: handle return values of (static) class methods, as well!!!
+
+        if callee_leftmost_identifier.name in "Identifier":
+            arguments: List[Node] = pdg.children[1:]
+            assert len(arguments) > 0  # because of len(pdg.children) > 1 check above
 
             # For CallExpressions like `foo.bar((y) => { /* ... */ })`,
             #   add a data flow from `foo` to `y`.
