@@ -848,7 +848,9 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
                       f"possible missing data flow edge(s)...")
                 # todo: stop warning for functions that aren't declared but that we can still resolve, e.g., "sendResponse" !!!!!
 
-    elif pdg.name == "CallExpression" and len(pdg.children) > 1 and pdg.children[0].name == "FunctionExpression":
+    elif (pdg.name == "CallExpression"
+          and len(pdg.children) > 1
+          and pdg.children[0].name in ["FunctionExpression", "ArrowFunctionExpression"]):
         # For each IIFE, e.g.: "!function(x,y){}(a,b)", add data flows from `a` to `x` and from `b` to `y`:
         # [1] [Program] (1 child)
         # 	[2] [ExpressionStatement] (1 child)
@@ -864,8 +866,19 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
         # This will also handle more complex cases, e.g.:
         #   "!function(x=null,y,z){}(a+1,b)"
 
+        # However, DO NOT add data flow edges from identifiers `a`, `b` when they're inside a...:
+        IGNORE_IDENTIFIERS_IN: List[str] = ["BlockStatement", "FunctionExpression", "ArrowFunctionExpression"]
+        # => The reason being that some obfuscated ("compiled") JavaScript code looks like this (e.g. "ClassLink" ext.):
+        #    ! function(t) {
+        #        /* [...] */
+        #    }([function(t, n, e) {
+        #
+        #    }, function(t, n, e) {
+        #
+        #    }, ... ]);
+
         function_expression: Node = pdg.children[0]
-        assert function_expression.name == "FunctionExpression"  # because of check above
+        assert function_expression.name in ["FunctionExpression", "ArrowFunctionExpression"]  # because of check above
 
         no_of_params_in_call_expr: int = len(pdg.children) - 1  # a CallExpression = 1 callee + N arguments (cf. Esprima docs)
         no_of_params_in_func_expr: int = len(function_expression.arrow_function_expression_get_params())
@@ -874,8 +887,9 @@ def add_missing_data_flow_edges_call_expressions(pdg: Node) -> int:
             n_th_func_expr_param = function_expression.arrow_function_expression_get_nth_param(param_index)
             n_th_func_expr_identifier = n_th_func_expr_param.function_param_get_identifier()  # handles `function foo(x=42) { ... }` case (default parameter)
             if n_th_func_expr_identifier is not None:
-                # Add a data flow edge for each identifier in the expression used as the parameter:
-                for identifier in n_th_call_expr_param.get_all_identifiers():
+                # Add a data flow edge for each identifier in the expression
+                #   used as the parameter (that's not inside one of IGNORE_IDENTIFIERS_IN):
+                for identifier in n_th_call_expr_param.get_all_identifiers_not_inside_a_as_iter(IGNORE_IDENTIFIERS_IN):
                     # Add data flow edge:
                     data_flow_edges_added += identifier.set_data_dependency(n_th_func_expr_identifier)  # a --data--> x
                 # => handles all of the following:
