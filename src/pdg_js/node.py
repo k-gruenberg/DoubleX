@@ -4581,9 +4581,23 @@ class Node:
                   f"file {self.get_file()}")
             return []
 
-    # ADDED BY ME:
+    # ADDED BY ME:  # ToDo: rename: object_expression_or_pattern_get_property
     def object_expression_get_property(self, property_name: str) -> Optional[Self]:
-        assert self.name == "ObjectExpression"
+        # interface ObjectExpression {
+        #     properties: Property[];
+        # }
+        # interface ObjectPattern {
+        #     properties: Property[];
+        # }
+        # interface Property {
+        #     key: Expression;
+        #     computed: boolean;
+        #     value: Expression | null;
+        #     kind: 'get' | 'set' | 'init';
+        #     method: false;
+        #     shorthand: boolean;
+        # }
+        assert self.name in ["ObjectExpression", "ObjectPattern"]
         for child in self.children:
             if (child.name == "Property"
                     and len(child.children) >= 1
@@ -4592,9 +4606,23 @@ class Node:
                 return child
         return None
 
-    # ADDED BY ME:
+    # ADDED BY ME:  # ToDo: rename: object_expression_or_pattern_get_property_value
     def object_expression_get_property_value(self, property_name: str) -> Optional[Self]:
-        assert self.name == "ObjectExpression"
+        # interface ObjectExpression {
+        #     properties: Property[];
+        # }
+        # interface ObjectPattern {
+        #     properties: Property[];
+        # }
+        # interface Property {
+        #     key: Expression;
+        #     computed: boolean;
+        #     value: Expression | null;
+        #     kind: 'get' | 'set' | 'init';
+        #     method: false;
+        #     shorthand: boolean;
+        # }
+        assert self.name in ["ObjectExpression", "ObjectPattern"]
         prop = self.object_expression_get_property(property_name)
         if prop is None:
             return None

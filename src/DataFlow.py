@@ -195,7 +195,7 @@ class DataFlow:
     def has_cycle(self):
         return len(set(self.nodes)) != len(self.nodes)
 
-    def get_accessed_members(self, include_method_calls=False):
+    def get_accessed_members(self, include_method_calls=False, include_last_node=True):
         r"""
         Along a data flow, multiple members/attributes of the initial variable may be accessed.
         This function returns a list of all of them, in order (i.e., in the order of the data flow).
@@ -330,7 +330,7 @@ class DataFlow:
 
         result = []
 
-        for node in self.nodes:  # For each (Identifier) Node in the DataFlow:
+        for node in (self.nodes if include_last_node else self.nodes[:-1]):  # For each (Identifier) Node in the DataFlow:
             # If the (Identifier) Node `x` is the left part of a MemberExpression `x.y`
             #     (i.e., a member of it got accessed), add `y` to the list of accessed members inside this DataFlow:
             if node.parent.name == "MemberExpression" and node.is_nth_child_of_parent(0):
