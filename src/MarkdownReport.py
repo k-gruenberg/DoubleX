@@ -6,6 +6,7 @@ import os
 import json
 import traceback
 import re
+import sys
 
 
 def markdown_escape(unescaped_str: str) -> str:
@@ -78,6 +79,9 @@ class MarkdownReport:
             "\n"
             f"No. of worker processes used: {no_worker_processes_used}  \n"
             f"Timeout used: {timeout_used} sec  \n"
+            "\n"
+            "**Command line arguments:**  \n"
+            f"{"  \n".join(f'{idx}: {markdown_escape(arg)}' for idx, arg in enumerate(sys.argv))}"
             "\n"
         )
         self.f.flush()
