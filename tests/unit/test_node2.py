@@ -1142,7 +1142,7 @@ class TestNodeClass2(unittest.TestCase):
         self.assertTrue(y.is_inside_any_function_declaration_param())
         self.assertFalse(z.is_inside_any_function_declaration_param())
 
-    def test_is_or_is_inside_any_function_declaration_param(self):
+    def test_is_inside_or_is_any_function_declaration_param(self):
         code = """
         function foo(x,{a:y}) {
             z();
@@ -1153,9 +1153,52 @@ class TestNodeClass2(unittest.TestCase):
         x = pdg.get_identifier_by_name("x")
         y = pdg.get_identifier_by_name("y")
         z = pdg.get_identifier_by_name("z")
-        self.assertTrue(x.is_or_is_inside_any_function_declaration_param())
-        self.assertTrue(y.is_or_is_inside_any_function_declaration_param())
-        self.assertFalse(z.is_or_is_inside_any_function_declaration_param())
+        self.assertTrue(x.is_inside_or_is_any_function_declaration_param())
+        self.assertTrue(y.is_inside_or_is_any_function_declaration_param())
+        self.assertFalse(z.is_inside_or_is_any_function_declaration_param())
+
+    def test_is_inside_or_is_any_function_param(self):
+        code = """
+        function foo(x=1,{a:y}) {
+            z();
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        x = pdg.get_identifier_by_name("x")
+        y = pdg.get_identifier_by_name("y")
+        z = pdg.get_identifier_by_name("z")
+        self.assertTrue(x.is_inside_or_is_any_function_param())
+        self.assertTrue(y.is_inside_or_is_any_function_param())
+        self.assertFalse(z.is_inside_or_is_any_function_param())
+
+        code = """
+        let foo = function (x=1,{a:y}) {
+            z();
+        }
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        x = pdg.get_identifier_by_name("x")
+        y = pdg.get_identifier_by_name("y")
+        z = pdg.get_identifier_by_name("z")
+        self.assertTrue(x.is_inside_or_is_any_function_param())
+        self.assertTrue(y.is_inside_or_is_any_function_param())
+        self.assertFalse(z.is_inside_or_is_any_function_param())
+
+    def test_is_inside_or_is_any_call_expression_param(self):
+        code = """
+        foo(x,y+1);
+        z();
+        """
+        pdg = generate_pdg(code)
+        print(pdg)
+        x = pdg.get_identifier_by_name("x")
+        y = pdg.get_identifier_by_name("y")
+        z = pdg.get_identifier_by_name("z")
+        self.assertTrue(x.is_inside_or_is_any_call_expression_param())
+        self.assertTrue(y.is_inside_or_is_any_call_expression_param())
+        self.assertFalse(z.is_inside_or_is_any_call_expression_param())
 
     def test_arrow_function_expression_get_nth_param(self):
         for code in ["!function(x,y,z) {}", "!function foo(x,y,z) {}"]:
@@ -2530,6 +2573,46 @@ class TestNodeClass2(unittest.TestCase):
         self.assertTrue(member_expr.has_descendent(["Identifier"]))
         self.assertTrue(member_expr.has_descendent(["Identifier", "Literal"]))
         self.assertFalse(member_expr.has_descendent(["Literal"]))
+
+    def test_is_inside_or_is_any_call_expression_param(self):
+        code = "z = foo(123, x, y+42, 456)"
+        pdg = generate_pdg(code)
+        print(pdg)
+        x = pdg.get_identifier_by_name("x")
+        y = pdg.get_identifier_by_name("y")
+        z = pdg.get_identifier_by_name("z")
+        self.assertTrue(x.is_inside_or_is_any_call_expression_param())
+        self.assertFalse(z.is_inside_or_is_any_call_expression_param())
+
+        self.assertTrue(y.is_inside_or_is_any_call_expression_param())
+        self.assertTrue(y.is_inside_or_is_any_call_expression_param(but_not_in=[]))
+        self.assertTrue(y.is_inside_or_is_any_call_expression_param(but_not_in=set()))
+        self.assertFalse(y.is_inside_or_is_any_call_expression_param(but_not_in=["BinaryExpression"]))
+        self.assertFalse(y.is_inside_or_is_any_call_expression_param(but_not_in={"BinaryExpression"}))
+
+    def test_is_inside_return_statement(self):
+        code = "function foo(x) {return x;}"
+        pdg = generate_pdg(code)
+        print(pdg)
+        x1 = pdg.get_all_identifiers_by_name("x")[0]
+        x2 = pdg.get_all_identifiers_by_name("x")[1]
+        self.assertFalse(x1.is_inside_return_statement())
+        self.assertTrue(x2.is_inside_return_statement())
+
+    def test_get_surrounding_return_statement(self):
+        code = "function foo(x) {return x;}"
+        pdg = generate_pdg(code)
+        print(pdg)
+        x1 = pdg.get_all_identifiers_by_name("x")[0]
+        self.assertIsNone(
+            x1.get_surrounding_return_statement()
+        )
+        x2 = pdg.get_all_identifiers_by_name("x")[1]
+        self.assertEqual(
+            pdg.get_all("ReturnStatement")[0],
+            x2.get_surrounding_return_statement()
+        )
+
 
 
 if __name__ == '__main__':

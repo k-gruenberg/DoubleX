@@ -352,7 +352,8 @@ def main():
     parser.add_argument("--eager-df-gen",
                         dest='eager_df_gen',
                         action='store_true',
-                        help="Generate all basic data flow edges eagerly in the beginning; instead of only computing "
+                        help="Generate all basic data flow edges, call expression data flow edges, and function "
+                             "return data flow edges eagerly in the beginning; instead of only computing "
                              "them lazily on demand, which is the default. SLOW!!! NOT RECOMMENDED!!!")
 
     parser.add_argument("--data-flows-considered", metavar="DF_ENUMERATION_METHOD", type=str,

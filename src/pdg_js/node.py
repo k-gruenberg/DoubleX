@@ -129,6 +129,8 @@ class Node:
             remove_incorrect_doublex_data_flows=False,
             add_my_data_flows=False,
             add_my_basic_data_flows=False,
+            add_my_call_expr_data_flows=False,
+            add_my_func_return_data_flows=False,
         )
 
     # ADDED BY ME:
@@ -149,6 +151,8 @@ class Node:
             remove_incorrect_doublex_data_flows=False,
             add_my_data_flows=False,
             add_my_basic_data_flows=False,
+            add_my_call_expr_data_flows=False,
+            add_my_func_return_data_flows=False,
         )
 
     # ADDED BY ME:
@@ -161,7 +165,10 @@ class Node:
                         add_doublex_data_flows: bool = False,
                         remove_incorrect_doublex_data_flows: bool = False,
                         add_my_data_flows: bool = True,
-                        add_my_basic_data_flows: bool = False) -> Self:
+                        add_my_basic_data_flows: bool = False,
+                        add_my_call_expr_data_flows: bool = False,
+                        add_my_func_return_data_flows: bool = False
+                        ) -> Self:
         """
         Returns the parsed AST from the given `js_code`; annotated with data flow edges.
         By default, no control flow edges will be added and data flow edge generation will use my own code instead
@@ -172,6 +179,7 @@ class Node:
         Note:
         When add_my_basic_data_flows=False (which is the default), basic data flow edges will *still* be
         generated, just later, lazily on demand!
+        The same thing applies to add_my_call_expr_data_flows and add_my_func_return_data_flows.
         """
         tmp_file = tempfile.NamedTemporaryFile()
         with open(tmp_file.name, 'w') as f:
@@ -187,6 +195,8 @@ class Node:
             remove_incorrect_doublex_data_flows=remove_incorrect_doublex_data_flows,
             add_my_data_flows=add_my_data_flows,
             add_my_basic_data_flows=add_my_basic_data_flows,
+            add_my_call_expr_data_flows=add_my_call_expr_data_flows,
+            add_my_func_return_data_flows=add_my_func_return_data_flows,
         )
 
     # ADDED BY ME:
@@ -199,7 +209,10 @@ class Node:
                       add_doublex_data_flows: bool = False,
                       remove_incorrect_doublex_data_flows: bool = False,
                       add_my_data_flows: bool = True,
-                      add_my_basic_data_flows: bool = False) -> Self:
+                      add_my_basic_data_flows: bool = False,
+                      add_my_call_expr_data_flows: bool = False,
+                      add_my_func_return_data_flows: bool = False
+                      ) -> Self:
         """
         Returns the parsed AST from the given JavaScript `file`; annotated with data flow edges.
         By default, no control flow edges will be added and data flow edge generation will use my own code instead
@@ -210,6 +223,8 @@ class Node:
         Note:
         When add_my_basic_data_flows=False (which is the default), basic data flow edges will *still* be
         generated, just later, lazily on demand!
+        The same goes for the add_my_call_expr_data_flows and add_my_func_return_data_flows. Setting them to false
+        leaves them to later lazy generation.
         """
         # Imports have to happen here to avoid circular imports:
         from .build_pdg import get_data_flow
@@ -248,6 +263,8 @@ class Node:
             data_flow_gen_benchmarks = benchmarks['data_flow_gen_benchmarks'] = dict()
             no_added_df_edges: int = add_missing_data_flow_edges(pdg,
                                                                  add_basic_df_edges=add_my_basic_data_flows,
+                                                                 add_call_expr_df_edges=add_my_call_expr_data_flows,
+                                                                 add_func_return_df_edges=add_my_func_return_data_flows,
                                                                  benchmarks=data_flow_gen_benchmarks)
             print(f"{no_added_df_edges} missing data flows edges added to PDG within "
                   f"{timeit.default_timer() - start}s")
@@ -970,7 +987,7 @@ class Node:
         return result
 
     # ADDED BY ME:
-    def get_all_as_iter(self, node_name: Optional[str]):
+    def get_all_as_iter(self, node_name: Optional[str]):  # ToDo: optimize by creating a Dict[str, List[Node]] at AST generation?!
         """
         Returns all nodes of a given type/name, e.g. all "VariableDeclaration" nodes.
         Unlike get_all(), which returns a list, this function returns an iterator.
@@ -1622,6 +1639,18 @@ class Node:
             return self.parent.is_inside_return_statement()
         else:
             return False
+
+    # ADDED BY ME:
+    def get_surrounding_return_statement(self) -> Optional[Self]:
+        """
+        Returns `None` if and only if is_inside_return_statement() returns False.
+        """
+        if self.name == "ReturnStatement":
+            return self
+        elif self.parent is not None:
+            return self.parent.get_surrounding_return_statement()
+        else:
+            return None
 
     # ##### On if statements: #####
     #
@@ -4284,17 +4313,65 @@ class Node:
         # Note how this assumes that parameters of FunctionDeclarations may not contain FunctionDeclarations themselves.
 
     # ADDED BY ME:
-    def is_or_is_inside_any_function_declaration_param(self) -> bool:
+    def is_inside_or_is_any_function_declaration_param(self) -> bool:
         """
         Returns True if and only if there is a Node `p` such that
-        `self.is_inside(p)` or `self == p` and
+        `self.is_inside_or_is(p)` or `self == p` and
         there exists a FunctionDeclaration `f` such that `p in f.function_declaration_get_params()`.
         """
         func_decl_ancestor: Optional[Node] = self.get_ancestor_or_none(["FunctionDeclaration"])
         if func_decl_ancestor is None:
             return False
-        return any(self.is_inside(param) or self == param for param in func_decl_ancestor.function_declaration_get_params())
+        return any(self.is_inside_or_is(param) or self == param for param in func_decl_ancestor.function_declaration_get_params())
         # Note how this assumes that parameters of FunctionDeclarations may not contain FunctionDeclarations themselves.
+
+    # ADDED BY ME:
+    def is_inside_or_is_any_function_param(self) -> bool:
+        """
+        Returns True if and only if there is a Node `p` such that
+        `self.is_inside_or_is(p)` and
+        there exists a FunctionDeclaration, FunctionExpression, or ArrowFunctionExpression `f`
+        such that `p in Func(f).get_params()`.
+        """
+
+        func_ancestor: Optional[Node] = self.get_ancestor_or_none(["FunctionDeclaration",
+                                                                   "FunctionExpression",
+                                                                   "ArrowFunctionExpression"])
+        if func_ancestor is None:
+            return False
+        from .Func import Func
+        return any(self.is_inside_or_is(param) for param in Func(func_ancestor).get_params())
+        # Note how this assumes that parameters of FunctionDeclarations may not contain FunctionDeclarations themselves.
+
+    # ADDED BY ME:
+    def is_inside_or_is_any_call_expression_param(self, but_not_in: List[str] | Set[str] = []) -> bool:
+        """
+        Returns True if and only if this `x` is inside any CallExpression parameter, e.g., like this:
+            some_function(..., ..., x+42, ..., ...)
+
+        When `but_not_in` is passed and not empty, `x` may NOT be inside any of the listed Node types, however!
+
+        Returns True if and only if there is a CallExpression `c` with parameter `p` such that
+        `self.is_inside_or_is(p)` and `not self.is_inside_a(but_not_in, stop_at_parent=c)` (stop_at_parent = exclusive).
+        """
+        if c := self.get_ancestor_or_none("CallExpression"):
+            # interface CallExpression {
+            #     callee: Expression | Import;
+            #     arguments: ArgumentListElement[];
+            # }
+            arguments: List[Node] = c.get("arguments")
+            if any(self.is_inside_or_is(p) for p in arguments):
+                if len(but_not_in) == 0 or not self.is_inside_a(but_not_in, stop_at_parent=c):
+                    return True
+                else:
+                    # self is inside a CallExpression parameter, but it has a forbidden parent (but_not_in):
+                    return False
+            else:
+                # self is inside a CallExpression but not inside a parameter:
+                return False
+        else:
+            # If self is not inside any CallExpression, it obviously cannot be inside any CallExpression parameter:
+            return False
 
     # ADDED BY ME:
     def function_declaration_get_function_identifier(self) -> Self:
@@ -5104,12 +5181,27 @@ class Identifier(Node, Value):
         self.fun = None
         self._data_dep_parents = []  # <== RENAMED BY ME
         self._data_dep_children = []  # <== RENAMED BY ME
+
         self.basic_data_dep_computed = False  # <== ADDED BY ME
 
+        # ToDo: avoid redundant "lazy" re-computation of call expr and func return DFs when using
+        #       eager DF generation (--eager-df-gen command line argument), just like I'm already doing
+        #       for basic DFs in add_basic_data_flow_edges():
+
+        self.call_expr_data_parents_computed = False  # <== ADDED BY ME
+        self.call_expr_data_children_computed = False  # <== ADDED BY ME
+
+        self.func_return_data_parents_computed = False  # <== ADDED BY ME
+        self.func_return_data_children_computed = False  # <== ADDED BY ME
+
     # ADDED BY ME:
-    def data_dep_parents(self) -> list:
+    def data_dep_parents(self,
+                         lazy_gen_basic_df: bool = True,
+                         lazy_gen_call_expr_df: bool = True,
+                         lazy_gen_func_return_df: bool = True) -> list:
         # Lazy computation of basic data dep parents & children:
-        if not self.basic_data_dep_computed:
+        if lazy_gen_basic_df and not self.basic_data_dep_computed:
+            self.basic_data_dep_computed = True
             from .add_missing_data_flow_edges import add_basic_data_flow_edges
             add_basic_data_flow_edges(
                 pdg=self.root(),
@@ -5117,14 +5209,37 @@ class Identifier(Node, Value):
                 # All data flows [id1] --data--> [id2] will be generated where either [id1]==self or [id2]==self.
                 debug=(os.environ.get('DEBUG') == "yes"),
             )
-            self.basic_data_dep_computed = True
+
+        # Lazy computation of call expression data dep parents:
+        if lazy_gen_call_expr_df and not self.call_expr_data_parents_computed:
+            self.call_expr_data_parents_computed = True
+            from .add_missing_data_flow_edges import add_missing_data_flow_edges_call_expressions
+            add_missing_data_flow_edges_call_expressions(
+                pdg=self.root(),
+                identifier_of_interest_in=self,
+                identifier_of_interest_out=None,
+            )
+
+        # Lazy computation of function return data dep parents:
+        if lazy_gen_func_return_df and not self.func_return_data_parents_computed:
+            self.func_return_data_parents_computed = True
+            from .add_missing_data_flow_edges import add_missing_data_flow_edges_function_returns
+            add_missing_data_flow_edges_function_returns(
+                pdg=self.root(),
+                identifier_of_interest_in=self,  # we want to know the parents, i.e., *incoming* DF edges
+                identifier_of_interest_out=None,
+            )
 
         return self._data_dep_parents
 
     # ADDED BY ME:
-    def data_dep_children(self) -> list:
+    def data_dep_children(self,
+                          lazy_gen_basic_df: bool = True,
+                          lazy_gen_call_expr_df: bool = True,
+                          lazy_gen_func_return_df: bool = True) -> list:
         # Lazy computation of basic data dep parents & children:
-        if not self.basic_data_dep_computed:
+        if lazy_gen_basic_df and not self.basic_data_dep_computed:
+            self.basic_data_dep_computed = True
             from .add_missing_data_flow_edges import add_basic_data_flow_edges
             add_basic_data_flow_edges(
                 pdg=self.root(),
@@ -5132,7 +5247,26 @@ class Identifier(Node, Value):
                 # All data flows [id1] --data--> [id2] will be generated where either [id1]==self or [id2]==self.
                 debug=(os.environ.get('DEBUG') == "yes"),
             )
-            self.basic_data_dep_computed = True
+
+        # Lazy computation of call expression data dep children:
+        if lazy_gen_call_expr_df and not self.call_expr_data_children_computed:
+            self.call_expr_data_children_computed = True
+            from .add_missing_data_flow_edges import add_missing_data_flow_edges_call_expressions
+            add_missing_data_flow_edges_call_expressions(
+                pdg=self.root(),
+                identifier_of_interest_in=None,
+                identifier_of_interest_out=self,
+            )
+
+        # Lazy computation of function return data dep children:
+        if lazy_gen_func_return_df and not self.func_return_data_children_computed:
+            self.func_return_data_children_computed = True
+            from .add_missing_data_flow_edges import add_missing_data_flow_edges_function_returns
+            add_missing_data_flow_edges_function_returns(
+                pdg=self.root(),
+                identifier_of_interest_in=None,
+                identifier_of_interest_out=self,  # we want to know the children, i.e., *outgoing* DF edges
+            )
 
         return self._data_dep_children
 

@@ -125,7 +125,7 @@ class Func:
                 #    print anything:
                 if func_decl is None:
                     raise FuncError(f"Identifier '{node.attributes['name']}' (line {node.get_line()}) "
-                                    f"cannot be resolved, not even using "
+                                    f"cannot be resolved using "
                                     f"Node.function_Identifier_get_FunctionDeclaration()!")
                 else:
                     node = func_decl  # WARNING: this might be incorrect !!!

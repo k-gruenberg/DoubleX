@@ -279,16 +279,34 @@ class TestAddMissingDataFlowEdges(unittest.TestCase):
         code = """
         let x = 42;
         function foo() {
-            return x;
+            return x; // --data--> y
         }
         let y = foo();
         """
+
         ast = generate_ast(code)
         print(f"Before: {ast}")
-        add_missing_data_flow_edges_declarations_and_assignments(ast)  # required for the next call to work!
+        add_missing_data_flow_edges_declarations_and_assignments_RTL(ast)  # required for the next call to work!
         self.assertEqual(1, add_missing_data_flow_edges_function_returns(ast))
         print(f"After: {ast}")
 
+        # Test identifier_of_interest_in:
+        ast = generate_ast(code)
+        y = ast.get_identifier_by_name("y")
+        print(f"Before: {ast}")
+        add_missing_data_flow_edges_declarations_and_assignments_RTL(ast)
+        self.assertEqual(1, add_missing_data_flow_edges_function_returns(ast, identifier_of_interest_in=y))
+        print(f"After: {ast}")
+
+        # Test identifier_of_interest_out:
+        ast = generate_ast(code)
+        x2 = ast.get_all_identifiers_by_name("x")[1]
+        print(f"Before: {ast}")
+        add_missing_data_flow_edges_declarations_and_assignments_RTL(ast)
+        self.assertEqual(1, add_missing_data_flow_edges_function_returns(ast, identifier_of_interest_out=x2))
+        print(f"After: {ast}")
+
+    def test_add_missing_data_flow_edges_IIFE_returns(self):
         # Case (B):
         #   does not rely on any existing DF edges:
         code = """
@@ -296,7 +314,7 @@ class TestAddMissingDataFlowEdges(unittest.TestCase):
         """
         ast = generate_ast(code)
         print(f"Before: {ast}")
-        self.assertEqual(1, add_missing_data_flow_edges_function_returns(ast))
+        self.assertEqual(1, add_missing_data_flow_edges_IIFE_returns(ast))
         print(f"After: {ast}")
 
     def test_add_missing_data_flow_edges_standard_library_functions(self):
@@ -398,6 +416,8 @@ class TestAddMissingDataFlowEdges(unittest.TestCase):
         # Test whether each `data` identifier flows into each `p` identifier:
         for data in pdg.get_all_identifiers_by_name("data"):
             for p in pdg.get_all_identifiers_by_name("p"):
+                print(f"data = {data} (line {data.get_line()})")
+                print(f"p = {p} (line {p.get_line()})")
                 self.assertIn(p, data.get_all_data_flow_descendents(sort=False))
 
         # BEWARE: A ClassDeclaration may contain two methods with the same name,

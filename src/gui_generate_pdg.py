@@ -18,6 +18,8 @@ ADD_DOUBLEX_DATA_FLOWS = False
 REMOVE_INCORRECT_DOUBLEX_DATA_FLOWS = False
 ADD_MY_DATA_FLOWS = True
 ADD_MY_BASIC_DATA_FLOWS = True  # (usually set to False due to lazy data flow generation but not for the GUI)
+ADD_MY_CALL_EXPR_DATA_FLOWS = True  # (same here)
+ADD_MY_FUNC_RETURN_DATA_FLOWS = True  # (same here)
 
 SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
@@ -58,6 +60,8 @@ def main():
                 remove_incorrect_doublex_data_flows=REMOVE_INCORRECT_DOUBLEX_DATA_FLOWS,
                 add_my_data_flows=ADD_MY_DATA_FLOWS,
                 add_my_basic_data_flows=ADD_MY_BASIC_DATA_FLOWS,
+                add_my_call_expr_data_flows=ADD_MY_CALL_EXPR_DATA_FLOWS,
+                add_my_func_return_data_flows=ADD_MY_FUNC_RETURN_DATA_FLOWS,
             )
 
             # Set content of the right text area:
