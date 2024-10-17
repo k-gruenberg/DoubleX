@@ -125,6 +125,14 @@ def analyze_extensions_in_sequence(process_idx: int,
             # (2): Unpack the CRX file:
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Unpacking '{crx}' ...")
             unpacked_ext_dir = unpack_extension(extension_crx=crx, dest=unpack_dest_dir)
+            if unpacked_ext_dir is None:
+                # unpack_extension() returns None...
+                #     - for themes
+                #     - when unpacking/unzipping fails
+                #     - when JSON parsing the manifest.json fails
+                #     - when manifest version is neither 2 nor 3
+                print(f"[Info] Skipping extension '{crx}'")
+                continue  # continue with next CRX from the global CRXs queue
             extension_size_unpacked = f"{get_directory_size(unpacked_ext_dir):_}"
             js_loc = f"{get_javascript_loc(unpacked_ext_dir):_}"
             info: dict = {

@@ -27,6 +27,7 @@ import argparse
 from urllib.parse import urljoin
 from zipfile import ZipFile
 from bs4 import BeautifulSoup
+import traceback  # <== ADDED BY ME
 
 
 def read_from_zip(zf, filename):
@@ -239,7 +240,8 @@ def unpack_extension(extension_crx, dest):
     try:
         extension_zip = ZipFile(extension_crx)
         manifest = json.loads(read_from_zip(extension_zip, "manifest.json"))
-    except:
+    except Exception as e:
+        print(traceback.format_exc())
         return
 
     if "theme" in manifest:
@@ -249,7 +251,7 @@ def unpack_extension(extension_crx, dest):
 
     manifest_version = manifest.get("manifest_version", -1)
     if manifest_version not in (2, 3):
-        logging.error('Only unpacking extensions with manifest version 2 or 3')
+        print('Only unpacking extensions with manifest version 2 or 3')
         # Considering only extensions with manifest versions 2 or 3
         return
 
