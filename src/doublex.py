@@ -581,16 +581,16 @@ def main():
                     manifest['description'][:100].replace(",", "").replace("\n", "") \
                         if 'description' in manifest else "N/A"
                 ext_permissions = \
-                    " | ".join(manifest['permissions']).replace(",", "").replace("\n", "")\
+                    " | ".join(str(p) for p in manifest['permissions']).replace(",", "").replace("\n", "")\
                         if 'permissions' in manifest else "N/A"
                 ext_optional_permissions = \
-                    " | ".join(manifest['optional_permissions']).replace(",", "").replace("\n", "")\
+                    " | ".join(str(p) for p in manifest['optional_permissions']).replace(",", "").replace("\n", "")\
                         if 'optional_permissions' in manifest else "N/A"
                 ext_host_permissions = \
-                    " | ".join(manifest['host_permissions']).replace(",", "").replace("\n", "")\
+                    " | ".join(str(p) for p in manifest['host_permissions']).replace(",", "").replace("\n", "")\
                         if 'host_permissions' in manifest else "N/A"
                 ext_optional_host_permissions = \
-                    " | ".join(manifest['optional_host_permissions']).replace(",", "").replace("\n", "")\
+                    " | ".join(str(p) for p in manifest['optional_host_permissions']).replace(",", "").replace("\n", "")\
                         if 'optional_host_permissions' in manifest else "N/A"
 
                 # (3): Analysis results:
