@@ -360,6 +360,15 @@ def main():
                         default=DataFlowsConsidered.default(),
                         help=f"One of: {list(DataFlowsConsidered.__members__.keys())}")
 
+    parser.add_argument("--only-when-content-script-injected-everywhere",
+                        dest='only_when_content_script_injected_everywhere',
+                        action='store_true',
+                        help="Only analyze extensions where at least one of the content scripts is injected everywhere "
+                             "(e.g., '*://*/*', '<all_urls>', 'http://*/*', 'https://*/*'). "
+                             "Only this will allow a renderer attacker to act as a content script (at least "
+                             "assuming no further vulnerability in the browser and assuming the attacker hasn't "
+                             "also taken over one of the listed websites).")
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
@@ -427,6 +436,9 @@ def main():
 
     if args.eager_df_gen:
         os.environ['EAGER_DF_GEN'] = "yes"
+
+    if args.only_when_content_script_injected_everywhere:
+        os.environ['ONLY_WHEN_CONTENT_SCRIPT_INJECTED_EVERYWHERE'] = "yes"
 
     os.environ['DATA_FLOWS_CONSIDERED'] = args.data_flows_considered
 

@@ -111,6 +111,11 @@ Some notable, useful arguments are:
 * `--include-31-violations-without-privileged-api-access` to also look for "weaker" vulnerabilities, where there's 
   no verification of the message sender (renderer-attacker-exploitable) but no sensitive API is actually accessed; 
   it has to be verified manually whether each of these actually pose any real danger.
+* `--only-when-content-script-injected-everywhere` to not analyze extensions that do not inject a content script, or 
+  whose content script is only injected into a select number of sites and not everywhere. A renderer attacker cannot
+  exploit a vulnerability in such extensions, unless taking over one of these sites as well (or unless there's an
+  additional vulnerability in the browser). Vulnerabilities will still be listed in the result CSV but with a
+  `skipped-as-cs-not-injected-everywhere` crash.
 
 ## How to get .CRX files?
 
