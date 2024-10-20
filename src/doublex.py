@@ -131,8 +131,13 @@ def analyze_extensions_in_sequence(process_idx: int,
                 #     - when unpacking/unzipping fails
                 #     - when JSON parsing the manifest.json fails
                 #     - when manifest version is neither 2 nor 3
-                print(f"[Info] Skipping extension '{crx}'")
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Unpacking failed, skipping extension '{crx}'")
+                # IMPORTANT: DO NOT FORGET TO STILL PUT A RESULT INTO THE results_queue:
+                results_queue.put((None, None), block=False)
                 continue  # continue with next CRX from the global CRXs queue
+            else:
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Unpacked '{crx}' into '{unpacked_ext_dir}'")
+
             extension_size_unpacked = f"{get_directory_size(unpacked_ext_dir):_}"
             js_loc = f"{get_javascript_loc(unpacked_ext_dir):_}"
             info: dict = {
@@ -143,19 +148,6 @@ def analyze_extensions_in_sequence(process_idx: int,
                 "analysis_time": "N/A",
                 "unpacked_ext_dir": unpacked_ext_dir,
             }
-            if unpacked_ext_dir is None:
-                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Unpacking failed: '{crx}'")
-                # Simply continue with next extension...
-                # ...but don't forget to still put a result into the results_queue:
-                analysis_result = {
-                    "benchmarks": {
-                        'crashes': ["Unpacking failed"]
-                    }
-                }
-                results_queue.put((info, analysis_result), block=False)
-                continue
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] "
-                  f"Unpacked '{crx}' into '{unpacked_ext_dir}'")
 
             # After unpacking, there are now JS files for CS and BP that can be analyzed in the next step:
             cs = os.path.join(unpacked_ext_dir, "content_scripts.js")
@@ -531,14 +523,23 @@ def main():
         # Main thread: Collect results and store them in the result CSV:
         start_time = time.time()
         results_collected: int = 0
-        while results_collected < len(crxs):
+        extensions_skipped: int = 0
+        while (results_collected + extensions_skipped) < len(crxs):
             # Print progress to console:
             seconds_passed_so_far = int(time.time() - start_time)
             formatted_time_passed_so_far = format_seconds_to_printable_time(seconds_passed_so_far)
-            print_progress(done=results_collected, total=len(crxs), of_what="CRXs",
-                           suffix=f"({formatted_time_passed_so_far} passed so far)")
+            print_progress(done=results_collected+extensions_skipped, total=len(crxs), of_what="CRXs",
+                           suffix=f"({formatted_time_passed_so_far} passed so far, "
+                                  f"{extensions_skipped}/{results_collected+extensions_skipped} skipped)")
 
             info, analysis_result = results_queue.get(block=True)  # blocks until a result is available
+            if (info, analysis_result) == (None, None):
+                # Unpacking failed, extension skipped.
+                extensions_skipped += 1
+                continue
+            else:
+                results_collected += 1
+
             if args.md_out != "":
                 markdown_report.add_extension(info=info, analysis_result=analysis_result)
             crx = info["crx"]
@@ -550,8 +551,6 @@ def main():
                 if 'cs' in analysis_result and 'code_stats' in analysis_result['cs'] else "N/A"
             analysis_time = info["analysis_time"]
             unpacked_ext_dir = info["unpacked_ext_dir"]
-
-            results_collected += 1
 
             if args.csv_out != "":
                 # Write analysis results, as well as lots of additional info on the extension, into the result CSV:
@@ -712,7 +711,9 @@ def main():
 
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Done." +
               (f" {results_collected} results collected in CSV file: {args.csv_out}" if (args.csv_out != '') else '') +
-              (f" Vulnerabilities collected in Markdown file: {args.md_out}" if (args.md_out != '') else ''))
+              (f" Vulnerabilities collected in Markdown file: {args.md_out}" if (args.md_out != '') else '') +
+              f" {extensions_skipped} extensions skipped"
+              f" (themes, unzipping failed, parsing manifest.json failed, neither MV2 nor MV3).")
 
 
 if __name__ == "__main__":
