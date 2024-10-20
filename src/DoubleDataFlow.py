@@ -67,18 +67,18 @@ class DoubleDataFlow:
         return json.dumps(self.as_pretty_dict(), indent=4, sort_keys=False, skipkeys=True)
 
     @classmethod
-    def data_flows_into_function(cls,
-                                 pdg: Node,
-                                 from_node: Node,
-                                 to_node: Node,
-                                 rendezvous_nodes: List[str],
-                                 rendezvous_forbidden_descendents: List[str] =
+    def data_flows_into_sink(cls,
+                             pdg: Node,
+                             from_node: Node,
+                             to_node: Node,
+                             rendezvous_nodes: List[str],
+                             rendezvous_forbidden_descendents: List[str] =
                                     ["FunctionExpression", "ArrowFunctionExpression", "BlockStatement",
                                      "FunctionDeclaration"],
-                                 return_multiple=True,
-                                 allow_unreachable_rendezvous=False,
-                                 allow_IIFE_rendezvous=False,
-                                 ) -> List[Self]:
+                             return_multiple=True,
+                             allow_unreachable_rendezvous=False,
+                             allow_IIFE_rendezvous=False,
+                             ) -> List[Self]:
         """
         Returns the empty list `[]` if no data flow exists from `from_node` to `to_node`.
         Otherwise, returns the data flow(s) from `from_node` to `to_node` as DoubleDataFlow objects.
