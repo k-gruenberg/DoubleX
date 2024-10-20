@@ -369,6 +369,12 @@ def main():
                              "assuming no further vulnerability in the browser and assuming the attacker hasn't "
                              "also taken over one of the listed websites).")
 
+    parser.add_argument("--ext-storage-accesses-only",
+                        dest='ext_storage_accesses_only',
+                        action='store_true',
+                        help="Only look for extension storage accesses and skip all other vulnerability types "
+                             "(namely, exfiltration and infiltration dangers).")
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
@@ -439,6 +445,9 @@ def main():
 
     if args.only_when_content_script_injected_everywhere:
         os.environ['ONLY_WHEN_CONTENT_SCRIPT_INJECTED_EVERYWHERE'] = "yes"
+
+    if args.ext_storage_accesses_only:
+        os.environ['EXT_STORAGE_ACCESSES_ONLY'] = "yes"
 
     os.environ['DATA_FLOWS_CONSIDERED'] = args.data_flows_considered
 
