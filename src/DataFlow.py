@@ -1,9 +1,37 @@
 import os
 import sys
 from typing import List, Self, Optional
+import re
 
 from DataFlowsConsidered import DataFlowsConsidered
 from pdg_js.node import Node
+
+
+def is_uxss_sanitizing_regex_pattern(pattern: str) -> bool:
+    r"""
+    The given regex pattern comes from a <source>.replaceAll(/pattern/g, ...) or <source>.replace(/pattern/g, ...)
+    call, where <source> is some identifier coming out of a UXSS "from" data flow.
+
+    Now the question is:
+    Is the pattern sufficient to prevent *any* UXSS attack vector?
+    We'd rather have false positives than false negatives in our end result, meaning that, when in doubt,
+    we will assume that a regex pattern is *not* sufficient for sanitization!!!
+
+    Our approach is simple: the given pattern must match all non-alphanumeric, non-underscore characters!
+
+    Examples of sufficient sanitization patterns are:
+        * \W
+        * [^\w]
+        * \D
+        * [^\d]
+        * [^a-zA-Z0-9_]
+        * [^a-z]
+
+    Parameters:
+        the JavaScript regex pattern as a string (without leading and trailing "/")
+    """
+    bad_chars: str = r"""!"#$%&'()*+,-./:;<=>?[\]^`{|}~"""
+    return re.sub(pattern, "", bad_chars) == ""
 
 
 class DataFlow:
@@ -372,3 +400,49 @@ class DataFlow:
                 result.append(accessed_member_name)
 
         return result
+
+    def from_flow_is_correctly_uxss_sanitized(self) -> bool:
+        for node in self.nodes:
+            # UXSS-safe: <source>.replaceAll(/pattern/g, ...)    (where the "g" is actually required)
+            #            <source>.replace(/pattern/g, ...)    where the "g" is crucial!!!
+            #            => it's hard to say exactly how a string must be escaped as that depends on the context where it
+            #               will be used, examples:
+            #                 - string is assigned to el.innerHTML later on
+            #                 - string will become part of an inserted script
+            #                 - string will become part of a stylesheet
+            #                 - ...
+            #               => to simplify things (and prevent False Negatives), we just say that the pattern must
+            #                  therefore include/match all non-alphanumeric ASCII chars
+            #            => Syntax: replaceAll(pattern, replacement)
+            #                       replace(pattern, replacement)
+            if (node.is_lhs_of_a("MemberExpression") and
+                    (node.get_sibling_relative(+1).is_identifier_named("replaceAll") or
+                     node.get_sibling_relative(+1).is_identifier_named("replace"))):
+                if node.parent.is_callee_of_a_call_expression():
+                    call_expression: Node = node.grandparent()
+                    assert call_expression.name == "CallExpression"
+                    arguments: List[Node] = call_expression.get("arguments")
+                    if len(arguments) > 0:
+                        pattern = arguments[0]
+                        if pattern.name == "Literal" and 'regex' in pattern.attributes:
+                            if (node.get_sibling_relative(+1).is_identifier_named("replaceAll")
+                                    or 'flags' in pattern.attributes['regex'] and 'g' in pattern.attributes['regex']['flags']):
+                                regex_pattern: str = pattern.attributes['regex']['pattern']
+                                if is_uxss_sanitizing_regex_pattern(regex_pattern):
+                                    print(f"[Info] Correct UXSS sanitization using replace()/replaceAll() found "
+                                          f"in file {node.get_file()}, line {node.get_line()}")
+                                    return True
+
+            # UXSS-safe: parseInt(<source>) and parseFloat(<source>)
+            #            => returned value will be a number and therefore definitely safe
+            if node.parent.name == "CallExpression":
+                callee: Node = node.parent.get("callee")[0]
+                if callee.is_identifier_named("parseInt") or callee.is_identifier_named("parseFloat"):
+                    print(f"[Info] Correct UXSS sanitization using parseInt()/parseFloat() found "
+                          f"in file {node.get_file()}, line {node.get_line()}")
+                    return True
+
+        return False
+
+    def to_flow_is_correctly_uxss_sanitized(self) -> bool:
+        return False

@@ -2613,6 +2613,55 @@ class TestNodeClass2(unittest.TestCase):
             x2.get_surrounding_return_statement()
         )
 
+    def test_rendezvous_is_correctly_uxss_sanitized(self):
+        # Test CallExpressions:
+
+        code = "sink.setAttribute('data-foobar', source)"
+        pdg = generate_pdg(code)
+        call_expression: Node = pdg.get_all("CallExpression")[0]
+        self.assertTrue(call_expression.rendezvous_is_correctly_uxss_sanitized())
+
+        code = "sink.setAttribute('foobar', source)"
+        pdg = generate_pdg(code)
+        call_expression: Node = pdg.get_all("CallExpression")[0]
+        self.assertTrue(call_expression.rendezvous_is_correctly_uxss_sanitized())
+
+        code = "sink.setAttribute('src', source)"
+        pdg = generate_pdg(code)
+        call_expression: Node = pdg.get_all("CallExpression")[0]
+        self.assertFalse(call_expression.rendezvous_is_correctly_uxss_sanitized())
+
+        code = "sink.setAttribute('srcdoc', source)"
+        pdg = generate_pdg(code)
+        call_expression: Node = pdg.get_all("CallExpression")[0]
+        self.assertFalse(call_expression.rendezvous_is_correctly_uxss_sanitized())
+
+        code = "sink.setAttribute('onkeydown', source)"
+        pdg = generate_pdg(code)
+        call_expression: Node = pdg.get_all("CallExpression")[0]
+        self.assertFalse(call_expression.rendezvous_is_correctly_uxss_sanitized())
+
+        code = "sink.querySelector(source)"
+        pdg = generate_pdg(code)
+        call_expression: Node = pdg.get_all("CallExpression")[0]
+        self.assertTrue(call_expression.rendezvous_is_correctly_uxss_sanitized())
+
+        code = "sink.getElementById(source)"
+        pdg = generate_pdg(code)
+        call_expression: Node = pdg.get_all("CallExpression")[0]
+        self.assertTrue(call_expression.rendezvous_is_correctly_uxss_sanitized())
+
+        # Test AssignmentExpressions:
+
+        code = "sink.dataset.foo = source"
+        pdg = generate_pdg(code)
+        assignment_expression: Node = pdg.get_all("AssignmentExpression")[0]
+        self.assertTrue(assignment_expression.rendezvous_is_correctly_uxss_sanitized())
+
+        code = "sink.innerHTML = source"
+        pdg = generate_pdg(code)
+        assignment_expression: Node = pdg.get_all("AssignmentExpression")[0]
+        self.assertFalse(assignment_expression.rendezvous_is_correctly_uxss_sanitized())
 
 
 if __name__ == '__main__':

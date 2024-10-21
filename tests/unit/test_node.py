@@ -20,9 +20,9 @@ class TestNodeClass(unittest.TestCase):
         self.assertFalse(identifier3.equivalent(identifier2))
 
         # For Literals, raw literal values are compared:
-        literal1 = Node("Literal", attributes={"raw": "'Hello World'"})
-        literal2 = Node("Literal", attributes={"raw": "'Hello World'"})
-        literal3 = Node("Literal", attributes={"raw": "'Bye World'"})
+        literal1 = Node("Literal", attributes={"raw": "'Hello World'", "value": "Hello World"})
+        literal2 = Node("Literal", attributes={"raw": "'Hello World'", "value": "Hello World"})
+        literal3 = Node("Literal", attributes={"raw": "'Bye World'", "value": "Bye World"})
         self.assertTrue(literal1.equivalent(literal1))
         self.assertTrue(literal1.equivalent(literal2))
         self.assertTrue(literal2.equivalent(literal1))
@@ -87,10 +87,10 @@ class TestNodeClass(unittest.TestCase):
 
         # Number of children:
         pdg_2_children = Node("IfStatement")\
-                            .child(Node("Literal", attributes={"raw": "1"}))\
+                            .child(Node("Literal", attributes={"raw": "1", "value": 1}))\
                             .child(Node("BlockStatement"))
         pdg_3_children = Node("IfStatement")\
-                            .child(Node("Literal", attributes={"raw": "1"}))\
+                            .child(Node("Literal", attributes={"raw": "1", "value": 1}))\
                             .child(Node("BlockStatement"))\
                             .child(Node("BlockStatement"))
         self.assertTrue(pdg_2_children.equivalent(pdg_2_children))
@@ -100,11 +100,11 @@ class TestNodeClass(unittest.TestCase):
 
         # Order of children:
         pdg_order1 = Node("BinaryExpression", attributes={"operator": "+"})\
-                            .child(Node("Literal", attributes={"raw": "1"}))\
-                            .child(Node("Literal", attributes={"raw": "2"}))
+                            .child(Node("Literal", attributes={"raw": "1", "value": 1}))\
+                            .child(Node("Literal", attributes={"raw": "2", "value": 2}))
         pdg_order2 = Node("BinaryExpression", attributes={"operator": "+"})\
-                            .child(Node("Literal", attributes={"raw": "2"}))\
-                            .child(Node("Literal", attributes={"raw": "1"}))
+                            .child(Node("Literal", attributes={"raw": "2", "value": 2}))\
+                            .child(Node("Literal", attributes={"raw": "1", "value": 1}))
         self.assertTrue(pdg_order1.equivalent(pdg_order1))
         self.assertTrue(pdg_order2.equivalent(pdg_order2))
         self.assertFalse(pdg_order1.equivalent(pdg_order2))
@@ -144,11 +144,11 @@ class TestNodeClass(unittest.TestCase):
             "allow_different_child_order": False
         }
         expression1 = Node("BinaryExpression", attributes={"operator": "+"}) \
-            .child(Node("Literal", attributes={"raw": "'x'"})) \
-            .child(Node("Literal", attributes={"raw": "'y'"}))
+            .child(Node("Literal", attributes={"raw": "'x'", "value": "x"})) \
+            .child(Node("Literal", attributes={"raw": "'y'", "value": "y"}))
         expression2 = Node("BinaryExpression", attributes={"operator": "+"}) \
-            .child(Node("Literal", attributes={"raw": "'x'"})) \
-            .child(Node("Literal", attributes={"raw": "'z'"}))
+            .child(Node("Literal", attributes={"raw": "'x'", "value": "x"})) \
+            .child(Node("Literal", attributes={"raw": "'z'", "value": "z"}))
         # Test that each expression matches itself, no matter the value of match_literals:
         self.assertTrue(expression1.matches(expression1, match_literals=True, **args))
         self.assertTrue(expression1.matches(expression1, match_literals=False, **args))
@@ -194,10 +194,10 @@ class TestNodeClass(unittest.TestCase):
             "allow_different_child_order": False
         }
         pdg_2_children = Node("IfStatement") \
-            .child(Node("Literal", attributes={"raw": "1"})) \
+            .child(Node("Literal", attributes={"raw": "1", "value": 1})) \
             .child(Node("BlockStatement"))
         pdg_3_children = Node("IfStatement") \
-            .child(Node("Literal", attributes={"raw": "1"})) \
+            .child(Node("Literal", attributes={"raw": "1", "value": 1})) \
             .child(Node("BlockStatement")) \
             .child(Node("BlockStatement"))
         # Both PDGs match themselves, no matter the allow_additional_children argument:
@@ -217,11 +217,11 @@ class TestNodeClass(unittest.TestCase):
             "allow_additional_children": False
         }
         pdg_order1 = Node("BinaryExpression", attributes={"operator": "+"})\
-            .child(Node("Literal", attributes={"raw": "1"}))\
-            .child(Node("Literal", attributes={"raw": "2"}))
+            .child(Node("Literal", attributes={"raw": "1", "value": 1}))\
+            .child(Node("Literal", attributes={"raw": "2", "value": 2}))
         pdg_order2 = Node("BinaryExpression", attributes={"operator": "+"})\
-            .child(Node("Literal", attributes={"raw": "2"}))\
-            .child(Node("Literal", attributes={"raw": "1"}))
+            .child(Node("Literal", attributes={"raw": "2", "value": 2}))\
+            .child(Node("Literal", attributes={"raw": "1", "value": 1}))
         # Both PDGs match themselves, no matter the allow_different_child_order argument:
         self.assertTrue(pdg_order1.matches(pdg_order1, allow_different_child_order=True, **args))
         self.assertTrue(pdg_order1.matches(pdg_order1, allow_different_child_order=False, **args))

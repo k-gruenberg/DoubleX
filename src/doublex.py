@@ -375,6 +375,12 @@ def main():
                         help="Only look for extension storage accesses and skip all other vulnerability types "
                              "(namely, exfiltration and infiltration dangers).")
 
+    parser.add_argument("--check-for-uxss-sanitization",
+                        dest='check_for_uxss_sanitization',
+                        action='store_true',
+                        help="Only look for extension storage accesses and skip all other vulnerability types "
+                             "(namely, exfiltration and infiltration dangers).")
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
@@ -448,6 +454,9 @@ def main():
 
     if args.ext_storage_accesses_only:
         os.environ['EXT_STORAGE_ACCESSES_ONLY'] = "yes"
+
+    if args.check_for_uxss_sanitization:
+        os.environ['CHECK_FOR_UXSS_SANITIZATION'] = "yes"
 
     os.environ['DATA_FLOWS_CONSIDERED'] = args.data_flows_considered
 

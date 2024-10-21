@@ -108,6 +108,8 @@ class Node:
         self.statement_dep_children = []  # Between Statement and their non-Statement descendants
         self.is_wildcard = False  # <== ADDED BY ME
         self.is_identifier_regex = False  # <== ADDED BY ME
+        self.is_string_literal_regex = False  # <== ADDED BY ME
+        self.is_negated_string_literal_regex = False  # <== ADDED BY ME
         self.identifiers_by_name: Optional[Dict[str, List[Node]]] = None  # <== ADDED BY ME (shall only be not None for the root Node)
         self.height = -1  # <== ADDED BY ME; used for caching the result of .get_height()
 
@@ -560,7 +562,7 @@ class Node:
     # ADDED BY ME:
     @classmethod
     def identifier(cls, name: str) -> Self:
-        n = cls("Identifier")
+        n = Identifier("Identifier", parent=None)
         n.attributes['name'] = name
         return n
 
@@ -580,16 +582,32 @@ class Node:
 
         Note: an `re.fullmatch` is performed.
         """
-        n = cls("Identifier")
+        n = Identifier("Identifier", parent=None)
         n.attributes['name'] = name_regex
         n.is_identifier_regex = True
         return n
 
     # ADDED BY ME:
     @classmethod
-    def literal(cls, raw: str) -> Self:
+    def literal(cls, value: str, raw: str) -> Self:
         n = cls("Literal")
+        n.attributes['value'] = value
         n.attributes['raw'] = raw
+        return n
+
+    # ADDED BY ME:
+    @classmethod
+    def string_literal_regex(cls, name_regex: str, negate: bool = False) -> Self:
+        """
+        Matches any string literal whose string value matches the given regex (fullmatch).
+
+        Use Node.identifier_regex() when trying to regex-match the names of identifiers!
+        """
+        assert isinstance(name_regex, str)
+        n = cls("Literal")
+        n.attributes['value'] = name_regex
+        n.is_string_literal_regex = not negate
+        n.is_negated_string_literal_regex = negate
         return n
 
     # ADDED BY ME:
@@ -1216,7 +1234,11 @@ class Node:
             return False
         elif match_identifier_names and self.name == "Identifier" and pattern.is_identifier_regex and not re.fullmatch(pattern.attributes['name'], self.attributes['name']):
             return False
-        elif match_literals and self.name == "Literal" and self.attributes['raw'] != pattern.attributes['raw']:
+        elif match_literals and self.name == "Literal" and not pattern.is_string_literal_regex and not pattern.is_negated_string_literal_regex and self.attributes['value'] != pattern.attributes['value']:
+            return False
+        elif match_literals and self.name == "Literal" and pattern.is_string_literal_regex and not re.fullmatch(pattern.attributes['value'], self.attributes['value']):
+            return False
+        elif match_literals and self.name == "Literal" and pattern.is_negated_string_literal_regex and re.fullmatch(pattern.attributes['value'], self.attributes['value']):
             return False
         elif match_operators and self.name in ["UpdateExpression", "UnaryExpression", "BinaryExpression",
                                                "LogicalExpression", "AssignmentExpression"]\
@@ -2929,6 +2951,8 @@ class Node:
         Returns:
             the Python equivalent of this statically evaluated JavaScript expression
         """
+        # ToDo: statically evaluate replace() and replaceAll() calls!
+
         # From the Esprima docs:
         # type Expression = ThisExpression | Identifier | Literal |
         #                   ArrayExpression | ObjectExpression | FunctionExpression | ArrowFunctionExpression |
@@ -4998,6 +5022,90 @@ class Node:
                 return parent.attributes["filename"]
         return ''
 
+    # ADDED BY ME:
+    def rendezvous_is_correctly_uxss_sanitized(self) -> bool:
+        if self.name == "CallExpression":
+            # UXSS-safe: <sink>.setAttribute("data-...", <source>)
+            #            => definitely safe as 'data-...' attributes have no effect
+            #            <sink>.setAttribute("foo", <source>)
+            #            => safe when 'foo' is not in ["src", "srcdoc", "on*"]
+            #               => https://security.stackexchange.com/questions/139749/in-what-situations-can-element-setattribute-allow-xss
+            #            => https://developer.mozilla.org/en-US/docs/Web/API/Element/setAttribute:
+            #               Syntax: setAttribute(name, value)
+            pattern: Node =\
+                Node("CallExpression")\
+                    .child(
+                        Node("MemberExpression", attributes={"computed": False})  # ToDo: also support x['setAttribute']
+                            .child(
+                                Node.wildcard()
+                            )
+                            .child(
+                                Node.identifier("setAttribute")
+                            )
+                    )\
+                    .child(
+                        Node.string_literal_regex("src(doc)?|on.*", negate=True)
+                    )\
+                    .child(
+                        Node.wildcard()
+                    )
+            if self.matches(pattern=pattern,
+                            match_identifier_names=True,
+                            match_literals=True,
+                            match_operators=False,  # not applicable
+                            allow_additional_children=True,
+                            allow_different_child_order=False):
+                print(f"[Info] Correct UXSS sanitization using .setAttribute() found "
+                      f"in file {self.get_file()}, line {self.get_line()}")
+                return True
+
+            # UXSS-safe: <sink>.querySelector(<source>)
+            #            => https://developer.mozilla.org/en-US/docs/Web/API/Document/querySelector
+            #               => Syntax: querySelector(selectors)
+            #            => <source> is used for querying only and is not inserted into the document in any way
+            # UXSS-safe: <sink>.getElementById(<source>)
+            #            => https://developer.mozilla.org/en-US/docs/Web/API/Document/getElementById
+            #               => Syntax: getElementById(id)
+            #            => <source> is used for querying only and is not inserted into the document in any way
+            pattern: Node = \
+                Node("CallExpression") \
+                    .child(
+                        Node("MemberExpression", attributes={"computed": False})  # ToDo: also support x['querySelector'] and x['getElementById']
+                            .child(
+                                Node.wildcard()
+                            )
+                            .child(
+                                Node.identifier_regex("querySelector|getElementById")
+                            )
+                    )\
+                    .child(
+                        Node.wildcard()
+                    )
+            if self.matches(pattern=pattern,
+                            match_identifier_names=True,
+                            match_literals=False,  # not applicable
+                            match_operators=False,  # not applicable
+                            allow_additional_children=True,
+                            allow_different_child_order=False):
+                print(f"[Info] Correct UXSS sanitization using .querySelector()/.getElementById() found "
+                      f"in file {self.get_file()}, line {self.get_line()}")
+                return True
+
+        elif self.name == "AssignmentExpression":
+            # UXSS-safe: <sink>.dataset.foo = <source>
+            #            => https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/dataset
+            lhs: Node = self.lhs()
+            if lhs.name == "MemberExpression" and ".dataset." in lhs.member_expression_to_string():
+                print(f"[Info] Correct UXSS sanitization using .dataset found "
+                      f"in file {self.get_file()}, line {self.get_line()}")
+                return True
+
+            # BEWARE: <sink>.innerText = <source> and <sink>.textContent = <source>
+            #         can indeed be unsafe when being called on a <SCRIPT> tag!!!
+            #         This method *is* used by extensions to inject scripts into sites!!!
+
+        return False
+
 
 def literal_type(literal_node):
     """ Gets the type of a Literal node. """
@@ -5183,10 +5291,6 @@ class Identifier(Node, Value):
         self._data_dep_children = []  # <== RENAMED BY ME
 
         self.basic_data_dep_computed = False  # <== ADDED BY ME
-
-        # ToDo: avoid redundant "lazy" re-computation of call expr and func return DFs when using
-        #       eager DF generation (--eager-df-gen command line argument), just like I'm already doing
-        #       for basic DFs in add_basic_data_flow_edges():
 
         self.call_expr_data_parents_computed = False  # <== ADDED BY ME
         self.call_expr_data_children_computed = False  # <== ADDED BY ME

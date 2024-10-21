@@ -116,6 +116,10 @@ Some notable, useful arguments are:
   exploit a vulnerability in such extensions, unless taking over one of these sites as well (or unless there's an
   additional vulnerability in the browser). Vulnerabilities will still be listed in the result CSV but with a
   `skipped-as-cs-not-injected-everywhere` crash.
+* `--ext-storage-accesses-only` to only look for all extension storage accesses that can be statically resolved.
+  Do not look for any exfiltration or infiltration dangers.
+* `--check-for-uxss-sanitization` to exclude UXSS flows that appear to be correctly sanitized. This is not done by
+  default.
 
 ## How to get .CRX files?
 

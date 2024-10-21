@@ -78,6 +78,7 @@ class DoubleDataFlow:
                              return_multiple=True,
                              allow_unreachable_rendezvous=False,
                              allow_IIFE_rendezvous=False,
+                             check_for_uxss_sanitization=False,
                              ) -> List[Self]:
         """
         Returns the empty list `[]` if no data flow exists from `from_node` to `to_node`.
@@ -111,6 +112,9 @@ class DoubleDataFlow:
                                    when `"CallExpression" in rendezvous_nodes`
                                    (default: False, to prevent false positives!)
                                    (this type of false positive often occurred for the Kim+Lee extensions tested)
+            check_for_uxss_sanitization: when this function is used to detect UXSS vulnerabilities/data flows, set this
+                                         to True (the default is False) to check for correct methods of UXSS
+                                         sanitization, correctly sanitized data flows won't be returned then
 
         Returns:
             Returns the empty list `[]` if no data flow exists from `from_node` to `to_node`.
@@ -149,7 +153,10 @@ class DoubleDataFlow:
                     if (
                         (allow_unreachable_rendezvous or (not from_flow_final_expr.is_unreachable())) and
                         (allow_IIFE_rendezvous or (not from_flow_final_expr.is_IIFE_call_expression())) and
-                        not from_flow_final_expr.has_descendent(rendezvous_forbidden_descendents)
+                        not from_flow_final_expr.has_descendent(rendezvous_forbidden_descendents) and
+                        (not check_for_uxss_sanitization or (not from_flow.from_flow_is_correctly_uxss_sanitized() and
+                                                             not to_flow.to_flow_is_correctly_uxss_sanitized() and
+                                                             not from_flow_final_expr.rendezvous_is_correctly_uxss_sanitized()))
                     ):
                         result = DoubleDataFlow(from_flow=from_flow, to_flow=to_flow, rendezvous_nodes=rendezvous_nodes)
                         if return_multiple:
