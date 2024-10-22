@@ -2952,6 +2952,7 @@ class Node:
             the Python equivalent of this statically evaluated JavaScript expression
         """
         # ToDo: statically evaluate replace() and replaceAll() calls!
+        # ToDo: statically evaluate Array.prototype.includes() calls!
 
         # From the Esprima docs:
         # type Expression = ThisExpression | Identifier | Literal |
