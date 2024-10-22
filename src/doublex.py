@@ -720,6 +720,7 @@ def main():
                     pass
                 files_and_line_numbers =\
                     " & ".join(f"{rendezvous['location']} in '{rendezvous['filename']}'" for rendezvous in rendezvouses)
+                files_and_line_numbers = files_and_line_numbers.translate(str.maketrans({",": "", "\n": "", "\r": ""}))
 
                 # (4): Write all of that information into a new line in the output CSV file (and flush afterward):
                 csv_out.write(f"{crx},{ext_name},{ext_browser_action_default_title},{ext_version},"
