@@ -31,7 +31,7 @@ import multiprocessing
 from multiprocessing import Process
 import queue
 import re
-from typing import Tuple, Any
+from typing import Tuple, Any, List
 
 from DataFlowsConsidered import DataFlowsConsidered
 # Original DoubleX extension analysis:
@@ -706,7 +706,20 @@ def main():
                 total_no_of_dangers = sum(0 if d == "N/A" else d
                                           for d in [bp_exfiltration_dangers, bp_infiltration_dangers,
                                                     cs_exfiltration_dangers, cs_infiltration_dangers])
-                files_and_line_numbers = ""  # ToDo: write once more types of vuln. are supported!
+
+                rendezvouses: List[dict] = []
+                try:
+                    rendezvouses += [danger['rendezvous'] for danger in analysis_result['bp']['exfiltration_dangers']]
+                    rendezvouses += [danger['rendezvous'] for danger in analysis_result['bp']['infiltration_dangers']]
+                except KeyError:
+                    pass
+                try:
+                    rendezvouses += [danger['rendezvous'] for danger in analysis_result['cs']['exfiltration_dangers']]
+                    rendezvouses += [danger['rendezvous'] for danger in analysis_result['cs']['infiltration_dangers']]
+                except KeyError:
+                    pass
+                files_and_line_numbers =\
+                    " & ".join(f"{rendezvous['location']} in '{rendezvous['filename']}'" for rendezvous in rendezvouses)
 
                 # (4): Write all of that information into a new line in the output CSV file (and flush afterward):
                 csv_out.write(f"{crx},{ext_name},{ext_browser_action_default_title},{ext_version},"
