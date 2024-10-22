@@ -595,36 +595,36 @@ def main():
                 manifest_path = os.path.join(unpacked_ext_dir, 'manifest.json')  # == os.path.dirname(cs)
                 manifest = json.load(open(manifest_path))
                 ext_name = \
-                    manifest['name'].replace(",", "").replace("\n", "") \
+                    manifest['name'].translate(str.maketrans({",": "", "\n": "", "\r": ""})) \
                         if 'name' in manifest else "N/A"
                 ext_browser_action_default_title = \
-                    manifest['browser_action']['default_title'].replace(",", "").replace("\n", "") \
+                    manifest['browser_action']['default_title'].translate(str.maketrans({",": "", "\n": "", "\r": ""})) \
                         if 'browser_action' in manifest and 'default_title' in manifest['browser_action'] else "N/A"
                 ext_version = \
-                    manifest['version'].replace(",", "").replace("\n", "") \
+                    manifest['version'].translate(str.maketrans({",": "", "\n": "", "\r": ""})) \
                         if 'version' in manifest else "N/A"
                 ext_manifest_version = \
-                    str(manifest['manifest_version']).replace(",", "").replace("\n", "") \
+                    str(manifest['manifest_version']).translate(str.maketrans({",": "", "\n": "", "\r": ""})) \
                         if 'manifest_version' in manifest else "N/A"
                 ext_description = \
-                    manifest['description'][:100].replace(",", "").replace("\n", "") \
+                    manifest['description'][:100].translate(str.maketrans({",": "", "\n": "", "\r": ""})) \
                         if 'description' in manifest else "N/A"
                 ext_permissions = \
-                    " | ".join(str(p) for p in manifest['permissions']).replace(",", "").replace("\n", "")\
+                    " | ".join(str(p) for p in manifest['permissions']).translate(str.maketrans({",": "", "\n": "", "\r": ""}))\
                         if 'permissions' in manifest else "N/A"
                 ext_optional_permissions = \
-                    " | ".join(str(p) for p in manifest['optional_permissions']).replace(",", "").replace("\n", "")\
+                    " | ".join(str(p) for p in manifest['optional_permissions']).translate(str.maketrans({",": "", "\n": "", "\r": ""}))\
                         if 'optional_permissions' in manifest else "N/A"
                 ext_host_permissions = \
-                    " | ".join(str(p) for p in manifest['host_permissions']).replace(",", "").replace("\n", "")\
+                    " | ".join(str(p) for p in manifest['host_permissions']).translate(str.maketrans({",": "", "\n": "", "\r": ""}))\
                         if 'host_permissions' in manifest else "N/A"
                 ext_optional_host_permissions = \
-                    " | ".join(str(p) for p in manifest['optional_host_permissions']).replace(",", "").replace("\n", "")\
+                    " | ".join(str(p) for p in manifest['optional_host_permissions']).translate(str.maketrans({",": "", "\n": "", "\r": ""}))\
                         if 'optional_host_permissions' in manifest else "N/A"
 
                 # (3): Analysis results:
                 content_script_injected_into = \
-                    " | ".join(analysis_result['content_script_injected_into']).replace(",", "").replace("\n", "")\
+                    " | ".join(analysis_result['content_script_injected_into']).translate(str.maketrans({",": "", "\n": "", "\r": ""}))\
                         if 'content_script_injected_into' in analysis_result else "N/A"
                 crashes = analysis_result['benchmarks']['crashes']\
                         if 'benchmarks' in analysis_result and 'crashes' in analysis_result['benchmarks'] else []
@@ -637,7 +637,7 @@ def main():
                            and 'crashes' in analysis_result['benchmarks']['cs'] else []
                 crashes_cs = [f"CS crash: {cs_crash}" for cs_crash in crashes_cs]
                 crashes_all = " | ".join(crashes + crashes_bp + crashes_cs)\
-                                .replace(",", "").replace("\n", "")
+                                .translate(str.maketrans({",": "", "\n": "", "\r": ""}))
 
                 def extension_storage_accesses_to_string(
                         extension_storage_accesses: dict,
@@ -690,7 +690,7 @@ def main():
                            and '31_violations_without_sensitive_api_access' in analysis_result['bp'] else "N/A"
                 bp_ext_storage_accesses =\
                     extension_storage_accesses_to_string(analysis_result['bp']['extension_storage_accesses']) \
-                        .replace(",", "").replace("\n", "")\
+                        .translate(str.maketrans({",": "", "\n": "", "\r": ""}))\
                     if 'bp' in analysis_result and 'extension_storage_accesses' in analysis_result['bp'] else "N/A"
 
                 # CS:
@@ -700,7 +700,7 @@ def main():
                     if 'cs' in analysis_result and 'infiltration_dangers' in analysis_result['cs'] else "N/A"
                 cs_ext_storage_accesses =\
                     extension_storage_accesses_to_string(analysis_result['cs']['extension_storage_accesses']) \
-                        .replace(",", "").replace("\n", "")\
+                        .translate(str.maketrans({",": "", "\n": "", "\r": ""}))\
                     if 'cs' in analysis_result and 'extension_storage_accesses' in analysis_result['cs'] else "N/A"
 
                 total_no_of_dangers = sum(0 if d == "N/A" else d
