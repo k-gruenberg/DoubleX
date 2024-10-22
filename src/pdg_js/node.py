@@ -2867,7 +2867,11 @@ class Node:
         """
         assert self.name == "Identifier"
 
-        declaration_identifier: Node = self.resolve_identifier()  # = the same as `self` but where it's declared
+        declaration_identifier: Optional[Node] = self.resolve_identifier()  # = the same as `self` but where it's declared
+        if declaration_identifier is None:
+            raise Exception(f"Couldn't resolve identifier '{self.attributes['name']}' in line {self.get_line()}, "
+                            f"file {self.get_file()} and therefore couldn't determine whether it's in scope @ "
+                            f"{other_node.mini_str()} (line {other_node.get_line()}, file {other_node.get_file()})")
         declaration: Node = declaration_identifier.get_ancestor(
             ["FunctionDeclaration", "VariableDeclaration", "ClassDeclaration",
              "FunctionExpression", "ArrowFunctionExpression", "AssignmentExpression"]
