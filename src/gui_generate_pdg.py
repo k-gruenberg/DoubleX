@@ -35,6 +35,33 @@ generated_pdg: Optional[Node] = None
 # ToDo: afterwards: rename this file simply to "gui.py"
 
 
+def syntax_highlighting(text_area):
+    # This is a simple example of text highlighting in Tkinter
+    #   (cf. https://www.tutorialspoint.com/how-to-change-the-color-of-certain-words-in-a-tkinter-text-widget):
+    # text_area.tag_config("identifier", foreground="red")
+    # text_area.tag_add("identifier", "1.6", "1.12")
+    js_code = text_area.get("1.0", tk.END)
+    tokens = tokenize(js_code=js_code)
+    # print(tokens)
+
+    text_area.tag_delete("Highlight", "Keyword", "String", "Numeric", "Punctuator", "Identifier")
+
+    if tokens is None:
+        print("Syntax highlighting: tokenization error.")
+    else:
+        text_area.tag_config("Keyword", foreground="red")
+        text_area.tag_config("String", foreground="green")
+        text_area.tag_config("Numeric", foreground="blue")
+        # text_area.tag_config("Punctuator", foreground="blue")  # token['value'] in ['{', '}', '(', ')', '.', ';']
+        # text_area.tag_config("Identifier", foreground="blue")
+        for token in tokens:
+            start_line = token['loc']['start']['line']
+            start_column = token['loc']['start']['column']
+            end_line = token['loc']['end']['line']
+            end_column = token['loc']['end']['column']
+            text_area.tag_add(token["type"], f"{start_line}.{start_column}", f"{end_line}.{end_column}")
+
+
 def main():
     os.environ['PARSER'] = "espree"
     os.environ['SOURCE_TYPE'] = "module"
@@ -132,32 +159,6 @@ def main():
         text_right.insert(tk.END, str(result))
         text_right.config(state=tk.DISABLED)
         highlight_locations(text_left, extract_locations(res_dict))
-
-    def syntax_highlighting(text_area):
-        # This is a simple example of text highlighting in Tkinter
-        #   (cf. https://www.tutorialspoint.com/how-to-change-the-color-of-certain-words-in-a-tkinter-text-widget):
-        # text_area.tag_config("identifier", foreground="red")
-        # text_area.tag_add("identifier", "1.6", "1.12")
-        js_code = text_left.get("1.0", tk.END)
-        tokens = tokenize(js_code=js_code)
-        # print(tokens)
-
-        text_area.tag_delete("Highlight", "Keyword", "String", "Numeric", "Punctuator", "Identifier")
-
-        if tokens is None:
-            print("Syntax highlighting: tokenization error.")
-        else:
-            text_area.tag_config("Keyword", foreground="red")
-            text_area.tag_config("String", foreground="green")
-            text_area.tag_config("Numeric", foreground="blue")
-            # text_area.tag_config("Punctuator", foreground="blue")  # token['value'] in ['{', '}', '(', ')', '.', ';']
-            # text_area.tag_config("Identifier", foreground="blue")
-            for token in tokens:
-                start_line = token['loc']['start']['line']
-                start_column = token['loc']['start']['column']
-                end_line = token['loc']['end']['line']
-                end_column = token['loc']['end']['column']
-                text_area.tag_add(token["type"], f"{start_line}.{start_column}", f"{end_line}.{end_column}")
 
     def dict_get_all_values_recursively(dict_or_list, query_key):
         result = []
