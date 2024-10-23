@@ -278,6 +278,8 @@ file:
 
 The "Analyze as CS" button works analogously.
 
+You will also find a slightly different kind of GUI in `gui_browser_extension_graphical_analyzer.py` (WIP).
+
 ## Improvements made upon DoubleX
 
 Despite the fact that it focuses on different kinds of vulnerabilities, this tool adds some 
