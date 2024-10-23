@@ -157,7 +157,7 @@ def main():
         file_text_field = Text(right_frame)
         file_text_field.pack(fill="both", expand=True)
         file_text_field.config(state=DISABLED)  # make text field read-only # https://stackoverflow.com/questions/3842155/is-there-a-way-to-make-the-tkinter-text-widget-read-only
-        # ToDo: js-beautified! / auto-indented for the manifest.json!, WITH syntax highlighting!, including vulnerability-specific highlighting of dangerous APIs/sinks/etc.!!!
+        # ToDo: js-beautified! / auto-indented for the manifest.json!, including vulnerability-specific highlighting of dangerous APIs/sinks/etc.!!!
 
         # Syntax highlighting:
         def on_file_text_change(_event):
