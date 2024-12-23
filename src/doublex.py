@@ -384,6 +384,14 @@ def main():
                         help="Only look for extension storage accesses and skip all other vulnerability types "
                              "(namely, exfiltration and infiltration dangers).")
 
+    parser.add_argument("--continue",
+                        dest='continue_analysis',
+                        action='store_true',
+                        help="Add this flag to continue analysis from where it ended last time. "
+                             "To be used when the analysis crashed or had to be cancelled for some reason. "
+                             "May only be used in combination with --csv-out (otherwise the program won't know "
+                             "where to continue).")
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
@@ -486,6 +494,10 @@ def main():
             print("--crx may only be used in combination with --renderer-attacker!")
             exit(1)
 
+        if args.continue_analysis and args.csv_out == "":
+            print("--continue may only be used in combination with --csv-out!")
+            exit(1)
+
         # Flatten the --crx / args.crx argument:
         #     => example: "--crx a b --crx x y" becomes: [['a', 'b'], ['x', 'y']]
         crxs = [c for cs in args.crx for c in cs]
@@ -502,21 +514,42 @@ def main():
                 print(f"Error: the --csv-out argument may only be supplied in combination with the --renderer-attacker "
                       f"argument.")
                 exit(1)
-            elif os.path.exists(args.csv_out):
-                print(f"Error: '{args.csv_out}' file already exists, please supply another file as --csv-out.")
+            elif not args.continue_analysis and os.path.exists(args.csv_out):
+                print(f"Error: '{args.csv_out}' file already exists, please supply another file as --csv-out. " +
+                      f"Use --continue if you want to continue the analysis from last time.")
                 exit(1)
-            csv_out = open(args.csv_out, "w")
-            csv_out.write("Extension,name,browser action default title,version,manifest version,description,"
-                          "permissions,optional permissions,host permissions,optional host permissions,"
-                          "extension size (packed),extension size (unpacked),JS LoC,"
-                          "BP code stats,CS code stats,"
-                          "CS injected into,crashes,analysis time in seconds,total dangers,"
-                          "BP exfiltration dangers,BP infiltration dangers,BP 3.1 violations w/o API danger,"
-                          "BP extension storage accesses,"
-                          "CS exfiltration dangers,CS infiltration dangers,"
-                          "CS extension storage accesses,"
-                          "files and line numbers\n")
-            csv_out.flush() # ToDo: add no. of UXSS vulnerabilities!
+            elif args.continue_analysis and not os.path.exists(args.csv_out):
+                print(f"Error: '{args.csv_out}' file doesn't exist, cannot --continue the analysis from last time.")
+                exit(1)
+
+            if not args.continue_analysis:  # Start analysis from scratch (default):
+                csv_out = open(args.csv_out, "w")
+                csv_out.write("Extension,name,browser action default title,version,manifest version,description,"
+                              "permissions,optional permissions,host permissions,optional host permissions,"
+                              "extension size (packed),extension size (unpacked),JS LoC,"
+                              "BP code stats,CS code stats,"
+                              "CS injected into,crashes,analysis time in seconds,total dangers,"
+                              "BP exfiltration dangers,BP infiltration dangers,BP 3.1 violations w/o API danger,"
+                              "BP extension storage accesses,"
+                              "CS exfiltration dangers,CS infiltration dangers,"
+                              "CS extension storage accesses,"
+                              "files and line numbers\n")
+                csv_out.flush() # ToDo: add no. of UXSS vulnerabilities!
+            else:  # Continue analysis from last time ("--continue" cmd line flag was supplied):
+                # (1) First, remove all the CRX files that have already been analyzed (according to the CSV file
+                #     supplied) from our list:
+                with open(args.csv_out) as csv:
+                    next(csv)  # skip CSV header row
+                    counter = 0
+                    for line in csv:
+                        extension_path = line.split(",")[0]
+                        crxs.remove(extension_path)
+                        counter += 1
+                    print(f"[Info] Removed {counter} CRX files from queue that have already been analyzed.")
+
+                # (2) Open CSV file in append mode:
+                csv_out = open(args.csv_out, "a")
+                print(f"[Info] Continuing analysis from last time into {args.csv_out} ...")
 
         # If user activated output of vulnerabilities found into a MD file by supplying the --md-out argument:
         if args.md_out != "":
@@ -524,13 +557,15 @@ def main():
                 print(f"Error: the --md-out argument may only be supplied in combination with the --renderer-attacker "
                       f"argument.")
                 exit(1)
-            elif os.path.exists(args.md_out):
-                print(f"Error: '{args.md_out}' file already exists, please supply another file as --md-out.")
+            elif not args.continue_analysis and os.path.exists(args.md_out):
+                print(f"Error: '{args.md_out}' file already exists, please supply another file as --md-out. " +
+                      f"Use --continue if you want to continue the analysis from last time.")
                 exit(1)
             markdown_report = MarkdownReport(
                 md_path=args.md_out,
                 no_worker_processes_used=args.parallelize,
                 timeout_used=args.timeout,
+                append=args.continue_analysis,  # use append mode for the MarkdownReport if --continuing
             )
 
         if args.sort_crxs_by_size_ascending:

@@ -58,33 +58,52 @@ class MarkdownReport:
     Cf. --md-out command line argument.
     """
 
-    def __init__(self, md_path: str, no_worker_processes_used: int, timeout_used: int):
+    def __init__(self, md_path: str, no_worker_processes_used: int, timeout_used: int, append: bool = False):
         """
         Parameters:
-            md_path: the path to the .md (Markdown) file to create; file shall not exist yet;
-                     existing content is overwritten ("w" flag)
+            md_path: the path to the .md (Markdown) file to create;
+                     file shall not exist yet (if append=False), file *must* exist (if append=True);
+                     existing content is overwritten ("w" flag), unless append=True
             no_worker_processes_used: the number of worker processes used
             timeout_used: the timeout used (in seconds)
+            append: set to True if you want to append to an *existing* Markdown file (default: False)
+
+        Raises:
+            IOError if append=False and file already exists, or if append=True and file *doesn't* exist
         """
-        self.f = open(md_path, "w")
-        print(f"[Info] Created Markdown report file: {md_path}")
-        self.f.write(
-            "# Vulnerability Report\n"
-            "\n"
-            f"Start: {time.strftime('%Y-%m-%d %H:%M:%S')}  \n"
-            "\n"
-            "**Machine:**  \n"
-            f"Hostname: {markdown_escape(socket.gethostname())}  \n"
-            f"No. of cores: {multiprocessing.cpu_count()}  \n"
-            "\n"
-            f"No. of worker processes used: {no_worker_processes_used}  \n"
-            f"Timeout used: {timeout_used} sec  \n"
-            "\n"
-            "**Command line arguments:**  \n"
-            f"{"  \n".join(f'{idx}: {markdown_escape(arg)}' for idx, arg in enumerate(sys.argv))}"
-            "\n"
-        )
-        self.f.flush()
+        if append:
+            if not os.path.exists(md_path):
+                raise IOError(f"MarkdownReport: cannot append to non-existing MarkdownReport @ {md_path}")
+
+            self.f = open(md_path, "a")
+            print(f"[Info] Appending to existing Markdown report file: {md_path}")
+            self.f.write("\n")
+            self.f.write(f"----- Continued analysis on {time.strftime('%Y-%m-%d %H:%M:%S')} -----  \n")
+            self.f.write("\n")
+            self.f.flush()
+        else:
+            if os.path.exists(md_path):
+                raise IOError(f"MarkdownReport: cannot write MarkdownReport @ {md_path} (already exists)")
+
+            self.f = open(md_path, "w")
+            print(f"[Info] Created Markdown report file: {md_path}")
+            self.f.write(
+                "# Vulnerability Report\n"
+                "\n"
+                f"Start: {time.strftime('%Y-%m-%d %H:%M:%S')}  \n"
+                "\n"
+                "**Machine:**  \n"
+                f"Hostname: {markdown_escape(socket.gethostname())}  \n"
+                f"No. of cores: {multiprocessing.cpu_count()}  \n"
+                "\n"
+                f"No. of worker processes used: {no_worker_processes_used}  \n"
+                f"Timeout used: {timeout_used} sec  \n"
+                "\n"
+                "**Command line arguments:**  \n"
+                f"{"  \n".join(f'{idx}: {markdown_escape(arg)}' for idx, arg in enumerate(sys.argv))}"
+                "\n"
+            )
+            self.f.flush()
 
     def add_extension(self, info: dict, analysis_result: dict):
         """
