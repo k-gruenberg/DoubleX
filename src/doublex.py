@@ -17,6 +17,9 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
+# ToDo: handle .then(sendResponse) instead of .then(x => sendResponse(x))
+
+
 """
     To call DoubleX from the command-line.
 """
