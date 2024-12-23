@@ -152,6 +152,16 @@ class MarkdownReport:
                         analysis_result['content_script_injected_into'] \
                         if 'content_script_injected_into' in analysis_result else "N/A"
 
+                # Host permissions:
+                host_permissions = \
+                    manifest['host_permissions'] \
+                        if 'host_permissions' in manifest else "N/A"
+
+                # Optional host permissions:
+                optional_host_permissions = \
+                    manifest['optional_host_permissions'] \
+                        if 'optional_host_permissions' in manifest else "N/A"
+
                 # Extension size (packed):
                 try:
                     extension_size_packed = f"{os.path.getsize(info['crx']):_}"
@@ -176,6 +186,9 @@ class MarkdownReport:
                     f"**Extension Path (unpacked):** {markdown_escape(unpacked_ext_dir)}  \n"
                     "\n"
                     f"**CS injected into:** {markdown_escape(str(content_script_injected_into))}  \n"
+                    "\n"
+                    f"**Host permissions:** {markdown_escape(str(host_permissions))}  \n"
+                    f"**Optional host permissions:** {markdown_escape(str(optional_host_permissions))}  \n"
                     "\n"
                     "**Extension stats:**  \n"
                     f"**JavaScript LoC:** {info.get('js_loc')}  \n"
