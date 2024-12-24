@@ -26,6 +26,7 @@
 # import faulthandler; faulthandler.enable()  # <=== useful for debugging, should multiprocessing create a segfault !!!
 import os
 import argparse
+import zipfile
 from pathlib import Path
 import time
 import json
@@ -127,7 +128,13 @@ def analyze_extensions_in_sequence(process_idx: int,
 
             # (2): Unpack the CRX file:
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Unpacking '{crx}' ...")
-            unpacked_ext_dir = unpack_extension(extension_crx=crx, dest=unpack_dest_dir)
+            try:
+                unpacked_ext_dir = unpack_extension(extension_crx=crx, dest=unpack_dest_dir)
+            except zipfile.BadZipFile:  # zipfile.BadZipFile: File is not a zip file
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Unpacking failed (BadZipFile), skipping extension '{crx}'")
+                # IMPORTANT: DO NOT FORGET TO STILL PUT A RESULT INTO THE results_queue:
+                results_queue.put((None, None), block=False)
+                continue  # continue with next CRX from the global CRXs queue
             if unpacked_ext_dir is None:
                 # unpack_extension() returns None...
                 #     - for themes
