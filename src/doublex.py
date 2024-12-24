@@ -188,6 +188,7 @@ def analyze_extensions_in_sequence(process_idx: int,
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Done analyzing '{crx}' after "
                   f"{info['analysis_time']} seconds")
     except queue.Empty:
+        print(traceback.format_exc())
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] End of process #{process_idx}. "
               f"No more extensions left in queue (queue has {crxs_queue.qsize()} elements left in it).")
 
