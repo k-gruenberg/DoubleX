@@ -791,7 +791,7 @@ def main():
 
         # Join all worker processes (all joins should terminate immediately as all extensions have been processed):
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] "
-              f"Joining all {len(processes)} worker processes; this should finish in no time...")
+              f"Joining all {len(processes)} worker processes; this should take at most 60sec...")
         for process in processes:
             process.join()
 
