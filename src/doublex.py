@@ -123,7 +123,11 @@ def analyze_extensions_in_sequence(process_idx: int,
     try:
         while True:
             # (1): Take a CRX file from the global CRXs queue:
-            crx = crxs_queue.get(block=False)
+            crx = crxs_queue.get(block=True)
+            # Even though the queue SHOULD be full, an item might not be *immediately* available,
+            #   so blocking is required here!!!
+            #   Otherwise, we'll have the problem of most worker processes terminating themselves, thinking the work
+            #   is done already ^^
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Process #{process_idx} took CRX '{crx}'")
 
             # (2): Unpack the CRX file:
@@ -188,7 +192,7 @@ def analyze_extensions_in_sequence(process_idx: int,
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Done analyzing '{crx}' after "
                   f"{info['analysis_time']} seconds")
     except queue.Empty:
-        print(traceback.format_exc())
+        # print(traceback.format_exc())
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] End of process #{process_idx}. "
               f"No more extensions left in queue (queue has {crxs_queue.qsize()} elements left in it).")
 
