@@ -189,7 +189,7 @@ def analyze_extensions_in_sequence(process_idx: int,
                   f"{info['analysis_time']} seconds")
     except queue.Empty:
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] End of process #{process_idx}. "
-              f"No more extensions left in queue.")
+              f"No more extensions left in queue (queue has {crxs_queue.qsize()} elements left in it).")
 
 
 def main():
