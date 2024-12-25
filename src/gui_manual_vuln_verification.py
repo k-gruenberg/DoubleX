@@ -1,5 +1,6 @@
 import tkinter as tk
 import dukpy
+from typing import List
 import sys
 import os
 
@@ -38,6 +39,15 @@ def main():
     # Left column:
     tk.Label(root, text="Extensions flagged as potentially vulnerable:", anchor="w").grid(row=0, column=0, sticky="ew", padx=5, pady=5)
     extensions_listbox = tk.Listbox(root)
+    subdirectory_names: List[str] = []
+    with os.scandir(sys.argv[1]) as directory_items:
+        for dir_item in directory_items:
+            if dir_item.is_dir():
+                subdirectory_names.append(dir_item.name)
+    subdirectory_names.sort()
+    for subdir_name in subdirectory_names:
+        extensions_listbox.insert(tk.END, subdir_name)
+
     extensions_listbox.grid(row=1, column=0, rowspan=5, sticky="nsew", padx=5, pady=5)
     tk.Label(root, text="Annotations are stored in annotations.csv.", anchor="w").grid(row=6, column=0, sticky="ew", padx=5, pady=5)
 
