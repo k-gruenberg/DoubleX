@@ -77,6 +77,7 @@ class MarkdownReport:
 
             self.f = open(md_path, "a")
             print(f"[Info] Appending to existing Markdown report file: {md_path}")
+            self.start_time = None
             self.f.write("\n")
             self.f.write(f"----- Continued analysis on {time.strftime('%Y-%m-%d %H:%M:%S')} -----  \n")
             self.f.write("\n")
@@ -87,6 +88,7 @@ class MarkdownReport:
 
             self.f = open(md_path, "w")
             print(f"[Info] Created Markdown report file: {md_path}")
+            self.start_time = time.time()
             self.f.write(
                 "# Vulnerability Report\n"
                 "\n"
@@ -293,10 +295,15 @@ class MarkdownReport:
             print(f"[Error] Exception occurred during MarkdownReport.add_extension(): {e}")
 
     def close_file(self):
+        if self.start_time is not None:
+            total_time_elapsed_in_sec = time.time() - self.start_time
+            total_time_elapsed: str = f"{total_time_elapsed_in_sec / 3600}h"
+        else:
+            total_time_elapsed: str = "???"
         self.f.write(
             "\n"
             "\n"
             "\n"
-            f"Finished: {time.strftime('%Y-%m-%d %H:%M:%S')}  \n"
+            f"Finished: {time.strftime('%Y-%m-%d %H:%M:%S')} (total time elapsed: {total_time_elapsed})  \n"
         )
         self.f.close()
