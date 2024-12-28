@@ -521,6 +521,7 @@ def main():
             #   Analyze all .CRX files in that folder:
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Scanning {crxs[0]} directory for .crx files...")
             with os.scandir(crxs[0]) as directory_items:
+                crxs.clear()  # Remove the folder from the list as it isn't actually a .CRX file!!!
                 for dir_item in directory_items:
                     if dir_item.is_file() and dir_item.name.lower().endswith(".crx"):
                         crxs.append(dir_item.path)
