@@ -210,7 +210,8 @@ def main():
     parser.add_argument("--crx", dest='crx', metavar="path", type=str, action='append', nargs='+',
                         help="Path(s) of the .CRX file(s) to unpack and analyze. "
                              "If used, the -cs and -bp arguments will be ignored. "
-                             "May only be used in combination with --renderer-attacker!")
+                             "May only be used in combination with --renderer-attacker! "
+                             "When a single folder is given, all .CRX files in that folder will be analyzed.")
 
     parser.add_argument("-cs", "--content-script", dest='cs', metavar="path", type=str,
                         help="path of the content script. "
@@ -515,6 +516,15 @@ def main():
         # Flatten the --crx / args.crx argument:
         #     => example: "--crx a b --crx x y" becomes: [['a', 'b'], ['x', 'y']]
         crxs = [c for cs in args.crx for c in cs]
+        if len(crxs) == 1 and os.path.isdir(crxs[0]):
+            # User specified exactly one folder as the --crx argument:
+            #   Analyze all .CRX files in that folder:
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Scanning {crxs[0]} directory for .crx files...")
+            with os.scandir(crxs[0]) as directory_items:
+                for dir_item in directory_items:
+                    if dir_item.is_file() and dir_item.name.lower().endswith(".crx"):
+                        crxs.append(dir_item.path)
+            crxs.sort()  # sort .crx files from directory alphabetically (will be resorted later if --sort-crxs-by-size-ascending)
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Analyzing {len(crxs)} packed extensions...")
 
         # Use the folder in which the first .CRX file is situated in, create a subfolder called "unpacked" and use that:
