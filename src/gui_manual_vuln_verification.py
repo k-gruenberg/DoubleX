@@ -105,8 +105,6 @@ def main():
     for subdir_name in subdirectory_names:
         extensions_listbox.insert(tk.END, subdir_name)
     # ToDo: include checkbox/cross to indicate whether an extension has already been manually checked
-    # ToDo: exclude subdirectories that either contain no analysis_renderer_attacker.json file or whose
-    #       analysis_renderer_attacker.json file contains no vulnerability !!!
 
     extensions_listbox.grid(row=1, column=0, rowspan=8, sticky="nsew", padx=5, pady=5)
     extensions_listbox.bind('<<ListboxSelect>>', on_extension_selected)
