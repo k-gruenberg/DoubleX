@@ -3,12 +3,57 @@ import dukpy
 from typing import List
 import sys
 import os
+import json
+
+from AnalysisRendererAttackerJSON import AnalysisRendererAttackerJSON
+from ManifestJSON import ManifestJSON
 
 
 def main():
     def on_button_click(_event):
         # Example button functionality
         print("Button clicked")
+
+    def on_extension_selected(event):  # ToDo: remember extension selected in a separate variable !!! (needed later...)
+        w = event.widget
+        curselection = w.curselection()
+        # curselection():
+        #    "Returns a tuple containing the line numbers of the selected element or elements, counting from 0.
+        #     If nothing is selected, returns an empty tuple."
+        if not curselection:
+            return  # prevents an "IndexError: tuple index out of range" in the line below!
+        index = int(curselection[0])
+        subdir_name = w.get(index)
+        # print('You selected item %d: "%s"' % (index, value))
+
+        # 1. Show all files in selected directory under "Unpacked extension:":
+        subdir_item_names: List[str] = list()
+        extension_dir = os.path.join(sys.argv[1], subdir_name)
+        with os.scandir(extension_dir) as subdirectory_items:
+            for subdir_item in subdirectory_items:
+                subdir_item_names.append(subdir_item.name)
+        subdir_item_names.sort()
+        unpacked_extension_listbox.delete(0, tk.END)  # clear Listbox
+        for subdir_item_name in subdir_item_names:
+            unpacked_extension_listbox.insert(tk.END, subdir_item_name)
+
+        # 2. Read manifest.json and update "Name: " and "Description: ":
+        manifest_file = os.path.join(extension_dir, "manifest.json")
+        manifest = ManifestJSON(path=manifest_file)
+        ext_name_label.config(text=f"Name: {manifest.get_name_or_else('<???>')} (v{manifest['version']})")
+        ext_description_label.config(text=f"Description: {manifest.get_description_or_else('<???>')[:66]}")
+
+        # 3. Read analysis_renderer_attacker.json and update "Injected into: ":
+        analysis_file = os.path.join(extension_dir, "analysis_renderer_attacker.json")
+        analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
+        ext_injected_into_label.config(text=f"Injected into: {str(analysis_result['content_script_injected_into'])[:66]}")
+        # ToDo: allow user to see full list using a tooltip, popup, or similar...
+
+        # 4. Read analysis_renderer_attacker.json and update "Potential vulnerabilities found:":
+        dangers: List[str] = analysis_result.get_dangers_in_str_repr()
+        vulnerabilities_listbox.delete(0, tk.END)  # clear Listbox
+        for danger in dangers:
+            vulnerabilities_listbox.insert(tk.END, danger)
 
     def eval_js(_event):
         js_input = js_input_text.get("1.0", tk.END)
@@ -42,8 +87,20 @@ def main():
     subdirectory_names: List[str] = []
     with os.scandir(sys.argv[1]) as directory_items:
         for dir_item in directory_items:
-            if dir_item.is_dir():
-                subdirectory_names.append(dir_item.name)
+            # 1. Is directory?
+            # 2. Contains a "manifest.json" file?
+            # 3. Contains an "analysis_renderer_attacker.json" file?
+            # 4. Does the "analysis_renderer_attacker.json" file contain any dangers?
+            if (
+                dir_item.is_dir() and
+                os.path.isfile(os.path.join(dir_item, "manifest.json")) and
+                os.path.isfile(os.path.join(dir_item, "analysis_renderer_attacker.json"))
+            ):
+                analysis_file = os.path.join(dir_item, "analysis_renderer_attacker.json")
+                analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
+                # Only append if analysis_result contains at least 1 danger (all the other ones we don't care about):
+                if analysis_result.total_danger_count() > 0:
+                    subdirectory_names.append(dir_item.name)
     subdirectory_names.sort()
     for subdir_name in subdirectory_names:
         extensions_listbox.insert(tk.END, subdir_name)
@@ -52,10 +109,10 @@ def main():
     #       analysis_renderer_attacker.json file contains no vulnerability !!!
 
     extensions_listbox.grid(row=1, column=0, rowspan=8, sticky="nsew", padx=5, pady=5)
+    extensions_listbox.bind('<<ListboxSelect>>', on_extension_selected)
     tk.Label(root, text="Annotations are stored in annotations.csv.", anchor="w").grid(row=9, column=0, sticky="ew", padx=5, pady=5)
 
     # Center column:
-    # ToDo: fill "Name: ", "Description: " and "Injected into: " Label with data from the manifest.json file:
     ext_name_label = tk.Label(root, text="Name: ", anchor="w")
     ext_name_label.grid(row=0, column=1, padx=5, pady=5, sticky="w")
     ext_description_label = tk.Label(root, text="Description: ", anchor="w")
