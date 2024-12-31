@@ -1,6 +1,6 @@
 import tkinter as tk
 import dukpy
-from typing import List
+from typing import List, Optional
 import sys
 import os
 import json
@@ -9,12 +9,15 @@ from AnalysisRendererAttackerJSON import AnalysisRendererAttackerJSON
 from ManifestJSON import ManifestJSON
 
 
+selected_extension: Optional[str] = None
+
+
 def main():
-    def on_button_click(_event):
+    def on_button_click(_event):  # ToDo: replace with actual implementation for each button click!!!
         # Example button functionality
         print("Button clicked")
 
-    def on_extension_selected(event):  # ToDo: remember extension selected in a separate variable !!! (needed later...)
+    def on_extension_selected(event):
         w = event.widget
         curselection = w.curselection()
         # curselection():
@@ -24,7 +27,17 @@ def main():
             return  # prevents an "IndexError: tuple index out of range" in the line below!
         index = int(curselection[0])
         subdir_name = w.get(index)
-        # print('You selected item %d: "%s"' % (index, value))
+        # print('You selected item %d: "%s"' % (index, subdir_name))
+
+        # Remember selected extension in a separate variable
+        #   (this is needed because selecting an item in one of the other Listboxes will unselect the item!):
+        global selected_extension
+        selected_extension = subdir_name
+
+        # 0. Reset displayed "File content:" after changing the extension:
+        file_content_text.config(state=tk.NORMAL)
+        file_content_text.delete("1.0", tk.END)
+        file_content_text.config(state=tk.DISABLED)
 
         # 1. Show all files in selected directory under "Unpacked extension:":
         subdir_item_names: List[str] = list()
@@ -54,6 +67,32 @@ def main():
         vulnerabilities_listbox.delete(0, tk.END)  # clear Listbox
         for danger in dangers:
             vulnerabilities_listbox.insert(tk.END, danger)
+
+    def on_file_selected(event):
+        w = event.widget
+        curselection = w.curselection()
+        # curselection():
+        #    "Returns a tuple containing the line numbers of the selected element or elements, counting from 0.
+        #     If nothing is selected, returns an empty tuple."
+        if not curselection:
+            return  # prevents an "IndexError: tuple index out of range" in the line below!
+        index = int(curselection[0])
+        file_name = w.get(index)
+        # print('You selected item %d: "%s"' % (index, file_name))
+
+        # Read the file content:
+        global selected_extension
+        file_path = os.path.join(sys.argv[1], selected_extension, file_name)
+        with open(file_path, 'r') as file:
+            file_content = file.read()
+
+        # Display the file content on the right:
+        file_content_text.config(state=tk.NORMAL)
+        file_content_text.delete("1.0", tk.END)
+        file_content_text.insert(tk.END, str(file_content))
+        file_content_text.config(state=tk.DISABLED)
+
+        # ToDo: syntax highlighting !!!
 
     def eval_js(_event):
         js_input = js_input_text.get("1.0", tk.END)
@@ -121,6 +160,7 @@ def main():
     tk.Label(root, text="Unpacked extension:", anchor="w").grid(row=3, column=1, sticky="ew", padx=5, pady=5)
     unpacked_extension_listbox = tk.Listbox(root)
     unpacked_extension_listbox.grid(row=4, column=1, sticky="nsew", padx=5, pady=5)
+    unpacked_extension_listbox.bind('<<ListboxSelect>>', on_file_selected)
 
     tk.Label(root, text="Potential vulnerabilities found:", anchor="w").grid(row=5, column=1, sticky="ew", padx=5, pady=5)
     vulnerabilities_listbox = tk.Listbox(root)
