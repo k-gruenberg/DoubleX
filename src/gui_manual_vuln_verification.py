@@ -5,19 +5,19 @@ import sys
 import os
 import subprocess
 import webbrowser
+import re
+import platform
+import tempfile
 
 from AnalysisRendererAttackerJSON import AnalysisRendererAttackerJSON
 from ManifestJSON import ManifestJSON
 from gui_generate_pdg import syntax_highlighting
 
 selected_extension: Optional[str] = None
+selected_extension_version: Optional[str] = None
 
 
 def main():
-    def on_button_click():  # ToDo: replace with actual implementation for each button click!!!
-        # Example button functionality
-        print("Button clicked")
-
     def on_show_in_finder_click():
         global selected_extension
         if selected_extension is None:
@@ -31,7 +31,7 @@ def main():
 
     def on_open_in_web_store_click():
         global selected_extension  # e.g.: "aapbdbdomjkkjkaonfhkkikfgjllcleb-2.0.12-Crx4Chrome.com"
-        extension_id: str = selected_extension[0:32]
+        extension_id: str = re.search("[a-z]{32}", selected_extension).group()  # = selected_extension[0:32]
         web_store_url: str = f"https://chromewebstore.google.com/detail/{extension_id}"
         webbrowser.open(web_store_url, new=2, autoraise=True)
 
@@ -76,6 +76,9 @@ def main():
         manifest = ManifestJSON(path=manifest_file)
         ext_name_label.config(text=f"Name: {manifest.get_name_or_else('<???>')} (v{manifest['version']})")
         ext_description_label.config(text=f"Description: {manifest.get_description_or_else('<???>')[:66]}")
+
+        global selected_extension_version
+        selected_extension_version = manifest['version']
 
         # 3. Read analysis_renderer_attacker.json and update "Injected into: ":
         analysis_file = os.path.join(extension_dir, "analysis_renderer_attacker.json")
@@ -154,6 +157,43 @@ def main():
         file_content_text.tag_config("YellowHighlight", background="yellow")
         file_content_text.tag_add("YellowHighlight", f"{start_line}.{start_col}", f"{end_line}.{end_col}")
         # print(f"Highlighted location {(start_line, start_col, end_line, end_col)}")
+
+    def on_mark_as_TP_click():  # ToDo:
+        pass
+
+    def on_mark_as_FP_click():  # ToDo:
+        pass
+
+    def on_load_ext_into_Chrome_click():
+        global selected_extension  # e.g.: "aapbdbdomjkkjkaonfhkkikfgjllcleb-2.0.12-Crx4Chrome.com"
+        extension_id: str = re.search("[a-z]{32}", selected_extension).group()  # = selected_extension[0:32]
+
+        # 1. Locate the original .CRX file (should be one folder above):
+        crx_path: str = os.path.join(sys.argv[1], os.pardir, selected_extension + ".crx")
+
+        # 2. Unpack the .CRX file:
+        crx_unpacked_path: str = tempfile.mkdtemp()
+        print(f"Unpacking CRX into temp directory: {crx_unpacked_path} ...")
+        subprocess.call(["unzip", crx_path, "-d", crx_unpacked_path])
+        print("CRX unpacked.")
+
+        # ToDo: add https://github.com/k-gruenberg/renderer_attacker_sim code snippet ?!
+
+        # 3. Load the unpacked .CRX file into Chrome:
+        #    => https://stackoverflow.com/questions/16800696/how-install-crx-chrome-extension-via-command-line
+        #       => <path to chrome> --load-extension=<path to extension directory>
+        path_to_chrome: str
+        system: str = platform.system()
+        if system == "Darwin":  # macOS:
+            path_to_chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        else:
+            raise Exception(f"unsupported platform: {system}")
+        cmd = [path_to_chrome, f"--load-extension={crx_unpacked_path}"]
+        print(f"Starting Chrome with command {cmd} ...")
+        subprocess.call(cmd)
+        # ToDo: clear temp dir
+        # (ToDo?: detach process or deliberately wait for the user to close Chrome again?!)
+        # (ToDo?: handle case where Chrome is already open?!)
 
     def on_file_content_change(_event):
         # Check if the text was actually modified
@@ -254,10 +294,10 @@ def main():
     center_button_frame.grid(row=9, column=1, sticky="nsew", padx=5, pady=5)
     center_button_frame.grid_columnconfigure((0, 1, 2), weight=1)
 
-    tk.Button(center_button_frame, text="Mark as TP", fg='green', command=on_button_click).grid(row=0, column=0, padx=5, pady=5)
-    tk.Button(center_button_frame, text="Mark as FP", fg='red', command=on_button_click).grid(row=0, column=1, padx=5, pady=5)
+    tk.Button(center_button_frame, text="Mark as TP", fg='green', command=on_mark_as_TP_click).grid(row=0, column=0, padx=5, pady=5)
+    tk.Button(center_button_frame, text="Mark as FP", fg='red', command=on_mark_as_FP_click).grid(row=0, column=1, padx=5, pady=5)
     # ToDo: "Mark as 'not injected everywhere'" !!!
-    tk.Button(center_button_frame, text="Load ext. into Chrome...", command=on_button_click).grid(row=0, column=2, padx=5, pady=5)
+    tk.Button(center_button_frame, text="Load ext. into Chrome...", command=on_load_ext_into_Chrome_click).grid(row=0, column=2, padx=5, pady=5)
 
     # Right column:
     tk.Label(root, text="File content:", anchor="w").grid(row=0, column=2, sticky="ew", padx=5, pady=5)
