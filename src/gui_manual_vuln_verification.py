@@ -67,6 +67,7 @@ def main():
         vulnerabilities_listbox.delete(0, tk.END)  # clear Listbox
         for danger in dangers:
             vulnerabilities_listbox.insert(tk.END, danger)
+        # ToDo: jump to the corresponding line of code when a vulnerability is selected !!!
 
     def on_file_selected(event):
         w = event.widget
@@ -92,7 +93,7 @@ def main():
         file_content_text.insert(tk.END, str(file_content))
         file_content_text.config(state=tk.DISABLED)
 
-        # ToDo: syntax highlighting !!!
+        # ToDo: syntax highlighting !!! (shall differ depending on the suffix: .js vs .json vs something else!)
 
     def eval_js(_event):
         js_input = js_input_text.get("1.0", tk.END)
@@ -167,7 +168,7 @@ def main():
     vulnerabilities_listbox.grid(row=6, column=1, sticky="nsew", padx=5, pady=5)
 
     tk.Label(root, text="Comment:", anchor="w").grid(row=7, column=1, sticky="ew", padx=5, pady=5)
-    comment_text = tk.Text(root, height=1)
+    comment_text = tk.Text(root, height=1, wrap=tk.NONE)
     comment_text.grid(row=8, column=1, sticky="nsew", padx=5, pady=5)
 
     # Buttons in the center:
@@ -182,15 +183,15 @@ def main():
 
     # Right column:
     tk.Label(root, text="File content:", anchor="w").grid(row=0, column=2, sticky="ew", padx=5, pady=5)
-    file_content_text = tk.Text(root, state="disabled")
+    file_content_text = tk.Text(root, state="disabled", wrap=tk.NONE)
     file_content_text.grid(row=1, column=2, rowspan=6, sticky="nsew", padx=5, pady=5)
 
     tk.Label(root, text="JavaScript eval:", anchor="w").grid(row=7, column=2, sticky="ew", padx=5, pady=5)
-    js_input_text = tk.Text(root, height=1)
+    js_input_text = tk.Text(root, height=1, wrap=tk.NONE)
     js_input_text.grid(row=8, column=2, sticky="nsew", padx=5, pady=5)
     js_input_text.bind("<Return>", eval_js)
 
-    js_output_text = tk.Text(root, height=1, state="disabled")
+    js_output_text = tk.Text(root, height=1, state="disabled", wrap=tk.NONE)
     js_output_text.grid(row=9, column=2, sticky="nsew", padx=5, pady=5)
 
     root.mainloop()
