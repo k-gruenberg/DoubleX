@@ -166,7 +166,6 @@ def main():
 
     def on_load_ext_into_Chrome_click():
         global selected_extension  # e.g.: "aapbdbdomjkkjkaonfhkkikfgjllcleb-2.0.12-Crx4Chrome.com"
-        extension_id: str = re.search("[a-z]{32}", selected_extension).group()  # = selected_extension[0:32]
 
         # 1. Locate the original .CRX file (should be one folder above):
         crx_path: str = os.path.join(sys.argv[1], os.pardir, selected_extension + ".crx")
