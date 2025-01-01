@@ -3,7 +3,8 @@ import dukpy
 from typing import List, Optional
 import sys
 import os
-import json
+import subprocess
+import webbrowser
 
 from AnalysisRendererAttackerJSON import AnalysisRendererAttackerJSON
 from ManifestJSON import ManifestJSON
@@ -13,9 +14,26 @@ selected_extension: Optional[str] = None
 
 
 def main():
-    def on_button_click(_event):  # ToDo: replace with actual implementation for each button click!!!
+    def on_button_click():  # ToDo: replace with actual implementation for each button click!!!
         # Example button functionality
         print("Button clicked")
+
+    def on_show_in_finder_click():
+        global selected_extension
+        if selected_extension is None:
+            # Open main directory (containing all unpacked extensions):
+            directory = sys.argv[1]
+        else:
+            # Open subdirectory of selected extension:
+            directory = os.path.join(sys.argv[1], selected_extension)
+        # Open:
+        subprocess.call(["open", "-R", directory])
+
+    def on_open_in_web_store_click():
+        global selected_extension  # e.g.: "aapbdbdomjkkjkaonfhkkikfgjllcleb-2.0.12-Crx4Chrome.com"
+        extension_id: str = selected_extension[0:32]
+        web_store_url: str = f"https://chromewebstore.google.com/detail/{extension_id}"
+        webbrowser.open(web_store_url, new=2, autoraise=True)
 
     def on_extension_selected(event):
         w = event.widget
@@ -33,6 +51,9 @@ def main():
         #   (this is needed because selecting an item in one of the other Listboxes will unselect the item!):
         global selected_extension
         selected_extension = subdir_name
+
+        # Enable the "Open in Web Store" button:
+        open_in_web_store_button.config(state=tk.NORMAL)
 
         # 0. Reset displayed "File content:" after changing the extension:
         file_content_text.config(state=tk.NORMAL)
@@ -193,12 +214,21 @@ def main():
         extensions_listbox.insert(tk.END, subdir_name)
     # ToDo: include checkbox/cross to indicate whether an extension has already been manually checked
 
-    extensions_listbox.grid(row=1, column=0, rowspan=8, sticky="nsew", padx=5, pady=5)
+    extensions_listbox.grid(row=1, column=0, rowspan=7, sticky="nsew", padx=5, pady=5)
     extensions_listbox.bind('<<ListboxSelect>>', on_extension_selected)
-    tk.Label(root, text="Annotations are stored in annotations.csv.", anchor="w").grid(row=9, column=0, sticky="ew", padx=5, pady=5)
-    # ToDo: add buttons "Open in Finder" & "Open in Web Store" !!!
+    tk.Label(root, text="Annotations are stored in annotations.csv.", anchor="w").grid(row=8, column=0, sticky="ew", padx=5, pady=5)
 
-    # Center column:  # ToDo: add option to open Chrome web store link in browser !!!
+    # Buttons on the left:
+    left_button_frame = tk.Frame(root)
+    left_button_frame.grid(row=9, column=0, sticky="nsew", padx=5, pady=5)
+    left_button_frame.grid_columnconfigure((0, 1), weight=1)
+    tk.Button(left_button_frame, text="Show in Finder", command=on_show_in_finder_click).grid(row=0, column=0, padx=5, pady=5)
+    open_in_web_store_button = tk.Button(left_button_frame, text="Open in Web Store", command=on_open_in_web_store_click)
+    open_in_web_store_button.grid(row=0, column=1, padx=5, pady=5)
+    # When no extension is selected yet, there is no meaningful action for the "Open in Web Store" button:
+    open_in_web_store_button.config(state=tk.DISABLED)
+
+    # Center column:
     ext_name_label = tk.Label(root, text="Name: ", anchor="w")
     ext_name_label.grid(row=0, column=1, padx=5, pady=5, sticky="w")
     ext_description_label = tk.Label(root, text="Description: ", anchor="w")
@@ -221,14 +251,14 @@ def main():
     comment_text.grid(row=8, column=1, sticky="nsew", padx=5, pady=5)
 
     # Buttons in the center:
-    button_frame = tk.Frame(root)
-    button_frame.grid(row=9, column=1, sticky="nsew", padx=5, pady=5)
-    button_frame.grid_columnconfigure((0, 1, 2), weight=1)
+    center_button_frame = tk.Frame(root)
+    center_button_frame.grid(row=9, column=1, sticky="nsew", padx=5, pady=5)
+    center_button_frame.grid_columnconfigure((0, 1, 2), weight=1)
 
-    tk.Button(button_frame, text="Mark as TP", fg='green', command=on_button_click).grid(row=0, column=0, padx=5, pady=5)
-    tk.Button(button_frame, text="Mark as FP", fg='red', command=on_button_click).grid(row=0, column=1, padx=5, pady=5)
+    tk.Button(center_button_frame, text="Mark as TP", fg='green', command=on_button_click).grid(row=0, column=0, padx=5, pady=5)
+    tk.Button(center_button_frame, text="Mark as FP", fg='red', command=on_button_click).grid(row=0, column=1, padx=5, pady=5)
     # ToDo: "Mark as 'not injected everywhere'" !!!
-    tk.Button(button_frame, text="Load ext. into Chrome...", command=on_button_click).grid(row=0, column=2, padx=5, pady=5)
+    tk.Button(center_button_frame, text="Load ext. into Chrome...", command=on_button_click).grid(row=0, column=2, padx=5, pady=5)
 
     # Right column:
     tk.Label(root, text="File content:", anchor="w").grid(row=0, column=2, sticky="ew", padx=5, pady=5)
