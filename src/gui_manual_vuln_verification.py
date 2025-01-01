@@ -88,7 +88,6 @@ def main():
         vulnerabilities_listbox.delete(0, tk.END)  # clear Listbox
         for danger in dangers:
             vulnerabilities_listbox.insert(tk.END, danger)
-        # ToDo: jump to the corresponding line of code when a vulnerability is selected !!!
 
     def show_file_content(file_name: str):
         # Read the file content:
