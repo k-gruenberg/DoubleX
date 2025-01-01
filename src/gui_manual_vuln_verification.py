@@ -69,6 +69,19 @@ def main():
             vulnerabilities_listbox.insert(tk.END, danger)
         # ToDo: jump to the corresponding line of code when a vulnerability is selected !!!
 
+    def show_file_content(file_name: str):
+        # Read the file content:
+        global selected_extension
+        file_path = os.path.join(sys.argv[1], selected_extension, file_name)
+        with open(file_path, 'r') as file:
+            file_content = file.read()
+
+        # Display the file content on the right:
+        file_content_text.config(state=tk.NORMAL)
+        file_content_text.delete("1.0", tk.END)
+        file_content_text.insert(tk.END, str(file_content))
+        file_content_text.config(state=tk.DISABLED)
+
     def on_file_selected(event):
         w = event.widget
         curselection = w.curselection()
@@ -81,17 +94,46 @@ def main():
         file_name = w.get(index)
         # print('You selected item %d: "%s"' % (index, file_name))
 
-        # Read the file content:
-        global selected_extension
-        file_path = os.path.join(sys.argv[1], selected_extension, file_name)
-        with open(file_path, 'r') as file:
-            file_content = file.read()
+        show_file_content(file_name=file_name)
 
-        # Display the file content on the right:
-        file_content_text.config(state=tk.NORMAL)
-        file_content_text.delete("1.0", tk.END)
-        file_content_text.insert(tk.END, str(file_content))
-        file_content_text.config(state=tk.DISABLED)
+    def on_vulnerability_selected(event):
+        w = event.widget
+        curselection = w.curselection()
+        # curselection():
+        #    "Returns a tuple containing the line numbers of the selected element or elements, counting from 0.
+        #     If nothing is selected, returns an empty tuple."
+        if not curselection:
+            return  # prevents an "IndexError: tuple index out of range" in the line below!
+        index = int(curselection[0])
+        vulnerability: str = w.get(index)
+        # print('You selected item %d: "%s"' % (index, vulnerability))
+
+        # Determine name of file with vulnerability:
+        file_name: str
+        if vulnerability.startswith("BP"):
+            file_name = "background.js"
+        elif vulnerability.startswith("CS"):
+            file_name = "content_scripts.js"
+        else:
+            raise Exception("vulnerability list item starts neither with 'BP' nor with 'CS'")
+
+        # Show content of file with vulnerability:
+        show_file_content(file_name=file_name)
+
+        # Determine location of vulnerability:
+        vuln_location: str = vulnerability.split(" @ ")[1]  # e.g.: "12:34 - 56:78"
+        [start_loc, end_loc] = vuln_location.split(" - ")
+        [start_line, start_col] = start_loc.split(":")
+        [end_line, end_col] = end_loc.split(":")
+
+        # Scroll to vulnerability:
+        file_content_text.see(f'{start_line}.0')
+
+        # Highlight vulnerability in yellow:
+        file_content_text.tag_delete("YellowHighlight")
+        file_content_text.tag_config("YellowHighlight", background="yellow")
+        file_content_text.tag_add("YellowHighlight", f"{start_line}.{start_col}", f"{end_line}.{end_col}")
+        # print(f"Highlighted location {(start_line, start_col, end_line, end_col)}")
 
     def on_file_content_change(_event):
         # Check if the text was actually modified
@@ -154,6 +196,7 @@ def main():
     extensions_listbox.grid(row=1, column=0, rowspan=8, sticky="nsew", padx=5, pady=5)
     extensions_listbox.bind('<<ListboxSelect>>', on_extension_selected)
     tk.Label(root, text="Annotations are stored in annotations.csv.", anchor="w").grid(row=9, column=0, sticky="ew", padx=5, pady=5)
+    # ToDo: add buttons "Open in Finder" & "Open in Web Store" !!!
 
     # Center column:  # ToDo: add option to open Chrome web store link in browser !!!
     ext_name_label = tk.Label(root, text="Name: ", anchor="w")
@@ -171,6 +214,7 @@ def main():
     tk.Label(root, text="Potential vulnerabilities found:", anchor="w").grid(row=5, column=1, sticky="ew", padx=5, pady=5)
     vulnerabilities_listbox = tk.Listbox(root)
     vulnerabilities_listbox.grid(row=6, column=1, sticky="nsew", padx=5, pady=5)
+    vulnerabilities_listbox.bind('<<ListboxSelect>>', on_vulnerability_selected)
 
     tk.Label(root, text="Comment:", anchor="w").grid(row=7, column=1, sticky="ew", padx=5, pady=5)
     comment_text = tk.Text(root, height=1, wrap=tk.NONE)
@@ -181,8 +225,8 @@ def main():
     button_frame.grid(row=9, column=1, sticky="nsew", padx=5, pady=5)
     button_frame.grid_columnconfigure((0, 1, 2), weight=1)
 
-    tk.Button(button_frame, text="Mark as TP", command=on_button_click).grid(row=0, column=0, padx=5, pady=5)
-    tk.Button(button_frame, text="Mark as FP", command=on_button_click).grid(row=0, column=1, padx=5, pady=5)
+    tk.Button(button_frame, text="Mark as TP", fg='green', command=on_button_click).grid(row=0, column=0, padx=5, pady=5)
+    tk.Button(button_frame, text="Mark as FP", fg='red', command=on_button_click).grid(row=0, column=1, padx=5, pady=5)
     # ToDo: "Mark as 'not injected everywhere'" !!!
     tk.Button(button_frame, text="Load ext. into Chrome...", command=on_button_click).grid(row=0, column=2, padx=5, pady=5)
 
