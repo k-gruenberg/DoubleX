@@ -7,7 +7,7 @@ import json
 
 from AnalysisRendererAttackerJSON import AnalysisRendererAttackerJSON
 from ManifestJSON import ManifestJSON
-
+from gui_generate_pdg import syntax_highlighting
 
 selected_extension: Optional[str] = None
 
@@ -93,7 +93,12 @@ def main():
         file_content_text.insert(tk.END, str(file_content))
         file_content_text.config(state=tk.DISABLED)
 
-        # ToDo: syntax highlighting !!! (shall differ depending on the suffix: .js vs .json vs something else!)
+    def on_file_content_change(_event):
+        # Check if the text was actually modified
+        if file_content_text.edit_modified():
+            syntax_highlighting(file_content_text)
+            # Reset the modified flag to ensure the event is triggered again
+            file_content_text.edit_modified(False)
 
     def eval_js(_event):
         js_input = js_input_text.get("1.0", tk.END)
@@ -150,7 +155,7 @@ def main():
     extensions_listbox.bind('<<ListboxSelect>>', on_extension_selected)
     tk.Label(root, text="Annotations are stored in annotations.csv.", anchor="w").grid(row=9, column=0, sticky="ew", padx=5, pady=5)
 
-    # Center column:
+    # Center column:  # ToDo: add option to open Chrome web store link in browser !!!
     ext_name_label = tk.Label(root, text="Name: ", anchor="w")
     ext_name_label.grid(row=0, column=1, padx=5, pady=5, sticky="w")
     ext_description_label = tk.Label(root, text="Description: ", anchor="w")
@@ -185,6 +190,7 @@ def main():
     tk.Label(root, text="File content:", anchor="w").grid(row=0, column=2, sticky="ew", padx=5, pady=5)
     file_content_text = tk.Text(root, state="disabled", wrap=tk.NONE)
     file_content_text.grid(row=1, column=2, rowspan=6, sticky="nsew", padx=5, pady=5)
+    file_content_text.bind("<<Modified>>", on_file_content_change)
 
     tk.Label(root, text="JavaScript eval:", anchor="w").grid(row=7, column=2, sticky="ew", padx=5, pady=5)
     js_input_text = tk.Text(root, height=1, wrap=tk.NONE)
@@ -198,6 +204,9 @@ def main():
 
 
 if __name__ == "__main__":
+    # Needed for tokenization, which is needed for syntax highlighting (cf. gui_generate_pdg.py):
+    os.environ['SOURCE_TYPE'] = "module"
+
     if len(sys.argv) != 2:
         print("Usage: python3 gui_manual_vuln_verification.py <FOLDER>")
         exit(1)
