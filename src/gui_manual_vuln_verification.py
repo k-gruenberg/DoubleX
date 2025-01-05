@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import messagebox
 import dukpy
 from typing import List, Optional
 import sys
@@ -10,11 +11,16 @@ import platform
 import tempfile
 
 from AnalysisRendererAttackerJSON import AnalysisRendererAttackerJSON
+from AnnotationsCSV import AnnotationsCSV
 from ManifestJSON import ManifestJSON
 from gui_generate_pdg import syntax_highlighting
 
+annotations_csv: Optional[AnnotationsCSV] = None
+
 selected_extension: Optional[str] = None
 selected_extension_version: Optional[str] = None
+
+# ToDo: ignore extensions not injected everywhere (and display their count!!!) !!! => extract NotInjectedEverywhere logic into a separate Python file!
 
 
 def main():
@@ -87,10 +93,29 @@ def main():
         # ToDo: allow user to see full list using a tooltip, popup, or similar...
 
         # 4. Read analysis_renderer_attacker.json and update "Potential vulnerabilities found:":
+        update_vulnerabilities_listbox()
+
+    def update_vulnerabilities_listbox():
+        global selected_extension
+        extension_dir = os.path.join(sys.argv[1], selected_extension)
+        analysis_file = os.path.join(extension_dir, "analysis_renderer_attacker.json")
+        analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
         dangers: List[str] = analysis_result.get_dangers_in_str_repr()
         vulnerabilities_listbox.delete(0, tk.END)  # clear Listbox
+        global annotations_csv
         for danger in dangers:
-            vulnerabilities_listbox.insert(tk.END, danger)
+            annotation_bool: Optional[bool] = annotations_csv.get_annotation_bool(
+                extension=selected_extension,
+                vulnerability=danger,
+            )
+            prefix: str = ""
+            if annotation_bool is True:
+                prefix = "✅ "
+            elif annotation_bool is False:
+                prefix = "❌ "
+            else:
+                print(f"No annotation present for {danger} of {selected_extension}")
+            vulnerabilities_listbox.insert(tk.END, prefix + danger)
 
     def show_file_content(file_name: str):
         # Read the file content:
@@ -120,6 +145,7 @@ def main():
         show_file_content(file_name=file_name)
 
     def on_vulnerability_selected(event):  # ToDo: also highlight "from flow" (in red) and "to flow" (in green) !!!!!
+        # ToDo: update "Comment" being displayed (use AnnotationsCSV.get_annotation_comment() method!)
         w = event.widget
         curselection = w.curselection()
         # curselection():
@@ -130,6 +156,10 @@ def main():
         index = int(curselection[0])
         vulnerability: str = w.get(index)
         # print('You selected item %d: "%s"' % (index, vulnerability))
+
+        # Strip the checkbox/cross prefix (marking TP/FP) of the vulnerability list item:
+        vulnerability = vulnerability.lstrip("✅ ")
+        vulnerability = vulnerability.lstrip("❌ ")
 
         # Determine name of file with vulnerability:
         file_name: str
@@ -158,11 +188,30 @@ def main():
         file_content_text.tag_add("YellowHighlight", f"{start_line}.{start_col}", f"{end_line}.{end_col}")
         # print(f"Highlighted location {(start_line, start_col, end_line, end_col)}")
 
-    def on_mark_as_TP_click():  # ToDo:
-        pass
+    def mark_as_TP_or_FP(true_positive: bool):  # ToDo: handle case when vuln. is already marked as TP/FP (i.e., if user wants to change the label)
+        global annotations_csv
+        global selected_extension
 
-    def on_mark_as_FP_click():  # ToDo:
-        pass
+        curselection = vulnerabilities_listbox.curselection()
+        if not curselection:
+            messagebox.showerror("Error", "Error: No vulnerability selected.")
+        else:
+            index: int = int(curselection[0])
+            selected_vulnerability: str = vulnerabilities_listbox.get(index)  # ToDo: remove prefix (only needed for updating functionality...)
+            annotations_csv.add_annotation(
+                extension=selected_extension,
+                vulnerability=selected_vulnerability,
+                true_positive=true_positive,
+                comment=comment_text.get("1.0", tk.END)
+            )
+            # Update checkmarks in Listboxes (also acts as a visual feedback to the user!):
+            update_vulnerabilities_listbox()
+
+    def on_mark_as_TP_click():
+        mark_as_TP_or_FP(true_positive=True)
+
+    def on_mark_as_FP_click():
+        mark_as_TP_or_FP(true_positive=False)
 
     def on_load_ext_into_Chrome_click():
         global selected_extension  # e.g.: "aapbdbdomjkkjkaonfhkkikfgjllcleb-2.0.12-Crx4Chrome.com"
@@ -218,6 +267,10 @@ def main():
     root = tk.Tk()
     root.title("Manual vulnerability verification GUI")
 
+    # Set up annotations.csv:
+    global annotations_csv
+    annotations_csv = AnnotationsCSV(path=os.path.join(sys.argv[1], "annotations.csv"))
+
     # Configure grid layout:
     root.grid_columnconfigure(0, weight=1)
     root.grid_columnconfigure(1, weight=2)
@@ -229,7 +282,7 @@ def main():
 
     # Left column:
     tk.Label(root, text="Extensions flagged as potentially vulnerable:", anchor="w").grid(row=0, column=0, sticky="ew", padx=5, pady=5)
-    extensions_listbox = tk.Listbox(root)
+    extensions_listbox = tk.Listbox(root)  # ToDo?: somehow mark the currently selected extension???!
     subdirectory_names: List[str] = []
     with os.scandir(sys.argv[1]) as directory_items:
         for dir_item in directory_items:
