@@ -20,8 +20,6 @@ annotations_csv: Optional[AnnotationsCSV] = None
 selected_extension: Optional[str] = None
 selected_extension_version: Optional[str] = None
 
-# ToDo: ignore extensions not injected everywhere (and display their count!!!) !!! => extract NotInjectedEverywhere logic into a separate Python file!
-
 
 def main():
     def on_show_in_finder_click():
@@ -335,12 +333,14 @@ def main():
     tk.Label(root, text="Extensions flagged as potentially vulnerable:", anchor="w").grid(row=0, column=0, sticky="ew", padx=5, pady=5)
     extensions_listbox = tk.Listbox(root)  # ToDo?: somehow mark the currently selected extension???!
     subdirectory_names: List[str] = []
+    count_extension_cs_not_injected_everywhere: int = 0
     with os.scandir(sys.argv[1]) as directory_items:
         for dir_item in directory_items:
             # 1. Is directory?
             # 2. Contains a "manifest.json" file?
             # 3. Contains an "analysis_renderer_attacker.json" file?
             # 4. Does the "analysis_renderer_attacker.json" file contain any dangers?
+            # 5. Is the CS of the extension injected everywhere (according to the "analysis_renderer_attacker.json" file) ?
             if (
                 dir_item.is_dir() and
                 os.path.isfile(os.path.join(dir_item, "manifest.json")) and
@@ -348,9 +348,15 @@ def main():
             ):
                 analysis_file = os.path.join(dir_item, "analysis_renderer_attacker.json")
                 analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
-                # Only append if analysis_result contains at least 1 danger (all the other ones we don't care about):
+                # Only append if analysis_result contains at least 1 danger and if the extension's content script is
+                #   injected everywhere (all the other ones we don't care about):
                 if analysis_result.total_danger_count() > 0:
-                    subdirectory_names.append(dir_item.name)
+                    if analysis_result.extension_cs_is_injected_everywhere():
+                        subdirectory_names.append(dir_item.name)
+                    else:
+                        count_extension_cs_not_injected_everywhere += 1
+    print(f"Info: {count_extension_cs_not_injected_everywhere} vulnerable extensions are not shown because their "
+          f"content script is not injected everywhere. {len(subdirectory_names)} vulnerable extensions are left.")
     subdirectory_names.sort()
     for subdir_name in subdirectory_names:
         extensions_listbox.insert(tk.END, subdir_name)
@@ -399,7 +405,6 @@ def main():
 
     tk.Button(center_button_frame, text="Mark as TP", fg='green', command=on_mark_as_TP_click).grid(row=0, column=0, padx=5, pady=5)
     tk.Button(center_button_frame, text="Mark as FP", fg='red', command=on_mark_as_FP_click).grid(row=0, column=1, padx=5, pady=5)
-    # ToDo: "Mark as 'not injected everywhere'" !!!
     tk.Button(center_button_frame, text="Load ext. into Chrome...", command=on_load_ext_into_Chrome_click).grid(row=0, column=2, padx=5, pady=5)
 
     # Right column:

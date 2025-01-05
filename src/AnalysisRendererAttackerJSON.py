@@ -1,5 +1,6 @@
 import json
 from typing import Optional, List
+from INJECTED_EVERYWHERE_PATTERNS import INJECTED_EVERYWHERE_PATTERNS
 
 
 class AnalysisRendererAttackerJSON:
@@ -56,3 +57,10 @@ class AnalysisRendererAttackerJSON:
                     result.append(f"CS infiltration danger with rendezvous @ {danger['rendezvous']['location']}")
 
         return result
+
+    def extension_cs_is_injected_everywhere(self) -> bool:
+        """
+        Returns True if and only if at least one content script of the extension (to which this
+        analysis_renderer_attacker.json refers) is injected everywhere (e.g., using the "*://*/*" pattern).
+        """
+        return len(set(self.json["content_script_injected_into"]).intersection(INJECTED_EVERYWHERE_PATTERNS)) > 0
