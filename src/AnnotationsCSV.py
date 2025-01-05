@@ -27,6 +27,8 @@ class AnnotationsCSV:
         If the (extension, vulnerability) pair is already present in the annotations.csv file however,
         no new line is added and instead the existing boolean value (FP/TP) and comment updated with the values given.
         """
+        comment = comment.rstrip()
+
         if self.has_annotation_for(extension=extension, vulnerability=vulnerability):
             # Update existing annotation:
             # (1) Read entire annotations.csv file:
