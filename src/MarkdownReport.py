@@ -139,7 +139,7 @@ class MarkdownReport:
                 unpacked_ext_dir = info["unpacked_ext_dir"]
                 manifest_path = os.path.join(unpacked_ext_dir, 'manifest.json')
                 manifest = json.load(open(manifest_path))
-                # Name:
+                # Name:  # ToDo: refactor using the new ManifestJSON class !!!???
                 ext_name = \
                     manifest['name'].replace("\n", "\\n") \
                         if 'name' in manifest else ""
