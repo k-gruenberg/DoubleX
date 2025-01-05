@@ -157,8 +157,7 @@ def main():
         # print('You selected item %d: "%s"' % (index, vulnerability))
 
         # Strip the checkbox/cross prefix (marking TP/FP) of the vulnerability list item:
-        vulnerability = vulnerability.lstrip("✅ ")
-        vulnerability = vulnerability.lstrip("❌ ")
+        vulnerability = vulnerability.lstrip("✅ ").lstrip("❌ ")
 
         # Determine and show the comment that has been associated with the vulnerability in the annotations.csv file
         #   (if present):
@@ -200,7 +199,7 @@ def main():
         file_content_text.tag_add("YellowHighlight", f"{start_line}.{start_col}", f"{end_line}.{end_col}")
         # print(f"Highlighted location {(start_line, start_col, end_line, end_col)}")
 
-    def mark_as_TP_or_FP(true_positive: bool):  # ToDo: handle case when vuln. is already marked as TP/FP (i.e., if user wants to change the label)
+    def mark_as_TP_or_FP(true_positive: bool):
         global annotations_csv
         global selected_extension
 
@@ -209,8 +208,10 @@ def main():
             messagebox.showerror("Error", "Error: No vulnerability selected.")
         else:
             index: int = int(curselection[0])
-            selected_vulnerability: str = vulnerabilities_listbox.get(index)  # ToDo: remove prefix (only needed for updating functionality...)
-            annotations_csv.add_annotation(
+            selected_vulnerability: str = vulnerabilities_listbox.get(index)
+            # Remove prefix (only needed for updating functionality):
+            selected_vulnerability = selected_vulnerability.lstrip("✅ ").lstrip("❌ ")
+            annotations_csv.add_or_update_annotation(
                 extension=selected_extension,
                 vulnerability=selected_vulnerability,
                 true_positive=true_positive,
