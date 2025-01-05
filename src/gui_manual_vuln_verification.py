@@ -145,7 +145,6 @@ def main():
         show_file_content(file_name=file_name)
 
     def on_vulnerability_selected(event):  # ToDo: also highlight "from flow" (in red) and "to flow" (in green) !!!!!
-        # ToDo: update "Comment" being displayed (use AnnotationsCSV.get_annotation_comment() method!)
         w = event.widget
         curselection = w.curselection()
         # curselection():
