@@ -144,7 +144,7 @@ def main():
 
         show_file_content(file_name=file_name)
 
-    def on_vulnerability_selected(event):  # ToDo: also highlight "from flow" (in red) and "to flow" (in green) !!!!!
+    def on_vulnerability_selected(event):
         w = event.widget
         curselection = w.curselection()
         # curselection():
@@ -198,6 +198,44 @@ def main():
         file_content_text.tag_config("YellowHighlight", background="yellow")
         file_content_text.tag_add("YellowHighlight", f"{start_line}.{start_col}", f"{end_line}.{end_col}")
         # print(f"Highlighted location {(start_line, start_col, end_line, end_col)}")
+
+        # Retrieve corresponding "from flow" and "to flow" from the analysis_renderer_attacker.json file:
+        extension_dir = os.path.join(sys.argv[1], selected_extension)
+        analysis_file = os.path.join(extension_dir, "analysis_renderer_attacker.json")
+        analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
+        vulnerabilities = analysis_result["bp" if vulnerability.startswith("BP") else "cs"]["exfiltration_dangers" if "exfiltration danger" in vulnerability else "infiltration_dangers"]
+        vuln = None
+        for v in vulnerabilities:
+            if v["rendezvous"]["location"] == vuln_location:  # e.g.: "12:34 - 56:78"
+                vuln = v
+        if vuln is None:
+            messagebox.showerror(
+                "Error",
+                "Error: Vulnerability not found in analysis_renderer_attacker.json. Cannot highlight 'from flow' and 'to flow'."
+            )
+            return
+        from_flow = vuln["from_flow"]
+        to_flow = vuln["to_flow"]
+
+        # Highlight each node of the "from flow" in red:
+        file_content_text.tag_delete("RedHighlight")
+        file_content_text.tag_config("RedHighlight", background="red")
+        for node in from_flow:
+            node_location: str = node["location"]  # e.g.: "12:34 - 56:78"
+            [start_loc, end_loc] = node_location.split(" - ")
+            [start_line, start_col] = start_loc.split(":")
+            [end_line, end_col] = end_loc.split(":")
+            file_content_text.tag_add("RedHighlight", f"{start_line}.{start_col}", f"{end_line}.{end_col}")
+
+        # Highlight each node of the "to flow" in green:
+        file_content_text.tag_delete("GreenHighlight")
+        file_content_text.tag_config("GreenHighlight", background="green")
+        for node in to_flow:
+            node_location: str = node["location"]  # e.g.: "12:34 - 56:78"
+            [start_loc, end_loc] = node_location.split(" - ")
+            [start_line, start_col] = start_loc.split(":")
+            [end_line, end_col] = end_loc.split(":")
+            file_content_text.tag_add("GreenHighlight", f"{start_line}.{start_col}", f"{end_line}.{end_col}")
 
     def mark_as_TP_or_FP(true_positive: bool):
         global annotations_csv
