@@ -28,4 +28,9 @@ INJECTED_EVERYWHERE_PATTERNS = {
     "https://*/*",
     "<all_urls>",
     "file:///*",
-}  # TODO?: add missing patterns?
+}
+# TODO: refactor code logic such that the following cases are also captured
+#   *://*/*.pdf* | file://*/*.pdf*
+#   *://*/owa/*
+#   file://*/*.*md* | file://*/*.*MD* | file://*/*.text | file://*/*.markdown* | file://*/*.mdown* | file://*/*.txt* | file://*/*.mkd* | file://*/*.rst* | *://*/*.*md* | *://*/*.*MD* | *://*/*.text | *://*/*.markdown* | *://*/*.mdown* | *://*/*.txt* | *://*/*.mkd* | *://*/*.rst*
+
