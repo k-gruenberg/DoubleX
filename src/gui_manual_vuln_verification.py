@@ -161,6 +161,19 @@ def main():
         vulnerability = vulnerability.lstrip("✅ ")
         vulnerability = vulnerability.lstrip("❌ ")
 
+        # Determine and show the comment that has been associated with the vulnerability in the annotations.csv file
+        #   (if present):
+        global annotations_csv
+        global selected_extension
+        comment: str = annotations_csv.get_annotation_comment(
+            extension=selected_extension,
+            vulnerability=vulnerability,
+        )
+        # Note that the value returned by get_annotation_comment() will never be None,
+        #   instead it will return the empty string "" if now comment is present in the annotations.csv file!
+        comment_text.delete("1.0", tk.END)
+        comment_text.insert(tk.END, str(comment))
+
         # Determine name of file with vulnerability:
         file_name: str
         if vulnerability.startswith("BP"):
