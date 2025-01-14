@@ -17,7 +17,8 @@ def longest_common_prefix(a: str, b: str) -> str:
 
 
 def print_result_csv_stats(result_csv_path: str,
-                           list_vuln_ext: bool):
+                           list_vuln_ext: bool,
+                           list_vuln_exploitable_ext: bool):
     no_ext: int = 0
     no_vuln_ext: int = 0
     no_vuln_ext_exploitable: int = 0
@@ -27,6 +28,7 @@ def print_result_csv_stats(result_csv_path: str,
     analysis_times_vuln_ext: List[float] = []
     extension_common_prefix: Optional[str] = None
     vulnerable_extensions: List[str] = []
+    vulnerable_exploitable_extensions: List[str] = []
 
     with open(result_csv_path) as csv_file:
         # Determine the relevant column indices using the CSV header line:
@@ -67,6 +69,7 @@ def print_result_csv_stats(result_csv_path: str,
                 no_dangers_exploitable += total_dangers
                 if total_dangers > 0:
                     no_vuln_ext_exploitable += 1
+                    vulnerable_exploitable_extensions.append(extension)
 
     print("")
     print("***** result.csv stats: *****")
@@ -86,6 +89,13 @@ def print_result_csv_stats(result_csv_path: str,
             print(vuln_ext)
         print("")
 
+    if list_vuln_exploitable_ext:
+        vulnerable_exploitable_extensions.sort()
+        print(f"Vulnerable exploitable extensions (count: {len(vulnerable_exploitable_extensions)}):")
+        for vuln_exploitable_ext in vulnerable_exploitable_extensions:
+            print(vuln_exploitable_ext)
+        print("")
+
 
 def main():
     parser = argparse.ArgumentParser(prog='result_csv_stats',
@@ -97,12 +107,17 @@ def main():
     parser.add_argument("--list-vuln-ext", dest='list_vuln_ext', action='store_true',
                         help="List all vulnerable extensions in alphabetical order.")
 
+    parser.add_argument("--list-vuln-exploitable-ext", dest='list_vuln_exploitable_ext',
+                        action='store_true',
+                        help="List all vulnerable exploitable(!) extensions in alphabetical order.")
+
     args = parser.parse_args()
 
     for result_csv_path in args.RESULT_CSV_FILE:
         if os.path.isfile(result_csv_path):
             print_result_csv_stats(result_csv_path=result_csv_path,
                                    list_vuln_ext=args.list_vuln_ext,
+                                   list_vuln_exploitable_ext=args.list_vuln_exploitable_ext,
                                    )
         else:
             print()
