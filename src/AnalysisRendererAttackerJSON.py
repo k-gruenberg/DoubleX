@@ -1,6 +1,6 @@
 import json
 from typing import Optional, List
-from INJECTED_EVERYWHERE_PATTERNS import INJECTED_EVERYWHERE_PATTERNS
+from INJECTED_EVERYWHERE_PATTERNS import is_an_injected_everywhere_url_pattern
 
 
 class AnalysisRendererAttackerJSON:
@@ -63,4 +63,5 @@ class AnalysisRendererAttackerJSON:
         Returns True if and only if at least one content script of the extension (to which this
         analysis_renderer_attacker.json refers) is injected everywhere (e.g., using the "*://*/*" pattern).
         """
-        return len(set(self.json["content_script_injected_into"]).intersection(INJECTED_EVERYWHERE_PATTERNS)) > 0
+        return any(is_an_injected_everywhere_url_pattern(url_pattern)
+                   for url_pattern in self.json["content_script_injected_into"])
