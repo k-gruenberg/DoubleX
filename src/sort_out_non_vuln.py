@@ -64,6 +64,9 @@ def main():
     parser.add_argument("-vuln", dest='vuln', action='store_true',
                         help="Move/copy all *vulnerable* extensions instead of all non-vulnerable extensions.")
 
+    parser.add_argument("-verbose", dest='verbose', action='store_true',
+                        help="Verbose prints to console.")
+
     args = parser.parse_args()
 
     # 1. Check that the $src$/unpacked subdirectory exists:
@@ -106,14 +109,18 @@ def main():
                     analysis_json = AnalysisRendererAttackerJSON(analysis_json_file)
                     total_danger_count: int = analysis_json.total_danger_count()
                     if args.vuln and total_danger_count == 0:
-                        print(f"Info: Not copying {analysis_json_file} as no vulnerabilities were found.")
+                        if args.verbose:
+                            print(f"Info: Not copying {subfolder} as no vulnerabilities were found.")
                     elif not args.vuln and total_danger_count > 0:
-                        print(f"Info: Not copying {analysis_json_file} as vulnerabilities were found.")
+                        if args.verbose:
+                            print(f"Info: Not copying {subfolder} as vulnerabilities were found.")
                     else:
                         # Perform move/copy of subfolder to /dest/folder/unpacked,
                         # as well as move/copy of the corresponding .CRX file one level up to /dest/folder:
                         extension_id = subfolder.name
                         crx_file = os.path.join(args.SRC, f"{extension_id}.crx")
+                        if args.verbose:
+                            print(f"Info: Copying {subfolder} and {crx_file} ...")
                         if args.cp:
                             shutil.copytree(subfolder, os.path.join(dest_unpacked_dir, subfolder.name), dirs_exist_ok=True)
                             shutil.copy(crx_file, args.DEST)  # Copies file. Destination may be a directory.
