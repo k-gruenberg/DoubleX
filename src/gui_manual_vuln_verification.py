@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox
+from tkinter import simpledialog
 import dukpy
 from typing import List, Optional
 import sys
@@ -9,16 +10,23 @@ import webbrowser
 import re
 import platform
 import tempfile
+import json
 
 from AnalysisRendererAttackerJSON import AnalysisRendererAttackerJSON
 from AnnotationsCSV import AnnotationsCSV
 from ManifestJSON import ManifestJSON
 from gui_generate_pdg import syntax_highlighting
+from INJECTED_EVERYWHERE_PATTERNS import is_an_injected_everywhere_url_pattern
 
 annotations_csv: Optional[AnnotationsCSV] = None
 
 selected_extension: Optional[str] = None
 selected_extension_version: Optional[str] = None
+
+# "Load ext. into Chrome..." settings:
+setting_chrome_path: str = ""
+setting_add_renderer_attacker_sim_code_snippet: bool = True
+setting_detach_process: bool = True
 
 
 def main():
@@ -264,6 +272,13 @@ def main():
 
     def on_load_ext_into_Chrome_click():
         global selected_extension  # e.g.: "aapbdbdomjkkjkaonfhkkikfgjllcleb-2.0.12-Crx4Chrome.com"
+        global setting_chrome_path
+        global setting_add_renderer_attacker_sim_code_snippet
+        global setting_detach_process
+
+        if selected_extension is None:
+            tk.messagebox.showerror(title="", message="No extension selected!")
+            return
 
         # 1. Locate the original .CRX file (should be one folder above):
         crx_path: str = os.path.join(sys.argv[1], os.pardir, selected_extension + ".crx")
@@ -274,23 +289,94 @@ def main():
         subprocess.call(["unzip", crx_path, "-d", crx_unpacked_path])
         print("CRX unpacked.")
 
-        # ToDo: add https://github.com/k-gruenberg/renderer_attacker_sim code snippet ?!
+        # 3. Add https://github.com/k-gruenberg/renderer_attacker_sim code snippet (unless explicitly disabled):
+        if setting_add_renderer_attacker_sim_code_snippet:
+            # The code snippet:
+            with open('code_snippet.js', 'r') as code_snippet_js_file:
+                code_snippet: str = code_snippet_js_file.read()
 
-        # 3. Load the unpacked .CRX file into Chrome:
-        #    => https://stackoverflow.com/questions/16800696/how-install-crx-chrome-extension-via-command-line
-        #       => <path to chrome> --load-extension=<path to extension directory>
+            # Read the manifest.json file of the extension that we just unpacked into a temp folder:
+            with open(os.path.join(crx_unpacked_path, 'manifest.json'), 'r') as manifest_json_file:
+                manifest = json.load(manifest_json_file)
+
+            # Pick a content script that is injected everywhere...:  # TODO: ...preferably one that is injected into "<all_urls>"
+            for content_script in manifest["content_scripts"]:
+                if any(is_an_injected_everywhere_url_pattern(url_pattern) for url_pattern in content_script["matches"]):
+                    cs_js_file_path = content_script["js"][0]
+                    # ...and append the code snippet to said content script:
+                    with open(os.path.join(crx_unpacked_path, cs_js_file_path), 'a') as cs_js_file:
+                        cs_js_file.write(code_snippet)
+                    break  # suitable content script has been picked, only inject code snippet into *one* content script!
+
+        # 4. Determine the path to Chrome:
         path_to_chrome: str
         system: str = platform.system()
-        if system == "Darwin":  # macOS:
+        if system == "Darwin":  # On macOS, we know where Google Chrome is located:
             path_to_chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        else:  # On other platforms, we'll ask the user once for the path and then remember it for the session:
+            if setting_chrome_path == "":
+                if user_given_path := tk.simpledialog.askstring('Enter path to Chrome', 'Please enter the path to Google Chrome on your machine:'):
+                    setting_chrome_path = user_given_path
+                else:  # User pressed "Cancel" or entered an empty string:
+                    return
+            path_to_chrome = setting_chrome_path
+
+        # 5. Load the unpacked .CRX file into Chrome:
+        #    => https://stackoverflow.com/questions/16800696/how-install-crx-chrome-extension-via-command-line
+        #       => <path to chrome> --load-extension=<path to extension directory>
+        cmd = [path_to_chrome, f"--load-extension={crx_unpacked_path}"]  # TODO: also open the attacker console!!!
+        print(f"Starting {'detached' if setting_detach_process else ''} Chrome with command {cmd} ...")
+        if setting_detach_process:
+            subprocess.Popen(cmd)
         else:
-            raise Exception(f"unsupported platform: {system}")
-        cmd = [path_to_chrome, f"--load-extension={crx_unpacked_path}"]
-        print(f"Starting Chrome with command {cmd} ...")
-        subprocess.call(cmd)
-        # ToDo: clear temp dir
-        # (ToDo?: detach process or deliberately wait for the user to close Chrome again?!)
-        # (ToDo?: handle case where Chrome is already open?!)
+            subprocess.call(cmd)
+            print("Subprocess call ended.")
+        # ToDo: clear temp dir !!!
+        # ToDo: refuse if Chrome is already open !!!
+
+    def on_load_ext_into_Chrome_settings_button_click():
+        # Create settings window:
+        settings_dialog = tk.Toplevel(root)
+        settings_dialog.title("'Load ext. into Chrome...' settings:")
+
+        # Add widgets:
+        tk.Label(settings_dialog, text="Chrome Path: ").grid(row=0, column=0, padx=10, pady=10)
+        chrome_path_text = tk.Text(settings_dialog, height=1, width=35, wrap=tk.NONE)
+        chrome_path_text.grid(row=0, column=1, padx=10, pady=10)
+        add_code_snippet_bool_var = tk.BooleanVar()
+        add_code_snippet_check_button = tk.Checkbutton(settings_dialog, text="Add renderer_attacker_sim code snippet", variable=add_code_snippet_bool_var)
+        add_code_snippet_check_button.grid(row=1, column=0, columnspan=2, padx=10, pady=10)
+        detach_process_bool_var = tk.BooleanVar()
+        detach_process_check_button = tk.Checkbutton(settings_dialog, text="Detach process", variable=detach_process_bool_var)
+        detach_process_check_button.grid(row=2, column=0, columnspan=2, padx=10, pady=10)
+
+        def load():
+            global setting_chrome_path
+            global setting_add_renderer_attacker_sim_code_snippet
+            global setting_detach_process
+            chrome_path_text.delete("1.0", tk.END)
+            chrome_path_text.insert(tk.END, setting_chrome_path)
+            add_code_snippet_bool_var.set(setting_add_renderer_attacker_sim_code_snippet)
+            detach_process_bool_var.set(setting_detach_process)
+
+        load()
+
+        def save():
+            global setting_chrome_path
+            global setting_add_renderer_attacker_sim_code_snippet
+            global setting_detach_process
+            setting_chrome_path = chrome_path_text.get("1.0", tk.END)
+            setting_add_renderer_attacker_sim_code_snippet = add_code_snippet_bool_var.get()
+            setting_detach_process = detach_process_bool_var.get()
+            settings_dialog.destroy()
+
+        tk.Button(settings_dialog, text="Save", command=save).grid(row=3, column=0, pady=10)
+        tk.Button(settings_dialog, text="Cancel", command=settings_dialog.destroy).grid(row=3, column=1, pady=10)
+
+        # Ensure dialog stays on top and wait for it to close:
+        settings_dialog.transient(root)  # Keep the dialog on top of the main window.
+        settings_dialog.grab_set()  # Make the dialog modal.
+        settings_dialog.wait_window()  # Wait until the dialog is closed.
 
     def on_file_content_change(_event):
         # Check if the text was actually modified
@@ -314,7 +400,7 @@ def main():
         return "break"  # returning "break" prevents the ENTER press from appending a newline char to the text!
 
     root = tk.Tk()
-    root.title("Manual vulnerability verification GUI")
+    root.title(f"Manual vulnerability verification GUI: {sys.argv[1]}")
 
     # Set up annotations.csv:
     global annotations_csv
@@ -356,7 +442,8 @@ def main():
                     else:
                         count_extension_cs_not_injected_everywhere += 1
     print(f"Info: {count_extension_cs_not_injected_everywhere} vulnerable extensions are not shown because their "
-          f"content script is not injected everywhere. {len(subdirectory_names)} vulnerable extensions are left.")
+          f"content script is not injected everywhere. "
+          f"{len(subdirectory_names)} vulnerable exploitable(!) extensions are left.")
     subdirectory_names.sort()
     for subdir_name in subdirectory_names:
         extensions_listbox.insert(tk.END, subdir_name)
@@ -405,7 +492,10 @@ def main():
 
     tk.Button(center_button_frame, text="Mark as TP", fg='green', command=on_mark_as_TP_click).grid(row=0, column=0, padx=5, pady=5)
     tk.Button(center_button_frame, text="Mark as FP", fg='red', command=on_mark_as_FP_click).grid(row=0, column=1, padx=5, pady=5)
-    tk.Button(center_button_frame, text="Load ext. into Chrome...", command=on_load_ext_into_Chrome_click).grid(row=0, column=2, padx=5, pady=5)
+    load_ext_into_chrome_frame = tk.Frame(center_button_frame)
+    load_ext_into_chrome_frame.grid(row=0, column=2, padx=5, pady=5)
+    tk.Button(load_ext_into_chrome_frame, text="Load ext. into Chrome...", command=on_load_ext_into_Chrome_click).grid(row=0, column=0)
+    tk.Button(load_ext_into_chrome_frame, text="⛭", command=on_load_ext_into_Chrome_settings_button_click).grid(row=0, column=1)
 
     # Right column:
     tk.Label(root, text="File content:", anchor="w").grid(row=0, column=2, sticky="ew", padx=5, pady=5)
@@ -429,7 +519,7 @@ if __name__ == "__main__":
     os.environ['SOURCE_TYPE'] = "module"
 
     if len(sys.argv) != 2:
-        print("Usage: python3 gui_manual_vuln_verification.py <FOLDER>")
+        print("Usage: python3 gui_manual_vuln_verification.py <UNPACKED_FOLDER>")
         exit(1)
     elif not os.path.isdir(sys.argv[1]):
         print(f"Error: {sys.argv[1]} is not a directory!")
