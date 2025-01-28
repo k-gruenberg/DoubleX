@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 from tkinter import simpledialog
 import dukpy
-from typing import List, Optional
+from typing import List, Optional, Dict
 import sys
 import os
 import subprocess
@@ -47,8 +47,24 @@ def main():
         web_store_url: str = f"https://chromewebstore.google.com/detail/{extension_id}"
         webbrowser.open(web_store_url, new=2, autoraise=True)
 
+    def remove_current_selection_marking():
+        for idx, listbox_entry in enumerate(extensions_listbox.get(0, tk.END)):
+            if listbox_entry.startswith("🟣 "):
+                annotations: List[str] = annotations_csv.get_annotations(listbox_entry.lstrip("🟣 "))
+                extension_dir = os.path.join(sys.argv[1], listbox_entry.lstrip("🟣 "))
+                analysis_file: str = os.path.join(extension_dir, "analysis_renderer_attacker.json")
+                danger_count = AnalysisRendererAttackerJSON(path=analysis_file).total_danger_count()
+                if len(annotations) == 0:
+                    restored_circle_indicator = "🔴"
+                elif len(annotations) == danger_count:
+                    restored_circle_indicator = "🟢"
+                else:
+                    restored_circle_indicator = "🟡"
+                extensions_listbox.delete(idx)
+                extensions_listbox.insert(idx, restored_circle_indicator + " " + listbox_entry.lstrip("🟣 "))
+
     def on_extension_selected(event):
-        w = event.widget
+        w: tk.Listbox = event.widget
         curselection = w.curselection()
         # curselection():
         #    "Returns a tuple containing the line numbers of the selected element or elements, counting from 0.
@@ -58,11 +74,19 @@ def main():
         index = int(curselection[0])
         subdir_name = w.get(index)
         # print('You selected item %d: "%s"' % (index, subdir_name))
+        subdir_name = subdir_name.lstrip("🟣 ").lstrip("🔴 ").lstrip("🟡 ").lstrip("🟢 ")
 
         # Remember selected extension in a separate variable
         #   (this is needed because selecting an item in one of the other Listboxes will unselect the item!):
         global selected_extension
         selected_extension = subdir_name
+
+        # Remove the current "🟣" selection marking (if present):
+        remove_current_selection_marking()
+
+        # Mark selection using a "🟣":
+        w.delete(curselection[0])
+        w.insert(index, "🟣 " + subdir_name)
 
         # Enable the "Open in Web Store" button:
         open_in_web_store_button.config(state=tk.NORMAL)
@@ -417,8 +441,9 @@ def main():
 
     # Left column:
     tk.Label(root, text="Extensions flagged as potentially vulnerable:", anchor="w").grid(row=0, column=0, sticky="ew", padx=5, pady=5)
-    extensions_listbox = tk.Listbox(root)  # ToDo?: somehow mark the currently selected extension???!
+    extensions_listbox = tk.Listbox(root)
     subdirectory_names: List[str] = []
+    danger_counts: Dict[str, int] = dict()
     count_extension_cs_not_injected_everywhere: int = 0
     with os.scandir(sys.argv[1]) as directory_items:
         for dir_item in directory_items:
@@ -436,7 +461,9 @@ def main():
                 analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
                 # Only append if analysis_result contains at least 1 danger and if the extension's content script is
                 #   injected everywhere (all the other ones we don't care about):
-                if analysis_result.total_danger_count() > 0:
+                total_danger_count: int = analysis_result.total_danger_count()
+                danger_counts[dir_item.name] = total_danger_count
+                if total_danger_count > 0:
                     if analysis_result.extension_cs_is_injected_everywhere():
                         subdirectory_names.append(dir_item.name)
                     else:
@@ -446,8 +473,19 @@ def main():
           f"{len(subdirectory_names)} vulnerable exploitable(!) extensions are left.")
     subdirectory_names.sort()
     for subdir_name in subdirectory_names:
-        extensions_listbox.insert(tk.END, subdir_name)
-    # ToDo: include checkbox/cross to indicate whether an extension has already been manually checked
+        # In front of every extension subdirectory name, indicate the annotation state using a colored circle emoji:
+        #   🔴 = no annotations yet
+        #   🟡 = partially annotated
+        #   🟢 = fully annotated
+        #   🟣 = marks current selection (initially, no selection will be selected!)
+        annotations: List[str] = annotations_csv.get_annotations(subdir_name)
+        if len(annotations) == 0:
+            circle_indicator = "🔴"
+        elif len(annotations) == danger_counts[subdir_name]:
+            circle_indicator = "🟢"
+        else:
+            circle_indicator = "🟡"
+        extensions_listbox.insert(tk.END, circle_indicator + " " + subdir_name)
 
     extensions_listbox.grid(row=1, column=0, rowspan=7, sticky="nsew", padx=5, pady=5)
     extensions_listbox.bind('<<ListboxSelect>>', on_extension_selected)
