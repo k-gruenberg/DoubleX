@@ -28,6 +28,8 @@ setting_chrome_path: str = ""
 setting_add_renderer_attacker_sim_code_snippet: bool = True
 setting_detach_process: bool = True
 
+detached_chrome_process: Optional[subprocess.Popen] = None
+
 
 def main():
     def on_show_in_finder_click():
@@ -304,10 +306,20 @@ def main():
         global setting_chrome_path
         global setting_add_renderer_attacker_sim_code_snippet
         global setting_detach_process
+        global detached_chrome_process
 
         if selected_extension is None:
             tk.messagebox.showerror(title="", message="No extension selected!")
             return
+
+        # Refuse when there's still another detached Chrome process running:
+        if detached_chrome_process is not None and detached_chrome_process.poll() is None:
+            tk.messagebox.showerror(
+                title="",
+                message="Another Chrome process is still running, please quit before continuing!"
+            )
+            return
+        # TODO: also refuse if there's another Chrome process that wasn't started by *us* !!!
 
         # 1. Locate the original .CRX file (should be one folder above):
         crx_path: str = os.path.join(sys.argv[1], os.pardir, selected_extension + ".crx")
@@ -368,12 +380,11 @@ def main():
         cmd = [path_to_chrome, os.path.join(__file__, "../exploit_console.html"), f"--load-extension={crx_unpacked_path}"]
         print(f"Starting {'detached' if setting_detach_process else ''} Chrome with command {cmd} ...")
         if setting_detach_process:
-            subprocess.Popen(cmd)
+            detached_chrome_process = subprocess.Popen(cmd)
         else:
             subprocess.call(cmd)
             print("Subprocess call ended.")
         # ToDo: clear temp dir !!!
-        # ToDo: refuse if Chrome is already open !!!
 
     def on_load_ext_into_Chrome_settings_button_click():
         # Create settings window:
