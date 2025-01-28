@@ -362,10 +362,10 @@ def main():
                     return
             path_to_chrome = setting_chrome_path
 
-        # 5. Load the unpacked .CRX file into Chrome:
+        # 5. Load the unpacked .CRX file into Chrome (and also immediately open the attacker/exploit console):
         #    => https://stackoverflow.com/questions/16800696/how-install-crx-chrome-extension-via-command-line
         #       => <path to chrome> --load-extension=<path to extension directory>
-        cmd = [path_to_chrome, f"--load-extension={crx_unpacked_path}"]  # TODO: also open the attacker console!!!
+        cmd = [path_to_chrome, os.path.join(__file__, "../exploit_console.html"), f"--load-extension={crx_unpacked_path}"]
         print(f"Starting {'detached' if setting_detach_process else ''} Chrome with command {cmd} ...")
         if setting_detach_process:
             subprocess.Popen(cmd)
