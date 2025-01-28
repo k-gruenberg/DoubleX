@@ -323,14 +323,26 @@ def main():
             with open(os.path.join(crx_unpacked_path, 'manifest.json'), 'r') as manifest_json_file:
                 manifest = json.load(manifest_json_file)
 
-            # Pick a content script that is injected everywhere...:  # TODO: ...preferably one that is injected into "<all_urls>"
+            # Pick one(!) content script to paste the code snippet into, ...:
+            code_snippet_injected: bool = False
+            # ...preferably one that is injected into "<all_urls>":
             for content_script in manifest["content_scripts"]:
-                if any(is_an_injected_everywhere_url_pattern(url_pattern) for url_pattern in content_script["matches"]):
+                if any(url_pattern == "<all_urls>" for url_pattern in content_script["matches"]):
                     cs_js_file_path = content_script["js"][0]
-                    # ...and append the code snippet to said content script:
+                    # Append the code snippet to said content script:
                     with open(os.path.join(crx_unpacked_path, cs_js_file_path), 'a') as cs_js_file:
                         cs_js_file.write(code_snippet)
-                    break  # suitable content script has been picked, only inject code snippet into *one* content script!
+                    code_snippet_injected = True
+                    break
+            # ...otherwise one that is injected everywhere:
+            if not code_snippet_injected:
+                for content_script in manifest["content_scripts"]:
+                    if any(is_an_injected_everywhere_url_pattern(url_pattern) for url_pattern in content_script["matches"]):
+                        cs_js_file_path = content_script["js"][0]
+                        # Append the code snippet to said content script:
+                        with open(os.path.join(crx_unpacked_path, cs_js_file_path), 'a') as cs_js_file:
+                            cs_js_file.write(code_snippet)
+                        break
 
         # 4. Determine the path to Chrome:
         path_to_chrome: str
