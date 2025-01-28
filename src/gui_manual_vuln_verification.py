@@ -120,7 +120,12 @@ def main():
         analysis_file = os.path.join(extension_dir, "analysis_renderer_attacker.json")
         analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
         ext_injected_into_label.config(text=f"Injected into: {str(analysis_result['content_script_injected_into'])[:66]}")
-        # ToDo: allow user to see full list using a tooltip, popup, or similar...
+        # Allow user to see full list of injection URL patterns by double-clicking:
+        ext_injected_into_label.bind(
+            '<Double-Button-1>',
+            lambda _event: tk.messagebox.showinfo(title="Injected into:",
+                                                  message=str(analysis_result['content_script_injected_into']))
+        )
 
         # 4. Read analysis_renderer_attacker.json and update "Potential vulnerabilities found:":
         update_vulnerabilities_listbox()
