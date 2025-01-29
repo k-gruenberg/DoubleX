@@ -42,19 +42,19 @@ class AnalysisRendererAttackerJSON:
 
         if "bp" in self.json:
             if "exfiltration_dangers" in self.json["bp"]:
-                for danger in self.json["bp"]["exfiltration_dangers"]:
-                    result.append(f"BP exfiltration danger with rendezvous @ {danger['rendezvous']['location']}")
+                for i, danger in enumerate(self.json["bp"]["exfiltration_dangers"]):
+                    result.append(f"BP exfiltration danger #{i+1} with rendezvous @ {danger['rendezvous']['location']}")
             if "infiltration_dangers" in self.json["bp"]:
-                for danger in self.json["bp"]["infiltration_dangers"]:
-                    result.append(f"BP infiltration danger with rendezvous @ {danger['rendezvous']['location']}")
+                for i, danger in enumerate(self.json["bp"]["infiltration_dangers"]):
+                    result.append(f"BP infiltration danger #{i+1} with rendezvous @ {danger['rendezvous']['location']}")
 
         if "cs" in self.json:
             if "exfiltration_dangers" in self.json["cs"]:
-                for danger in self.json["cs"]["exfiltration_dangers"]:
-                    result.append(f"CS exfiltration danger with rendezvous @ {danger['rendezvous']['location']}")
+                for i, danger in enumerate(self.json["cs"]["exfiltration_dangers"]):
+                    result.append(f"CS exfiltration danger #{i+1} with rendezvous @ {danger['rendezvous']['location']}")
             if "infiltration_dangers" in self.json["cs"]:
-                for danger in self.json["cs"]["infiltration_dangers"]:
-                    result.append(f"CS infiltration danger with rendezvous @ {danger['rendezvous']['location']}")
+                for i, danger in enumerate(self.json["cs"]["infiltration_dangers"]):
+                    result.append(f"CS infiltration danger #{i+1} with rendezvous @ {danger['rendezvous']['location']}")
 
         return result
 

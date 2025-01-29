@@ -233,6 +233,9 @@ def main():
         # Show content of file with vulnerability:
         show_file_content(file_name=file_name)
 
+        # Determine index of vulnerability (#1, #2, #3, etc.):
+        vuln_index: int = int(vulnerability.split("#")[1].split(" ")[0])
+
         # Determine location of vulnerability:
         vuln_location: str = vulnerability.split(" @ ")[1]  # e.g.: "12:34 - 56:78"
         [start_loc, end_loc] = vuln_location.split(" - ")
@@ -253,14 +256,13 @@ def main():
         analysis_file = os.path.join(extension_dir, "analysis_renderer_attacker.json")
         analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
         vulnerabilities = analysis_result["bp" if vulnerability.startswith("BP") else "cs"]["exfiltration_dangers" if "exfiltration danger" in vulnerability else "infiltration_dangers"]
-        vuln = None
-        for v in vulnerabilities:
-            if v["rendezvous"]["location"] == vuln_location:  # e.g.: "12:34 - 56:78"
-                vuln = v
-        if vuln is None:
+        try:
+            vuln = vulnerabilities[vuln_index-1]
+            assert vuln["rendezvous"]["location"] == vuln_location  # e.g.: "12:34 - 56:78"
+        except Exception as e:
             messagebox.showerror(
                 "Error",
-                "Error: Vulnerability not found in analysis_renderer_attacker.json. Cannot highlight 'from flow' and 'to flow'."
+                f"Error: {e}"
             )
             return
         from_flow = vuln["from_flow"]
