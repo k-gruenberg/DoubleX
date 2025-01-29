@@ -11,6 +11,7 @@ import re
 import platform
 import tempfile
 import json
+import shutil
 
 from AnalysisRendererAttackerJSON import AnalysisRendererAttackerJSON
 from AnnotationsCSV import AnnotationsCSV
@@ -29,6 +30,17 @@ setting_add_renderer_attacker_sim_code_snippet: bool = True
 setting_detach_process: bool = True
 
 detached_chrome_process: Optional[subprocess.Popen] = None
+
+temp_folder_to_delete: Optional[str] = None
+
+
+def on_exit(_event):
+    # Before exiting, delete the remaining temp folder (if one exists):
+    global temp_folder_to_delete
+    if temp_folder_to_delete is not None and os.path.isdir(temp_folder_to_delete):
+        print(f"Before exiting, deleting temp folder {temp_folder_to_delete} ...")
+        shutil.rmtree(temp_folder_to_delete)
+        print(f"Temp folder deleted.")
 
 
 def main():
@@ -380,11 +392,21 @@ def main():
         cmd = [path_to_chrome, os.path.join(__file__, "../exploit_console.html"), f"--load-extension={crx_unpacked_path}"]
         print(f"Starting {'detached' if setting_detach_process else ''} Chrome with command {cmd} ...")
         if setting_detach_process:
+            # Delete the temp folder from last time (not needed anymore):
+            global temp_folder_to_delete
+            if temp_folder_to_delete is not None:
+                print(f"Deleting now unneeded temp folder {temp_folder_to_delete} ...")
+                shutil.rmtree(temp_folder_to_delete)
+                print(f"Temp folder deleted.")
+            # Start the Chrome process as a separate detached process using subprocess.Popen():
             detached_chrome_process = subprocess.Popen(cmd)
+            # Next time, this folder will be up for deletion:
+            temp_folder_to_delete = crx_unpacked_path
         else:
             subprocess.call(cmd)
-            print("Subprocess call ended.")
-        # ToDo: clear temp dir !!!
+            print(f"Subprocess call ended. Deleting now unneeded temp folder {crx_unpacked_path} ...")
+            shutil.rmtree(crx_unpacked_path)
+            print(f"Temp folder deleted.")
 
     def on_load_ext_into_Chrome_settings_button_click():
         # Create settings window:
@@ -453,6 +475,7 @@ def main():
 
     root = tk.Tk()
     root.title(f"Manual vulnerability verification GUI: {sys.argv[1]}")
+    root.bind('<Destroy>', on_exit)
 
     # Set up annotations.csv:
     global annotations_csv

@@ -1,3 +1,6 @@
-graphviz
-tldextract
-bs4
+graphviz~=0.20.3
+tldextract~=5.1.2
+bs4~=0.0.2
+
+beautifulsoup4~=4.12.3
+dukpy~=0.5.0
