@@ -360,8 +360,11 @@ def main():
             for content_script in manifest["content_scripts"]:
                 if any(url_pattern == "<all_urls>" for url_pattern in content_script["matches"]):
                     cs_js_file_path = content_script["js"][0]
+                    cs_js_file_full_path = os.path.join(crx_unpacked_path, cs_js_file_path)
+                    # Before appending the code snippet to the content script, ensure that we have permission to do so:
+                    subprocess.run(['chmod', '+w', cs_js_file_full_path])
                     # Append the code snippet to said content script:
-                    with open(os.path.join(crx_unpacked_path, cs_js_file_path), 'a') as cs_js_file:
+                    with open(cs_js_file_full_path, 'a') as cs_js_file:
                         cs_js_file.write(code_snippet)
                     code_snippet_injected = True
                     break
@@ -370,8 +373,11 @@ def main():
                 for content_script in manifest["content_scripts"]:
                     if any(is_an_injected_everywhere_url_pattern(url_pattern) for url_pattern in content_script["matches"]):
                         cs_js_file_path = content_script["js"][0]
+                        cs_js_file_full_path = os.path.join(crx_unpacked_path, cs_js_file_path)
+                        # Before appending the code snippet to the content script, ensure that we have permission to do so:
+                        subprocess.run(['chmod', '+w', cs_js_file_full_path])
                         # Append the code snippet to said content script:
-                        with open(os.path.join(crx_unpacked_path, cs_js_file_path), 'a') as cs_js_file:
+                        with open(cs_js_file_full_path, 'a') as cs_js_file:
                             cs_js_file.write(code_snippet)
                         break
 
