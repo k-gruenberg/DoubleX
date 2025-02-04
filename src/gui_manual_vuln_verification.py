@@ -226,7 +226,7 @@ def main():
             vulnerability=vulnerability,
         )
         # Note that the value returned by get_annotation_comment() will never be None,
-        #   instead it will return the empty string "" if now comment is present in the annotations.csv file!
+        #   instead it will return the empty string "" if no comment is present in the annotations.csv file!
         comment_text.delete("1.0", tk.END)
         comment_text.insert(tk.END, str(comment))
 
