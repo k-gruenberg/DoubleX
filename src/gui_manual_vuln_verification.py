@@ -33,6 +33,10 @@ detached_chrome_process: Optional[subprocess.Popen] = None
 
 temp_folder_to_delete: Optional[str] = None
 
+# The two numbers displayed by the extensions_list_label (the label on the very top-left):
+no_of_ext_annotated: int = -1
+no_of_ext_to_annotate: int = -1
+
 
 def on_exit(_event):
     # Before exiting, delete the remaining temp folder (if one exists):
@@ -44,6 +48,11 @@ def on_exit(_event):
 
 
 def main():
+    def update_extensions_list_label():  # TODO: update not only at every restart but each time an annotation is added!
+        global no_of_ext_annotated
+        global no_of_ext_to_annotate
+        extensions_list_label.config(text=f"Flagged Extensions ({no_of_ext_annotated}/{no_of_ext_to_annotate} annotated):")
+
     def on_show_in_finder_click():
         global selected_extension
         if selected_extension is None:
@@ -499,7 +508,8 @@ def main():
     root.grid_rowconfigure(6, weight=1)
 
     # Left column:
-    tk.Label(root, text="Extensions flagged as potentially vulnerable:", anchor="w").grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+    extensions_list_label = tk.Label(root, text="Flagged Extensions (?/? annotated):", anchor="w")
+    extensions_list_label.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
     extensions_listbox = tk.Listbox(root)
     subdirectory_names: List[str] = []
     danger_counts: Dict[str, int] = dict()
@@ -530,6 +540,10 @@ def main():
     print(f"Info: {count_extension_cs_not_injected_everywhere} vulnerable extensions are not shown because their "
           f"content script is not injected everywhere. "
           f"{len(subdirectory_names)} vulnerable exploitable(!) extensions are left.")
+    global no_of_ext_annotated
+    global no_of_ext_to_annotate
+    no_of_ext_annotated = 0
+    no_of_ext_to_annotate = len(subdirectory_names)
     subdirectory_names.sort()
     for subdir_name in subdirectory_names:
         # In front of every extension subdirectory name, indicate the annotation state using a colored circle emoji:
@@ -542,9 +556,11 @@ def main():
             circle_indicator = "🔴"
         elif len(annotations) == danger_counts[subdir_name]:
             circle_indicator = "🟢"
+            no_of_ext_annotated += 1
         else:
             circle_indicator = "🟡"
         extensions_listbox.insert(tk.END, circle_indicator + " " + subdir_name)
+    update_extensions_list_label()
 
     extensions_listbox.grid(row=1, column=0, rowspan=7, sticky="nsew", padx=5, pady=5)
     extensions_listbox.bind('<<ListboxSelect>>', on_extension_selected)
