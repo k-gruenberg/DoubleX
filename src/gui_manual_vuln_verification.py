@@ -230,8 +230,12 @@ def main():
         )
         # Note that the value returned by get_annotation_comment() will never be None,
         #   instead it will return the empty string "" if no comment is present in the annotations.csv file!
-        comment_text.delete("1.0", tk.END)  # TODO: do not clear if the vuln. list box only lost focus and the same NON-annotated vuln. is selected again
-        comment_text.insert(tk.END, str(comment))
+        if comment != "":
+            # Note: Sometimes the vulnerability list box will lose focus (e.g. when selecting code on the right).
+            #       The check above is to prevent the user's WIP comment from getting deleted when re-selecting
+            #       the (not yet annotated) vulnerability.
+            comment_text.delete("1.0", tk.END)
+            comment_text.insert(tk.END, str(comment))
 
         # Determine name of file with vulnerability:
         file_name: str
