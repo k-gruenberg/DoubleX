@@ -114,10 +114,13 @@ def main():
         # Enable the "Open in Web Store" button:
         open_in_web_store_button.config(state=tk.NORMAL)
 
-        # 0. Reset displayed "File content:" after changing the extension:
+        # 0a. Reset displayed "File content:" after changing the extension:
         file_content_text.config(state=tk.NORMAL)
         file_content_text.delete("1.0", tk.END)
         file_content_text.config(state=tk.DISABLED)
+
+        # 0b. Reset displayed annotation comment after changing the extension:
+        comment_text.delete("1.0", tk.END)
 
         # 1. Show all files in selected directory under "Unpacked extension:":
         subdir_item_names: List[str] = list()
@@ -227,7 +230,7 @@ def main():
         )
         # Note that the value returned by get_annotation_comment() will never be None,
         #   instead it will return the empty string "" if no comment is present in the annotations.csv file!
-        comment_text.delete("1.0", tk.END)
+        comment_text.delete("1.0", tk.END)  # TODO: do not clear if the vuln. list box only lost focus and the same NON-annotated vuln. is selected again
         comment_text.insert(tk.END, str(comment))
 
         # Determine name of file with vulnerability:
