@@ -308,6 +308,8 @@ def main():
             text_left.tag_delete("df_tag")
 
     root = tk.Tk()
+    photo = tk.PhotoImage(file='icon_gui_generate_pdg.png')
+    root.wm_iconphoto(False, photo)
     root.title("PDG Generator")
     root.state("zoomed")
 

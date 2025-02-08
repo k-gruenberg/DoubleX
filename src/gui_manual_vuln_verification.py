@@ -498,6 +498,8 @@ def main():
         return "break"  # returning "break" prevents the ENTER press from appending a newline char to the text!
 
     root = tk.Tk()
+    photo = tk.PhotoImage(file='icon_gui_manual_vuln_verification.png')
+    root.wm_iconphoto(False, photo)
     root.title(f"Manual vulnerability verification GUI: {sys.argv[1]}")
     root.bind('<Destroy>', on_exit)
 
