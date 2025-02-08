@@ -68,7 +68,7 @@ def main():
     os.environ['INCLUDE_31_VIOLATIONS_WITHOUT_PRIVILEGED_API_ACCESS'] = "yes"
     os.environ['RETURN_MULTIPLE_FLOW_VARIANTS'] = "yes"
     os.environ['DEBUG'] = "yes"
-    os.environ['TIMEOUT'] = "600"
+    os.environ['TIMEOUT'] = "3600"
 
     def generate_pdg():
         global generated_pdg
