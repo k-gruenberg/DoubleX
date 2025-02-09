@@ -77,3 +77,32 @@ class AnnotationsCSV:
                     comment: str = line.split(",", maxsplit=3)[3].rstrip()
                     return comment
         return ""
+
+    def print_stats(self):
+        line_count: int = 0
+        annotation_count: int = 0
+        false_positive_vuln_count: int = 0
+        true_positive_vuln_count: int = 0
+        extensions: set = set()
+        extensions_with_one_fp: set = set()
+        extensions_with_one_tp: set = set()
+        with open(self.path, 'r') as csv_file:
+            for line in csv_file:
+                line_count += 1
+                line_split = line.split(",", maxsplit=3)
+                if len(line_split) == 4:
+                    annotation_count += 1
+                    [extension_id, _danger, fp_or_tp, _comment] = line_split
+                    extensions.add(extension_id)
+                    if fp_or_tp == "False":
+                        false_positive_vuln_count += 1
+                        extensions_with_one_fp.add(extension_id)
+                    elif fp_or_tp == "True":
+                        true_positive_vuln_count += 1
+                        extensions_with_one_tp.add(extension_id)
+        print(f"Info: Annotations.csv @ {self.path} contains {line_count} lines / "
+              f"{annotation_count} annotations for {len(extensions)} extensions, "
+              f"{false_positive_vuln_count} vuln. were flagged as FP, "
+              f"{true_positive_vuln_count} vuln. were flagged as TP, "
+              f"{len(extensions_with_one_fp)} extensions had at least one FP vuln., "
+              f"{len(extensions_with_one_tp)} extensions had at least one TP vuln.")

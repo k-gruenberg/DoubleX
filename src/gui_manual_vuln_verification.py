@@ -506,6 +506,7 @@ def main():
     # Set up annotations.csv:
     global annotations_csv
     annotations_csv = AnnotationsCSV(path=os.path.join(sys.argv[1], "annotations.csv"))
+    annotations_csv.print_stats()
 
     # Configure grid layout:
     root.grid_columnconfigure(0, weight=1)
