@@ -407,6 +407,59 @@ def main():
                              "May only be used in combination with --csv-out (otherwise the program won't know "
                              "where to continue).")
 
+    parser.add_argument("--ignore-cs-initiated-messaging",
+                        dest='ignore_cs_initiated_messaging',
+                        action='store_true',
+                        help="Ignore CS-initiated messaging (which is more common than BP-initiated messaging). "
+                             "CS-initiated messaging uses chrome.runtime.sendMessage() or chrome.runtime.connect() "
+                             "on the CS-side and chrome.runtime.onMessage.addListener() or "
+                             "chrome.runtime.onConnect.addListener() on the BP-side. "
+                             "Note that data can always flow both ways, this is just about who *initiates* the (long- "
+                             "or short-lived) connection!")
+
+    parser.add_argument("--ignore-bp-initiated-messaging",
+                        dest='ignore_bp_initiated_messaging',
+                        action='store_true',
+                        help="Ignore BP-initiated messaging (which is less common than CS-initiated messaging). "
+                             "BP-initiated messaging uses chrome.tabs.sendMessage() or chrome.tabs.connect() "
+                             "on the BP-side and chrome.runtime.onMessage.addListener() or "
+                             "chrome.runtime.onConnect.addListener() on the CS-side. "
+                             "Note that data can always flow both ways, this is just about who *initiates* the (long- "
+                             "or short-lived) connection!")
+
+    # parser.add_argument("--ignore-cs",
+    #                     dest='ignore_cs',
+    #                     action='store_true',
+    #                     help="Ignore all content scripts. Only analyze service workers/background pages.")  # => TODO
+
+    # parser.add_argument("--ignore-bp",
+    #                     dest='ignore_bp',
+    #                     action='store_true',
+    #                     help="Ignore all service workers/background pages. Only analyze content scripts.")  # => TODO
+
+    parser.add_argument("--ignore-message-related-vuln",
+                        dest='ignore_message_related_vuln',
+                        action='store_true',
+                        help="Ignore all message-related vulnerabilities. "
+                             "Only consider storage-related vulnerabilities.")
+
+    parser.add_argument("--ignore-storage-related-vuln",
+                        dest='ignore_storage_related_vuln',
+                        action='store_true',
+                        help="Ignore all storage-related vulnerabilities. "
+                             "Only consider message-related vulnerabilities. "
+                             "Note that there are no message-related vulnerabilities to be found in content scripts!")
+
+    parser.add_argument("--analysis-outfile-name",
+                        metavar="NAME",
+                        type=str,
+                        default="analysis_renderer_attacker",
+                        help="The name of the JSON output/analysis files that will be generated "
+                             "(when using the renderer attacker model). "
+                             "Use this when you want to avoid overwriting previous analysis results! "
+                             "Otherwise, the default value is 'analysis_renderer_attacker', resulting in files called "
+                             "'analysis_renderer_attacker.json'.")
+
     # TODO: control verbosity of logging?
 
     args = parser.parse_args()
@@ -485,6 +538,20 @@ def main():
         os.environ['CHECK_FOR_UXSS_SANITIZATION'] = "yes"
 
     os.environ['DATA_FLOWS_CONSIDERED'] = args.data_flows_considered
+
+    if args.ignore_cs_initiated_messaging:
+        os.environ['IGNORE_CS_INITIATED_MESSAGING'] = "yes"
+
+    if args.ignore_bp_initiated_messaging:
+        os.environ['IGNORE_BP_INITIATED_MESSAGING'] = "yes"
+
+    if args.ignore_message_related_vuln:
+        os.environ['IGNORE_MESSAGE_RELATED_VULN'] = "yes"
+
+    if args.ignore_storage_related_vuln:
+        os.environ['IGNORE_STORAGE_RELATED_VULN'] = "yes"
+
+    os.environ['ANALYSIS_OUTFILE_NAME'] = args.analysis_outfile_name  # default="analysis_renderer_attacker"
 
     if args.crx is None:  # No --crx argument supplied: Use -cs and -bp arguments:
         print("Analyzing a single, unpacked extension...")
