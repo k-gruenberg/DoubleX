@@ -19,6 +19,11 @@ from ManifestJSON import ManifestJSON
 from gui_generate_pdg import syntax_highlighting
 from INJECTED_EVERYWHERE_PATTERNS import is_an_injected_everywhere_url_pattern
 
+
+# Change this to "NAME" if you used the "--analysis-outfile-name NAME" argument when running doublex.py:
+ANALYSIS_OUTFILE_NAME = "analysis_renderer_attacker"  # .json
+
+
 annotations_csv: Optional[AnnotationsCSV] = None
 
 selected_extension: Optional[str] = None
@@ -75,7 +80,7 @@ def main():
             if listbox_entry.startswith("🟣 "):
                 annotations: List[str] = annotations_csv.get_annotations(listbox_entry.lstrip("🟣 "))
                 extension_dir = os.path.join(sys.argv[1], listbox_entry.lstrip("🟣 "))
-                analysis_file: str = os.path.join(extension_dir, "analysis_renderer_attacker.json")
+                analysis_file: str = os.path.join(extension_dir, f"{ANALYSIS_OUTFILE_NAME}.json")
                 danger_count = AnalysisRendererAttackerJSON(path=analysis_file).total_danger_count()
                 if len(annotations) == 0:
                     restored_circle_indicator = "🔴"
@@ -143,7 +148,7 @@ def main():
         selected_extension_version = manifest['version']
 
         # 3. Read analysis_renderer_attacker.json and update "Injected into: ":
-        analysis_file = os.path.join(extension_dir, "analysis_renderer_attacker.json")
+        analysis_file = os.path.join(extension_dir, f"{ANALYSIS_OUTFILE_NAME}.json")
         analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
         ext_injected_into_label.config(text=f"Injected into: {str(analysis_result['content_script_injected_into'])[:66]}")
         # Allow user to see full list of injection URL patterns by double-clicking:
@@ -159,7 +164,7 @@ def main():
     def update_vulnerabilities_listbox():
         global selected_extension
         extension_dir = os.path.join(sys.argv[1], selected_extension)
-        analysis_file = os.path.join(extension_dir, "analysis_renderer_attacker.json")
+        analysis_file = os.path.join(extension_dir, f"{ANALYSIS_OUTFILE_NAME}.json")
         analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
         dangers: List[str] = analysis_result.get_dangers_in_str_repr()
         vulnerabilities_listbox.delete(0, tk.END)  # clear Listbox
@@ -269,7 +274,7 @@ def main():
 
         # Retrieve corresponding "from flow" and "to flow" from the analysis_renderer_attacker.json file:
         extension_dir = os.path.join(sys.argv[1], selected_extension)
-        analysis_file = os.path.join(extension_dir, "analysis_renderer_attacker.json")
+        analysis_file = os.path.join(extension_dir, f"{ANALYSIS_OUTFILE_NAME}.json")
         analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
         vulnerabilities = analysis_result["bp" if vulnerability.startswith("BP") else "cs"]["exfiltration_dangers" if "exfiltration danger" in vulnerability else "infiltration_dangers"]
         try:
@@ -534,9 +539,9 @@ def main():
             if (
                 dir_item.is_dir() and
                 os.path.isfile(os.path.join(dir_item, "manifest.json")) and
-                os.path.isfile(os.path.join(dir_item, "analysis_renderer_attacker.json"))
+                os.path.isfile(os.path.join(dir_item, f"{ANALYSIS_OUTFILE_NAME}.json"))
             ):
-                analysis_file = os.path.join(dir_item, "analysis_renderer_attacker.json")
+                analysis_file = os.path.join(dir_item, f"{ANALYSIS_OUTFILE_NAME}.json")
                 analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
                 # Only append if analysis_result contains at least 1 danger and if the extension's content script is
                 #   injected everywhere (all the other ones we don't care about):

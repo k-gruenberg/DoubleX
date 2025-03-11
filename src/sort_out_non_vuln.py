@@ -67,6 +67,15 @@ def main():
     parser.add_argument("-verbose", dest='verbose', action='store_true',
                         help="Verbose prints to console.")
 
+    parser.add_argument("--analysis-outfile-name",
+                        metavar="NAME",
+                        type=str,
+                        default="analysis_renderer_attacker",
+                        help="The name of the JSON output/analysis files that will be parsed. "
+                             "Use this when you also specified a different outfile name using --analysis-outfile-name"
+                             "when running doublex.py. Otherwise the default will be 'analysis_renderer_attacker', "
+                             "meaning the 'analysis_renderer_attacker.json' files are parsed.")
+
     args = parser.parse_args()
 
     # 1. Check that the $src$/unpacked subdirectory exists:
@@ -102,7 +111,7 @@ def main():
     with os.scandir(src_unpacked_dir) as directory_items:
         for subfolder in directory_items:
             if os.path.isdir(subfolder):
-                analysis_json_file = os.path.join(subfolder, "analysis_renderer_attacker.json")
+                analysis_json_file = os.path.join(subfolder, f"{args.analysis_outfile_name}.json")  # default: "analysis_renderer_attacker.json"
                 if not os.path.exists(analysis_json_file):
                     print(f"Warning: {analysis_json_file} does not exist!")
                 else:
