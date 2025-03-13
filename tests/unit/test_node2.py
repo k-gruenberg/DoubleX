@@ -1707,6 +1707,12 @@ class TestNodeClass2(unittest.TestCase):
             expr('db.transaction("accounts").objectStore("accounts").get("Alice").addEventListener')
             .member_expression_get_leftmost_identifier().attributes['name']
         )
+        # The way it's implemented also results in the following working:
+        self.assertEqual(
+            "foo",
+            expr("foo(42).bar")
+            .member_expression_get_leftmost_identifier().attributes['name']
+        )
 
     def test_try_static_eval(self):
         self.assertEqual(333, expr("111+222").try_static_eval(allow_partial_eval=False))
