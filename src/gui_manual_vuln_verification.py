@@ -1,9 +1,9 @@
+import argparse
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import simpledialog
 import dukpy
 from typing import List, Optional, Dict
-import sys
 import os
 import subprocess
 import webbrowser
@@ -18,10 +18,6 @@ from AnnotationsCSV import AnnotationsCSV
 from ManifestJSON import ManifestJSON
 from gui_generate_pdg import syntax_highlighting
 from INJECTED_EVERYWHERE_PATTERNS import is_an_injected_everywhere_url_pattern
-
-
-# Change this to "NAME" if you used the "--analysis-outfile-name NAME" argument when running doublex.py:
-ANALYSIS_OUTFILE_NAME = "analysis_renderer_attacker"  # .json
 
 
 annotations_csv: Optional[AnnotationsCSV] = None
@@ -52,7 +48,7 @@ def on_exit(_event):
         print(f"Temp folder deleted.")
 
 
-def main():
+def main(unpacked_folder: str, analysis_outfile_name: str):
     def update_extensions_list_label():  # TODO: update not only at every restart but each time an annotation is added!
         global no_of_ext_annotated
         global no_of_ext_to_annotate
@@ -62,10 +58,10 @@ def main():
         global selected_extension
         if selected_extension is None:
             # Open main directory (containing all unpacked extensions):
-            directory = sys.argv[1]
+            directory = unpacked_folder
         else:
             # Open subdirectory of selected extension:
-            directory = os.path.join(sys.argv[1], selected_extension)
+            directory = os.path.join(unpacked_folder, selected_extension)
         # Open:
         subprocess.call(["open", "-R", directory])
 
@@ -79,8 +75,8 @@ def main():
         for idx, listbox_entry in enumerate(extensions_listbox.get(0, tk.END)):
             if listbox_entry.startswith("🟣 "):
                 annotations: List[str] = annotations_csv.get_annotations(listbox_entry.lstrip("🟣 "))
-                extension_dir = os.path.join(sys.argv[1], listbox_entry.lstrip("🟣 "))
-                analysis_file: str = os.path.join(extension_dir, f"{ANALYSIS_OUTFILE_NAME}.json")
+                extension_dir = os.path.join(unpacked_folder, listbox_entry.lstrip("🟣 "))
+                analysis_file: str = os.path.join(extension_dir, f"{analysis_outfile_name}.json")
                 danger_count = AnalysisRendererAttackerJSON(path=analysis_file).total_danger_count()
                 if len(annotations) == 0:
                     restored_circle_indicator = "🔴"
@@ -129,7 +125,7 @@ def main():
 
         # 1. Show all files in selected directory under "Unpacked extension:":
         subdir_item_names: List[str] = list()
-        extension_dir = os.path.join(sys.argv[1], subdir_name)
+        extension_dir = os.path.join(unpacked_folder, subdir_name)
         with os.scandir(extension_dir) as subdirectory_items:
             for subdir_item in subdirectory_items:
                 subdir_item_names.append(subdir_item.name)
@@ -148,7 +144,7 @@ def main():
         selected_extension_version = manifest['version']
 
         # 3. Read analysis_renderer_attacker.json and update "Injected into: ":
-        analysis_file = os.path.join(extension_dir, f"{ANALYSIS_OUTFILE_NAME}.json")
+        analysis_file = os.path.join(extension_dir, f"{analysis_outfile_name}.json")
         analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
         ext_injected_into_label.config(text=f"Injected into: {str(analysis_result['content_script_injected_into'])[:66]}")
         # Allow user to see full list of injection URL patterns by double-clicking:
@@ -163,8 +159,8 @@ def main():
 
     def update_vulnerabilities_listbox():
         global selected_extension
-        extension_dir = os.path.join(sys.argv[1], selected_extension)
-        analysis_file = os.path.join(extension_dir, f"{ANALYSIS_OUTFILE_NAME}.json")
+        extension_dir = os.path.join(unpacked_folder, selected_extension)
+        analysis_file = os.path.join(extension_dir, f"{analysis_outfile_name}.json")
         analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
         dangers: List[str] = analysis_result.get_dangers_in_str_repr()
         vulnerabilities_listbox.delete(0, tk.END)  # clear Listbox
@@ -186,7 +182,7 @@ def main():
     def show_file_content(file_name: str):
         # Read the file content:
         global selected_extension
-        file_path = os.path.join(sys.argv[1], selected_extension, file_name)
+        file_path = os.path.join(unpacked_folder, selected_extension, file_name)
         with open(file_path, 'r') as file:
             file_content = file.read()
 
@@ -273,8 +269,8 @@ def main():
         # print(f"Highlighted location {(start_line, start_col, end_line, end_col)}")
 
         # Retrieve corresponding "from flow" and "to flow" from the analysis_renderer_attacker.json file:
-        extension_dir = os.path.join(sys.argv[1], selected_extension)
-        analysis_file = os.path.join(extension_dir, f"{ANALYSIS_OUTFILE_NAME}.json")
+        extension_dir = os.path.join(unpacked_folder, selected_extension)
+        analysis_file = os.path.join(extension_dir, f"{analysis_outfile_name}.json")
         analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
         vulnerabilities = analysis_result["bp" if vulnerability.startswith("BP") else "cs"]["exfiltration_dangers" if "exfiltration danger" in vulnerability else "infiltration_dangers"]
         try:
@@ -357,7 +353,7 @@ def main():
         # TODO: also refuse if there's another Chrome process that wasn't started by *us* !!!
 
         # 1. Locate the original .CRX file (should be one folder above):
-        crx_path: str = os.path.join(sys.argv[1], os.pardir, selected_extension + ".crx")
+        crx_path: str = os.path.join(unpacked_folder, os.pardir, selected_extension + ".crx")
 
         # 2. Unpack the .CRX file:
         crx_unpacked_path: str = tempfile.mkdtemp()
@@ -505,12 +501,12 @@ def main():
     root = tk.Tk()
     photo = tk.PhotoImage(file='icon_gui_manual_vuln_verification.png')
     root.wm_iconphoto(False, photo)
-    root.title(f"Manual vulnerability verification GUI: {sys.argv[1]}")
+    root.title(f"Manual vulnerability verification GUI: {unpacked_folder}")
     root.bind('<Destroy>', on_exit)
 
     # Set up annotations.csv:
     global annotations_csv
-    annotations_csv = AnnotationsCSV(path=os.path.join(sys.argv[1], "annotations.csv"))
+    annotations_csv = AnnotationsCSV(path=os.path.join(unpacked_folder, "annotations.csv"))
     annotations_csv.print_stats()
 
     # Configure grid layout:
@@ -529,7 +525,7 @@ def main():
     subdirectory_names: List[str] = []
     danger_counts: Dict[str, int] = dict()
     count_extension_cs_not_injected_everywhere: int = 0
-    with os.scandir(sys.argv[1]) as directory_items:
+    with os.scandir(unpacked_folder) as directory_items:
         for dir_item in directory_items:
             # 1. Is directory?
             # 2. Contains a "manifest.json" file?
@@ -539,9 +535,9 @@ def main():
             if (
                 dir_item.is_dir() and
                 os.path.isfile(os.path.join(dir_item, "manifest.json")) and
-                os.path.isfile(os.path.join(dir_item, f"{ANALYSIS_OUTFILE_NAME}.json"))
+                os.path.isfile(os.path.join(dir_item, f"{analysis_outfile_name}.json"))
             ):
-                analysis_file = os.path.join(dir_item, f"{ANALYSIS_OUTFILE_NAME}.json")
+                analysis_file = os.path.join(dir_item, f"{analysis_outfile_name}.json")
                 analysis_result = AnalysisRendererAttackerJSON(path=analysis_file)
                 # Only append if analysis_result contains at least 1 danger and if the extension's content script is
                 #   injected everywhere (all the other ones we don't care about):
@@ -646,11 +642,25 @@ if __name__ == "__main__":
     # Needed for tokenization, which is needed for syntax highlighting (cf. gui_generate_pdg.py):
     os.environ['SOURCE_TYPE'] = "module"
 
-    if len(sys.argv) != 2:
-        print("Usage: python3 gui_manual_vuln_verification.py <UNPACKED_FOLDER>")
+    parser = argparse.ArgumentParser(prog='gui_manual_vuln_verification',
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     description="A GUI for manually verifying all flagged vulnerabilities.")
+
+    parser.add_argument('UNPACKED_FOLDER')
+
+    parser.add_argument("--analysis-outfile-name",
+                        metavar="NAME",
+                        type=str,
+                        default="analysis_renderer_attacker",
+                        help="The name of the JSON output/analysis files that will be parsed. "
+                             "Use this when you also specified a different outfile name using --analysis-outfile-name"
+                             "when running doublex.py. Otherwise the default will be 'analysis_renderer_attacker', "
+                             "meaning the 'analysis_renderer_attacker.json' files are parsed.")
+
+    args = parser.parse_args()
+
+    if not os.path.isdir(args.UNPACKED_FOLDER):
+        print(f"Error: {args.UNPACKED_FOLDER} is not a directory!")
         exit(1)
-    elif not os.path.isdir(sys.argv[1]):
-        print(f"Error: {sys.argv[1]} is not a directory!")
-        exit(1)
-    else:
-        main()
+    
+    main(unpacked_folder=args.UNPACKED_FOLDER, analysis_outfile_name=args.analysis_outfile_name)
