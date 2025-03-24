@@ -21,14 +21,14 @@ def print_result_csv_stats(result_csv_path: str,
                            list_vuln_exploitable_ext: bool):
     no_ext: int = 0  # (number of extensions)
     no_vuln_ext: int = 0  # (number of vulnerable extensions)
-    no_vuln_ext_exploitable: int = 0
-    no_dangers: int = 0
-    no_dangers_exploitable: int = 0
+    no_vuln_ext_exploitable: int = 0  # (number of vulnerable, exploitable extensions)
+    no_dangers: int = 0  # (number of dangers)
+    no_dangers_exploitable: int = 0  # (number of exploitable dangers)
     # ----- -----
-    bp_exf_no_ext: int = 0
-    bp_exf_no_dangers: int = 0
-    bp_exf_no_ext_exploitable: int = 0
-    bp_exf_no_dangers_exploitable: int = 0
+    bp_exf_no_ext: int = 0  # (number of extensions with at least 1 BP exfiltration danger)
+    bp_exf_no_dangers: int = 0  # (number of BP exfiltration dangers)
+    bp_exf_no_ext_exploitable: int = 0  # (number of exploitable extensions with at least 1 BP exfiltration danger)
+    bp_exf_no_dangers_exploitable: int = 0  # (number of BP exfiltration dangers in exploitable extensions)
     bp_inf_no_ext: int = 0
     bp_inf_no_dangers: int = 0
     bp_inf_no_ext_exploitable: int = 0
