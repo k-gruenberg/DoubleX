@@ -154,7 +154,8 @@ def print_result_csv_stats(result_csv_path: str,
     print("-----")
     print(f"Median analysis time: {statistics.median(analysis_times)}")
     print(f"Median analysis time of vulnerable extensions: {statistics.median(analysis_times_vuln_ext)}")
-    print(f"Timeouts (ext. with analysis time >= {timeout_in_sec}sec): {len([t for t in analysis_times if t >= timeout_in_sec])}")
+    no_of_timeouts: int = len([t for t in analysis_times if t >= timeout_in_sec])
+    print(f"Timeouts (ext. with analysis time >= {timeout_in_sec}sec): {no_of_timeouts} ({(100*no_of_timeouts)/no_ext:.2f}%)")
     print("")
 
     if list_vuln_ext:
