@@ -70,10 +70,12 @@ def print_result_csv_stats(result_csv_path: str,
                 analysis_time: float = float(line_split[col_idx_analysis_time])
                 total_dangers: int = int(line_split[col_idx_total_dangers])
                 # -----
-                no_bp_exfiltration_dangers: int = int(line_split[col_idx_bp_exfiltration_dangers])
-                no_bp_infiltration_dangers: int = int(line_split[col_idx_bp_infiltration_dangers])
-                no_cs_exfiltration_dangers: int = int(line_split[col_idx_cs_exfiltration_dangers])
-                no_cs_infiltration_dangers: int = int(line_split[col_idx_cs_infiltration_dangers])
+                def parse_int(s: str) -> int:
+                    return 0 if s == "N/A" else int(s)
+                no_bp_exfiltration_dangers: int = parse_int(line_split[col_idx_bp_exfiltration_dangers])
+                no_bp_infiltration_dangers: int = parse_int(line_split[col_idx_bp_infiltration_dangers])
+                no_cs_exfiltration_dangers: int = parse_int(line_split[col_idx_cs_exfiltration_dangers])
+                no_cs_infiltration_dangers: int = parse_int(line_split[col_idx_cs_infiltration_dangers])
             except IndexError:
                 print(f"CSV error: Line has too few commas: {line_split}")
                 exit(1)
