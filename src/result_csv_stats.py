@@ -18,7 +18,8 @@ def longest_common_prefix(a: str, b: str) -> str:
 
 def print_result_csv_stats(result_csv_path: str,
                            list_vuln_ext: bool,
-                           list_vuln_exploitable_ext: bool):
+                           list_vuln_exploitable_ext: bool,
+                           timeout_in_sec: int):
     no_ext: int = 0  # (number of extensions)
     no_vuln_ext: int = 0  # (number of vulnerable extensions)
     no_vuln_ext_exploitable: int = 0  # (number of vulnerable, exploitable extensions)
@@ -153,6 +154,7 @@ def print_result_csv_stats(result_csv_path: str,
     print("-----")
     print(f"Median analysis time: {statistics.median(analysis_times)}")
     print(f"Median analysis time of vulnerable extensions: {statistics.median(analysis_times_vuln_ext)}")
+    print(f"Timeouts (ext. with analysis time >= {timeout_in_sec}sec): {len([t for t in analysis_times if t >= timeout_in_sec])}")
     print("")
 
     if list_vuln_ext:
@@ -184,6 +186,10 @@ def main():
                         action='store_true',
                         help="List all vulnerable exploitable(!) extensions in alphabetical order.")
 
+    parser.add_argument("--timeout", metavar="SECONDS", type=int, default=3600,
+                        help="The timeout (in seconds) that was used for generating the given CSV file. "
+                             "Default: 3600 (i.e., 1 hour)")
+
     args = parser.parse_args()
 
     for result_csv_path in args.RESULT_CSV_FILE:
@@ -191,6 +197,7 @@ def main():
             print_result_csv_stats(result_csv_path=result_csv_path,
                                    list_vuln_ext=args.list_vuln_ext,
                                    list_vuln_exploitable_ext=args.list_vuln_exploitable_ext,
+                                   timeout_in_sec=args.timeout
                                    )
         else:
             print()
