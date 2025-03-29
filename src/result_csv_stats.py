@@ -153,6 +153,7 @@ def print_result_csv_stats(result_csv_path: str,
     print(f"CS UXSS/infiltration: {cs_inf_no_dangers} dangers in {cs_inf_no_ext} extensions (exploitable: {cs_inf_no_dangers_exploitable} dangers in {cs_inf_no_ext_exploitable} extensions)")
     print("-----")
     print(f"Median analysis time: {statistics.median(analysis_times)}")
+    # TODO: 60%, 70%, 80% and 90% quantiles !!!
     print(f"Median analysis time of vulnerable extensions: {statistics.median(analysis_times_vuln_ext)}")
     no_of_timeouts: int = len([t for t in analysis_times if t >= timeout_in_sec])
     print(f"Timeouts (ext. with analysis time >= {timeout_in_sec}sec): {no_of_timeouts} ({(100*no_of_timeouts)/no_ext:.2f}%)")
@@ -190,6 +191,11 @@ def main():
     parser.add_argument("--timeout", metavar="SECONDS", type=int, default=3600,
                         help="The timeout (in seconds) that was used for generating the given CSV file. "
                              "Default: 3600 (i.e., 1 hour)")
+
+    # TODO:
+    # parser.add_argument("--combine-csvs", dest='combine_csvs',
+    #                     action='store_true',
+    #                     help="Combine all CSV files given as arguments and generate statistics on them as a whole.")
 
     args = parser.parse_args()
 
