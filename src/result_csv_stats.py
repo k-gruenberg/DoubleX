@@ -19,7 +19,8 @@ def longest_common_prefix(a: str, b: str) -> str:
 def print_result_csv_stats(result_csv_paths: List[str],
                            list_vuln_ext: bool,
                            list_vuln_exploitable_ext: bool,
-                           timeouts_in_sec: List[int]):
+                           timeouts_in_sec: List[int],
+                           print_as_one_liner: bool = False):
     no_ext: int = 0  # (number of extensions)
     no_vuln_ext: int = 0  # (number of vulnerable extensions)
     no_vuln_ext_exploitable: int = 0  # (number of vulnerable, exploitable extensions)
@@ -147,27 +148,40 @@ def print_result_csv_stats(result_csv_paths: List[str],
                     if no_cs_infiltration_dangers > 0:
                         cs_inf_no_ext_exploitable += 1
 
-    print("")
-    print("***** result.csv stats: *****")
-    print(f"Result.csv file(s): {result_csv_paths}")
-    print(f"Extension common prefix: {extension_common_prefix}")
-    print(f"No. of extensions: {no_ext}")
-    print(f"No. of vulnerable extensions: {no_vuln_ext} ({no_vuln_ext_exploitable} exploitable)")
-    print(f"No. of vulnerabilities/dangers found: {no_dangers} ({no_dangers_exploitable} exploitable)")
-    print("-----")
-    print(f"BP exfiltration: {bp_exf_no_dangers} dangers in {bp_exf_no_ext} extensions (exploitable: {bp_exf_no_dangers_exploitable} dangers in {bp_exf_no_ext_exploitable} extensions)")
-    print(f"BP UXSS/infiltration: {bp_inf_no_dangers} dangers in {bp_inf_no_ext} extensions (exploitable: {bp_inf_no_dangers_exploitable} dangers in {bp_inf_no_ext_exploitable} extensions)")
-    print(f"CS exfiltration: {cs_exf_no_dangers} dangers in {cs_exf_no_ext} extensions (exploitable: {cs_exf_no_dangers_exploitable} dangers in {cs_exf_no_ext_exploitable} extensions)")
-    print(f"CS UXSS/infiltration: {cs_inf_no_dangers} dangers in {cs_inf_no_ext} extensions (exploitable: {cs_inf_no_dangers_exploitable} dangers in {cs_inf_no_ext_exploitable} extensions)")
-    print("-----")
-    print(f"Median analysis time: {statistics.median(analysis_times)}")
-    print(f"Median analysis time of vulnerable extensions: {statistics.median(analysis_times_vuln_ext)}")
-    print(f"Timeouts: {no_of_timeouts} ({(100*no_of_timeouts)/no_ext:.2f}%) (timeouts used: {timeouts_in_sec})")
-    print("-----")  # 60%, 70%, 80% and 90% quantiles:
-    analysis_times.sort()
-    for q in [0.6, 0.7, 0.8, 0.9]:
-        print(f"Analysis time of >={100*q}% extensions was <= {analysis_times[math.ceil(q * len(analysis_times) - 1)]} sec")
-    print("")
+    if print_as_one_liner:
+        assert len(timeouts_in_sec) == 1
+        print(f"{no_ext:05} | "
+              f"{no_vuln_ext:05} ({no_vuln_ext_exploitable:05} expl.) | "
+              f"{no_dangers:05} ({no_dangers_exploitable:05} expl.) | "
+              f"{bp_exf_no_dangers:05} ({bp_exf_no_dangers_exploitable:05} expl.) | "
+              f"{bp_inf_no_dangers:05} ({bp_inf_no_dangers_exploitable:05} expl.) | "
+              f"{cs_exf_no_dangers:05} ({cs_exf_no_dangers_exploitable:05} expl.) | "
+              f"{cs_inf_no_dangers:05} ({cs_inf_no_dangers_exploitable:05} expl.) | "
+              f"{statistics.median(analysis_times):08.3f}s | "  # 3 digits after the decimal == milliseconds
+              f"{statistics.median(analysis_times_vuln_ext):08.3f}s | "  # 3 digits after the decimal == milliseconds
+              f"{no_of_timeouts:05} (timeout: {timeouts_in_sec[0]:04}s)")
+    else:
+        print("")
+        print("***** result.csv stats: *****")
+        print(f"Result.csv file(s): {result_csv_paths}")
+        print(f"Extension common prefix: {extension_common_prefix}")
+        print(f"No. of extensions: {no_ext}")
+        print(f"No. of vulnerable extensions: {no_vuln_ext} ({no_vuln_ext_exploitable} exploitable)")
+        print(f"No. of vulnerabilities/dangers found: {no_dangers} ({no_dangers_exploitable} exploitable)")
+        print("-----")
+        print(f"BP exfiltration: {bp_exf_no_dangers} dangers in {bp_exf_no_ext} extensions (exploitable: {bp_exf_no_dangers_exploitable} dangers in {bp_exf_no_ext_exploitable} extensions)")
+        print(f"BP UXSS/infiltration: {bp_inf_no_dangers} dangers in {bp_inf_no_ext} extensions (exploitable: {bp_inf_no_dangers_exploitable} dangers in {bp_inf_no_ext_exploitable} extensions)")
+        print(f"CS exfiltration: {cs_exf_no_dangers} dangers in {cs_exf_no_ext} extensions (exploitable: {cs_exf_no_dangers_exploitable} dangers in {cs_exf_no_ext_exploitable} extensions)")
+        print(f"CS UXSS/infiltration: {cs_inf_no_dangers} dangers in {cs_inf_no_ext} extensions (exploitable: {cs_inf_no_dangers_exploitable} dangers in {cs_inf_no_ext_exploitable} extensions)")
+        print("-----")
+        print(f"Median analysis time: {statistics.median(analysis_times)}")
+        print(f"Median analysis time of vulnerable extensions: {statistics.median(analysis_times_vuln_ext)}")
+        print(f"Timeouts: {no_of_timeouts} ({(100*no_of_timeouts)/no_ext:.2f}%) (timeouts used: {timeouts_in_sec})")
+        print("-----")  # 60%, 70%, 80% and 90% quantiles:
+        analysis_times.sort()
+        for q in [0.6, 0.7, 0.8, 0.9]:
+            print(f"Analysis time of >={100*q}% extensions was <= {analysis_times[math.ceil(q * len(analysis_times) - 1)]} sec")
+        print("")
 
     if list_vuln_ext:
         vulnerable_extensions.sort()
@@ -209,35 +223,31 @@ def main():
                         action='store_true',
                         help="Combine all CSV files given as arguments and generate statistics on them as a whole. "
                              "This flag has no effect when only 1 CSV file is given.")
-    # TODO: still print stats for each INDIVIDUAL CSV file in tabular form?!
 
     args = parser.parse_args()
 
     # --combine-csvs flag was set:
     if args.combine_csvs:
-        for result_csv_path in args.RESULT_CSV_FILE:
-            if not os.path.isfile(result_csv_path):
-                print()
-                print(f"Error: {result_csv_path} is not a file!")
-                print()
-
         print_result_csv_stats(result_csv_paths=args.RESULT_CSV_FILE,
                                list_vuln_ext=args.list_vuln_ext,
                                list_vuln_exploitable_ext=args.list_vuln_exploitable_ext,
                                timeouts_in_sec=[int(i) for i in args.timeout.split(",")])
+        print(f"#ext. | #vuln. (#expl.)     | #dangers            | BP exf.             | BP inf.             | "
+              f"CS exf.             | CS inf.             | M.an.time | ...vuln.  | #timeouts")
+        print(f"------|---------------------|---------------------|---------------------|---------------------|-"
+              f"--------------------|---------------------|-----------|-----------|-----------")
 
-    # --combine-csvs flag was NOT set, generate N individual statistics:
-    else:
-        for result_csv_path in args.RESULT_CSV_FILE:
-            if os.path.isfile(result_csv_path):
-                print_result_csv_stats(result_csv_paths=[result_csv_path],
-                                       list_vuln_ext=args.list_vuln_ext,
-                                       list_vuln_exploitable_ext=args.list_vuln_exploitable_ext,
-                                       timeouts_in_sec=[int(i) for i in args.timeout.split(",")])
-            else:
-                print()
-                print(f"Error: {result_csv_path} is not a file!")
-                print()
+    for result_csv_path in args.RESULT_CSV_FILE:
+        if os.path.isfile(result_csv_path):
+            print_result_csv_stats(result_csv_paths=[result_csv_path],
+                                   list_vuln_ext=args.list_vuln_ext,
+                                   list_vuln_exploitable_ext=args.list_vuln_exploitable_ext,
+                                   timeouts_in_sec=[int(i) for i in args.timeout.split(",")],
+                                   print_as_one_liner=args.combine_csvs)
+        else:
+            print()
+            print(f"Error: {result_csv_path} is not a file!")
+            print()
 
 
 if __name__ == "__main__":
