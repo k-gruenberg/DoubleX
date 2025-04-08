@@ -152,11 +152,11 @@ def print_result_csv_stats(result_csv_paths: List[str],
         assert len(timeouts_in_sec) == 1
         print(f"{no_ext:05} | "
               f"{no_vuln_ext:05} ({no_vuln_ext_exploitable:05} expl.) | "
-              f"{no_dangers:05} ({no_dangers_exploitable:05} expl.) | "
-              f"{bp_exf_no_dangers:05} ({bp_exf_no_dangers_exploitable:05} expl.) | "
-              f"{bp_inf_no_dangers:05} ({bp_inf_no_dangers_exploitable:05} expl.) | "
-              f"{cs_exf_no_dangers:05} ({cs_exf_no_dangers_exploitable:05} expl.) | "
-              f"{cs_inf_no_dangers:05} ({cs_inf_no_dangers_exploitable:05} expl.) | "
+              f"{no_dangers:05} ({no_dangers_exploitable:05}) | "
+              f"{bp_exf_no_dangers:05} ({bp_exf_no_dangers_exploitable:05}) | "
+              f"{bp_inf_no_dangers:05} ({bp_inf_no_dangers_exploitable:05}) | "
+              f"{cs_exf_no_dangers:05} ({cs_exf_no_dangers_exploitable:05}) | "
+              f"{cs_inf_no_dangers:05} ({cs_inf_no_dangers_exploitable:05}) | "
               f"{statistics.median(analysis_times):08.3f}s | "  # 3 digits after the decimal == milliseconds
               f"{statistics.median(analysis_times_vuln_ext):08.3f}s | "  # 3 digits after the decimal == milliseconds
               f"{no_of_timeouts:05} (timeout: {timeouts_in_sec[0]:04}s)")
@@ -226,23 +226,25 @@ def main():
 
     args = parser.parse_args()
 
+    timeouts_in_sec: List[int] = [int(i) for i in args.timeout.split(",")]
+
     # --combine-csvs flag was set:
     if args.combine_csvs:
         print_result_csv_stats(result_csv_paths=args.RESULT_CSV_FILE,
                                list_vuln_ext=args.list_vuln_ext,
                                list_vuln_exploitable_ext=args.list_vuln_exploitable_ext,
-                               timeouts_in_sec=[int(i) for i in args.timeout.split(",")])
-        print(f"#ext. | #vuln. (#expl.)     | #dangers            | BP exf.             | BP inf.             | "
-              f"CS exf.             | CS inf.             | M.an.time | ...vuln.  | #timeouts")
-        print(f"------|---------------------|---------------------|---------------------|---------------------|-"
-              f"--------------------|---------------------|-----------|-----------|-----------")
+                               timeouts_in_sec=timeouts_in_sec)
+        print(f"#ext. | #vuln.ext. (#expl.) | #dangers      | BP exf.       | BP inf.       | "
+              f"CS exf.       | CS inf.       | M.an.time | ...vuln.  | #timeouts")
+        print(f"------|---------------------|---------------|---------------|---------------|-"
+              f"--------------|---------------|-----------|-----------|------------------------")
 
-    for result_csv_path in args.RESULT_CSV_FILE:
+    for index, result_csv_path in enumerate(args.RESULT_CSV_FILE):
         if os.path.isfile(result_csv_path):
             print_result_csv_stats(result_csv_paths=[result_csv_path],
                                    list_vuln_ext=args.list_vuln_ext,
                                    list_vuln_exploitable_ext=args.list_vuln_exploitable_ext,
-                                   timeouts_in_sec=[int(i) for i in args.timeout.split(",")],
+                                   timeouts_in_sec=[timeouts_in_sec[min(index, len(timeouts_in_sec) - 1)]],
                                    print_as_one_liner=args.combine_csvs)
         else:
             print()
