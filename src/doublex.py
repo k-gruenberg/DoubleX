@@ -459,6 +459,15 @@ def main():
                         action='store_true',
                         help="Ignore all infiltration (UXSS) dangers.")
 
+    # --ignore-source-XXX command line flags:
+
+    parser.add_argument("--ignore-source-indexedDB",
+                        dest='ignore_source_indexedDB',
+                        action='store_true',
+                        help="Ignore 'indexedDB' sources.")
+
+    # TODO: --ignore-source-XXX command line flags for all the other sources (cookies, fetch, etc.)
+
     parser.add_argument("--analysis-outfile-name",
                         metavar="NAME",
                         type=str,
@@ -571,6 +580,9 @@ def main():
 
     if args.ignore_infiltration_dangers:
         os.environ['IGNORE_INFILTRATION_DANGERS'] = "yes"
+
+    if args.ignore_source_indexedDB:
+        os.environ['IGNORE_SOURCE_INDEXEDDB'] = "yes"
 
     os.environ['ANALYSIS_OUTFILE_NAME'] = args.analysis_outfile_name  # default="analysis_renderer_attacker"
 
