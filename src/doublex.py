@@ -396,8 +396,7 @@ def main():
     parser.add_argument("--check-for-uxss-sanitization",
                         dest='check_for_uxss_sanitization',
                         action='store_true',
-                        help="Only look for extension storage accesses and skip all other vulnerability types "
-                             "(namely, exfiltration and infiltration dangers).")
+                        help="")  # TODO: help text; is correctly implemented everywhere?!
 
     parser.add_argument("--continue",
                         dest='continue_analysis',
@@ -449,6 +448,16 @@ def main():
                         help="Ignore all storage-related vulnerabilities. "
                              "Only consider message-related vulnerabilities. "
                              "Note that there are no message-related vulnerabilities to be found in content scripts!")
+
+    parser.add_argument("--ignore-exfiltration-dangers",
+                        dest='ignore_exfiltration_dangers',
+                        action='store_true',
+                        help="Ignore all exfiltration dangers.")
+
+    parser.add_argument("--ignore-infiltration-dangers",
+                        dest='ignore_infiltration_dangers',
+                        action='store_true',
+                        help="Ignore all infiltration (UXSS) dangers.")
 
     parser.add_argument("--analysis-outfile-name",
                         metavar="NAME",
@@ -556,6 +565,12 @@ def main():
 
     if args.ignore_storage_related_vuln:
         os.environ['IGNORE_STORAGE_RELATED_VULN'] = "yes"
+
+    if args.ignore_exfiltration_dangers:
+        os.environ['IGNORE_EXFILTRATION_DANGERS'] = "yes"
+
+    if args.ignore_infiltration_dangers:
+        os.environ['IGNORE_INFILTRATION_DANGERS'] = "yes"
 
     os.environ['ANALYSIS_OUTFILE_NAME'] = args.analysis_outfile_name  # default="analysis_renderer_attacker"
 
