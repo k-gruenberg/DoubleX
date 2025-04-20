@@ -427,15 +427,15 @@ def main():
                              "Note that data can always flow both ways, this is just about who *initiates* the (long- "
                              "or short-lived) connection!")
 
-    # parser.add_argument("--ignore-cs",
-    #                     dest='ignore_cs',
-    #                     action='store_true',
-    #                     help="Ignore all content scripts. Only analyze service workers/background pages.")  # => TODO
+    parser.add_argument("--ignore-cs",
+                        dest='ignore_cs',
+                        action='store_true',
+                        help="Ignore all content scripts. Only analyze service workers/background pages.")
 
-    # parser.add_argument("--ignore-bp",
-    #                     dest='ignore_bp',
-    #                     action='store_true',
-    #                     help="Ignore all service workers/background pages. Only analyze content scripts.")  # => TODO
+    parser.add_argument("--ignore-bp",
+                        dest='ignore_bp',
+                        action='store_true',
+                        help="Ignore all service workers/background pages. Only analyze content scripts.")
 
     parser.add_argument("--ignore-message-related-vuln",
                         dest='ignore_message_related_vuln',
@@ -544,6 +544,12 @@ def main():
 
     if args.ignore_bp_initiated_messaging:
         os.environ['IGNORE_BP_INITIATED_MESSAGING'] = "yes"
+
+    if args.ignore_cs:
+        os.environ['IGNORE_CS'] = "yes"
+
+    if args.ignore_bp:
+        os.environ['IGNORE_BP'] = "yes"
 
     if args.ignore_message_related_vuln:
         os.environ['IGNORE_MESSAGE_RELATED_VULN'] = "yes"
