@@ -13,6 +13,7 @@ import platform
 import tempfile
 import json
 import shutil
+from pathlib import Path
 
 from AnalysisRendererAttackerJSON import AnalysisRendererAttackerJSON
 from AnnotationsCSV import AnnotationsCSV
@@ -530,10 +531,11 @@ def main(unpacked_folder: str, analysis_outfile_name: str):
                 else:
                     activate_script = os.path.join(venv_path, 'bin', 'activate')
                     command = f'source \\"{activate_script}\\"; '
+                doublex_py_path = Path(__file__).parent / "doublex.py"
                 extension_dir = os.path.join(unpacked_folder, selected_extension)
                 cs_path: str = os.path.join(extension_dir, "content_scripts.js")
                 bp_path: str = os.path.join(extension_dir, "background.js")
-                command += (f"python3 doublex.py --renderer-attacker --espree --src-type-module --prod " +
+                command += (f"python3 {doublex_py_path} --renderer-attacker --espree --src-type-module --prod " +
                             f'-cs \\"{cs_path}\\" -bp \\"{bp_path}\\" '
                             f'--analysis-outfile-path \\"{analysis_json_outfile_path}\\" ' +
                             f"{'--ignore-cs' if ignore_cs_bool_var.get() else ''} " +
