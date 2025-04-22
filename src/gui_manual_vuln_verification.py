@@ -2,6 +2,7 @@ import argparse
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import simpledialog
+from tkinter import filedialog
 import dukpy
 from typing import List, Optional, Dict
 import os
@@ -477,6 +478,97 @@ def main(unpacked_folder: str, analysis_outfile_name: str):
         settings_dialog.grab_set()  # Make the dialog modal.
         settings_dialog.wait_window()  # Wait until the dialog is closed.
 
+    def on_re_analyze_click():
+        global selected_extension
+
+        if selected_extension is None:
+            tk.messagebox.showerror(title="", message="No extension selected!")
+            return
+
+        # Create analysis settings window:
+        settings_dialog = tk.Toplevel(root)
+        settings_dialog.title(f"Re-analyze {selected_extension}:")
+
+        # Add widgets:
+        # "Ignore CS":
+        ignore_cs_bool_var = tk.BooleanVar()
+        ignore_cs_check_button = tk.Checkbutton(settings_dialog, text="Ignore CS", variable=ignore_cs_bool_var)
+        ignore_cs_check_button.grid(row=0, column=0, columnspan=1, padx=10, pady=10)
+        # "Ignore BP":
+        ignore_bp_bool_var = tk.BooleanVar()
+        ignore_bp_check_button = tk.Checkbutton(settings_dialog, text="Ignore BP", variable=ignore_bp_bool_var)
+        ignore_bp_check_button.grid(row=0, column=1, columnspan=2, padx=10, pady=10)
+        # "Ignore exfiltration dangers":
+        ignore_exf_bool_var = tk.BooleanVar()
+        ignore_exf_check_button = tk.Checkbutton(settings_dialog, text="Ignore exfiltration dangers", variable=ignore_exf_bool_var)
+        ignore_exf_check_button.grid(row=1, column=0, columnspan=2, padx=10, pady=10)
+        # "Ignore infiltration dangers":
+        ignore_inf_bool_var = tk.BooleanVar()
+        ignore_inf_check_button = tk.Checkbutton(settings_dialog, text="Ignore infiltration dangers", variable=ignore_inf_bool_var)
+        ignore_inf_check_button.grid(row=2, column=0, columnspan=2, padx=10, pady=10)
+        # "Return multiple flow variants":
+        return_mult_flow_var_bool_var = tk.BooleanVar()
+        return_mult_flow_var_button = tk.Checkbutton(settings_dialog, text="Return multiple flow variants", variable=return_mult_flow_var_bool_var)
+        return_mult_flow_var_button.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+
+        def re_analyze():
+            # First open save dialog, then open terminal:
+            analysis_json_outfile_path: str = filedialog.asksaveasfilename(
+                initialdir="/",
+                title="Select file",
+                filetypes=(("JSON file", "*.json"),),
+                initialfile="analysis_renderer_attacker.json",
+                defaultextension=".json",
+                confirmoverwrite=True,
+            )
+            if analysis_json_outfile_path != "":  # If dialog has not been closed with "Cancel":
+                # Open terminal, activate the same venv as the current venv, and execute the doublex.py command:
+                venv_path = os.getenv('VIRTUAL_ENV')  # e.g. '/Users/kendrick/.venv' or None
+                if venv_path is None:
+                    # No venv used right now, no venv to use for the new shell:
+                    command = ""
+                else:
+                    activate_script = os.path.join(venv_path, 'bin', 'activate')
+                    command = f'source \\"{activate_script}\\"; '
+                extension_dir = os.path.join(unpacked_folder, selected_extension)
+                cs_path: str = os.path.join(extension_dir, "content_scripts.js")
+                bp_path: str = os.path.join(extension_dir, "background.js")
+                command += (f"python3 doublex.py --renderer-attacker --espree --src-type-module --prod " +
+                            f'-cs \\"{cs_path}\\" -bp \\"{bp_path}\\" '
+                            f'--analysis-outfile-path \\"{analysis_json_outfile_path}\\" ' +
+                            f"{'--ignore-cs' if ignore_cs_bool_var.get() else ''} " +
+                            f"{'--ignore-bp' if ignore_bp_bool_var.get() else ''} " +
+                            f"{'--ignore-exfiltration-dangers' if ignore_exf_bool_var.get() else ''} " +
+                            f"{'--ignore-infiltration-dangers' if ignore_inf_bool_var.get() else ''} " +
+                            f"{'--return-multiple-flow-variants' if return_mult_flow_var_bool_var.get() else ''}")
+                system: str = platform.system()
+                if system == "Darwin":
+                    subprocess.run([
+                        'osascript', '-e',
+                        # f'tell application "Terminal" to do script "{command}; bash"'  # = without activating window
+                        f'''
+                        tell application "Terminal"
+                            do script "{command}; bash"
+                            activate
+                        end tell
+                        '''
+                    ])
+                elif system == "Linux":
+                    subprocess.Popen(
+                        ['gnome-terminal', '--', 'bash', '-c', f'{command}; exec bash']
+                    )  # NOTE THAT I HAVE NOT TESTED THIS ONE !!!
+                else:
+                    tk.messagebox.showerror(title="", message=f"Unsupported system: {system}")
+                # (TODO: close dialog?!)
+
+        tk.Button(settings_dialog, text="Re-analyze", command=re_analyze).grid(row=4, column=0, pady=10)
+        tk.Button(settings_dialog, text="Cancel", command=settings_dialog.destroy).grid(row=4, column=1, pady=10)
+
+        # Ensure dialog stays on top and wait for it to close:
+        settings_dialog.transient(root)  # Keep the dialog on top of the main window.
+        settings_dialog.grab_set()  # Make the dialog modal.
+        settings_dialog.wait_window()  # Wait until the dialog is closed.
+
     def on_file_content_change(_event):
         # Check if the text was actually modified
         if file_content_text.edit_modified():
@@ -618,8 +710,9 @@ def main(unpacked_folder: str, analysis_outfile_name: str):
     tk.Button(center_button_frame, text="Mark as FP", fg='red', command=on_mark_as_FP_click).grid(row=0, column=1, padx=5, pady=5)
     load_ext_into_chrome_frame = tk.Frame(center_button_frame)
     load_ext_into_chrome_frame.grid(row=0, column=2, padx=5, pady=5)
-    tk.Button(load_ext_into_chrome_frame, text="Load ext. into Chrome...", command=on_load_ext_into_Chrome_click).grid(row=0, column=0)
+    tk.Button(load_ext_into_chrome_frame, text="Load ext. into Chrome", command=on_load_ext_into_Chrome_click).grid(row=0, column=0)
     tk.Button(load_ext_into_chrome_frame, text="⛭", command=on_load_ext_into_Chrome_settings_button_click).grid(row=0, column=1)
+    tk.Button(center_button_frame, text="Re-analyze", command=on_re_analyze_click).grid(row=0, column=3, padx=5, pady=5)
 
     # Right column:
     tk.Label(root, text="File content:", anchor="w").grid(row=0, column=2, sticky="ew", padx=5, pady=5)

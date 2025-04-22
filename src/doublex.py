@@ -229,11 +229,16 @@ def main():
     parser.add_argument("--manifest", metavar="path", type=str,
                         help="path of the extension manifest.json file. "
                              "Default: parent-path-of-content-script/manifest.json")
-    parser.add_argument("--analysis", metavar="path", type=str,
-                        help="path of the file to store the analysis results in. "
-                             "Default: parent-path-of-content-script/analysis.json "
-                             "Note that this parameter will be ignored when using --crx and, instead, the above "
-                             "default value will always be used!")
+    parser.add_argument("--analysis-outfile-path", metavar="path", type=str,
+                        help="Path of the JSON file to store the analysis results in. "
+                             "Default: either '<parent-path-of-content-script>/analysis.json' "
+                             "or '<parent-path-of-content-script>/analysis_renderer_attacker.json' "
+                             "(when using --renderer-attacker). "
+                             "Note that this parameter will only be used when using -cs and -bp, "
+                             "it will be ignored when using --crx. When using --crx "
+                             "(which is only possible in combination with --renderer-attacker), the path will be "
+                             "<UNPACKED_FOLDER>/<EXTENSION_ID>/<--analysis-outfile-name argument>.json, where the "
+                             "--analysis-outfile-name argument defaults to 'analysis_renderer_attacker'.")
     parser.add_argument("--apis", metavar="str", type=str, default='permissions',
                         help='''specify the sensitive APIs to consider for the analysis:
     - 'permissions' (default): DoubleX selected APIs iff the extension has the corresponding permissions;
@@ -473,10 +478,16 @@ def main():
                         type=str,
                         default="analysis_renderer_attacker",
                         help="The name of the JSON output/analysis files that will be generated "
-                             "(when using the renderer attacker model). "
+                             "(when using both --crx *and* the renderer attacker model with --renderer-attacker, "
+                             "which is required when using --crx). "
                              "Use this when you want to avoid overwriting previous analysis results! "
                              "Otherwise, the default value is 'analysis_renderer_attacker', resulting in files called "
-                             "'analysis_renderer_attacker.json'.")
+                             "'analysis_renderer_attacker.json'. "
+                             "Only has an effect when used with the --crx argument, "
+                             "use the --analysis-outfile-path argument "
+                             "instead when using the -cs and -bp arguments, it won't just allow you to specify the "
+                             "file name (as this argument does), but you can also specify any arbitrary target "
+                             "directory, as it takes a whole path.")
 
     # TODO: control verbosity of logging?
 
@@ -601,7 +612,7 @@ def main():
         if args.renderer_attacker:
             analyze_extension = kim_and_lee_analyze_extension
 
-        analyze_extension(cs, bp, json_analysis=args.analysis, chrome=not args.not_chrome,
+        analyze_extension(cs, bp, json_analysis=args.analysis_outfile_path, chrome=not args.not_chrome,
                           war=args.war, json_apis=args.apis, manifest_path=args.manifest)
 
     else:  # Ignore -cs and -bp arguments when --crx argument is supplied:
