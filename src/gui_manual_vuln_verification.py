@@ -378,7 +378,9 @@ def main(unpacked_folder: str, analysis_outfile_name: str):
             # ...preferably one that is injected into "<all_urls>":
             for content_script in manifest["content_scripts"]:
                 if any(url_pattern == "<all_urls>" for url_pattern in content_script["matches"]):
-                    cs_js_file_path = content_script["js"][0]
+                    cs_js_file_path: str = content_script["js"][0]
+                    if cs_js_file_path.startswith("/"):
+                        cs_js_file_path = cs_js_file_path[1:]
                     cs_js_file_full_path = os.path.join(crx_unpacked_path, cs_js_file_path)
                     # Before appending the code snippet to the content script, ensure that we have permission to do so:
                     subprocess.run(['chmod', '+w', cs_js_file_full_path])
@@ -538,6 +540,7 @@ def main(unpacked_folder: str, analysis_outfile_name: str):
                 command += (f"python3 {doublex_py_path} --renderer-attacker --espree --src-type-module --prod " +
                             f'-cs \\"{cs_path}\\" -bp \\"{bp_path}\\" '
                             f'--analysis-outfile-path \\"{analysis_json_outfile_path}\\" ' +
+                            f'--timeout 3600 ' +
                             f"{'--ignore-cs' if ignore_cs_bool_var.get() else ''} " +
                             f"{'--ignore-bp' if ignore_bp_bool_var.get() else ''} " +
                             f"{'--ignore-exfiltration-dangers' if ignore_exf_bool_var.get() else ''} " +
