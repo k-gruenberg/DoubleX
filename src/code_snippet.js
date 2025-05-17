@@ -2,7 +2,7 @@
 
 // Sometimes, an extension developer may include the same JavaScript file both in content scripts and in service workers.
 // Because "window.addEventListener" is not a function in service workers, we therefore need to do the following safety check (better safe than sorry):
-if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+;if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
     var port;
     window.addEventListener("message",
         function(event) {
