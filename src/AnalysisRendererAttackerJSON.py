@@ -179,6 +179,24 @@ class AnalysisRendererAttackerJSON:
                   f"{highlight(r['line_of_code'], r['location'], BLUE).lstrip()[:max_code_length]}{END_COLOR}")
         print("")
 
+        print("# Bottlenecks (lines occurring in either the from flow or the to flow of *every* danger): #")
+        bottleneck_lines: set[int] | None = None
+        all_line_contents: dict[int, str] = dict()
+        for danger in dangers:
+            line_contents: dict[int, str] = dict()
+            for node in danger["from_flow"]:
+                line_contents[int(node["location"].split(":")[0])] = node["line_of_code"]
+            for node in danger["to_flow"]:
+                line_contents[int(node["location"].split(":")[0])] = node["line_of_code"]
+            all_line_contents.update(line_contents)
+            if bottleneck_lines is None:
+                bottleneck_lines = set(line_contents.keys())
+            else:
+                bottleneck_lines = bottleneck_lines.intersection(line_contents.keys())
+        for line in sorted(bottleneck_lines):
+            print(f"Line {line}:\t{all_line_contents[line].lstrip()}")
+        print("")
+
 
 def flows_get_ith_node_options(flows: list[list], i: int) -> list[dict]:
     node_options: list[dict] = list()
