@@ -545,7 +545,9 @@ def main(unpacked_folder: str, analysis_outfile_name: str):
                             f"{'--ignore-bp' if ignore_bp_bool_var.get() else ''} " +
                             f"{'--ignore-exfiltration-dangers' if ignore_exf_bool_var.get() else ''} " +
                             f"{'--ignore-infiltration-dangers' if ignore_inf_bool_var.get() else ''} " +
-                            f"{'--return-multiple-flow-variants' if return_mult_flow_var_bool_var.get() else ''}")
+                            f"{'--return-multiple-flow-variants' if return_mult_flow_var_bool_var.get() else ''}; ")
+                command += (f'python3 {Path(__file__).parent / "AnalysisRendererAttackerJSON.py"} '
+                            f'\\"{analysis_json_outfile_path}\\"')
                 system: str = platform.system()
                 if system == "Darwin":
                     subprocess.run([
