@@ -4,6 +4,13 @@ from typing import Optional, List
 from INJECTED_EVERYWHERE_PATTERNS import is_an_injected_everywhere_url_pattern
 
 
+# From https://gist.github.com/rene-d/9e584a7dd2935d0f461904b9f2950007:
+RED = "\033[0;31m"
+GREEN = "\033[0;32m"
+BLUE = "\033[0;34m"
+END_COLOR = "\033[0m"
+
+
 class AnalysisRendererAttackerJSON:
     def __init__(self, path):
         self.path = path
@@ -67,7 +74,7 @@ class AnalysisRendererAttackerJSON:
         return any(is_an_injected_everywhere_url_pattern(url_pattern)
                    for url_pattern in self.json["content_script_injected_into"])
 
-    def print_summary(self, max_code_length: int = 10_000):
+    def print_summary(self, max_code_length: int = 150):
         """
         Prints a summary of this AnalysisRendererAttackerJSON to console.
         Useful for verifying vulnerabilities with *many* different possible flows as TP or FP!
@@ -136,11 +143,13 @@ class AnalysisRendererAttackerJSON:
                 ith_node_options: list[dict] = flows_get_ith_node_options(flows=from_flows, i=i)
                 print(f"Node #{i+1}: {len(ith_node_options)} options:")
                 for ith_node in ith_node_options:
-                    print(f'\t"{ith_node['identifier']}" @ {ith_node['location']}:    {ith_node['line_of_code'].lstrip()[:max_code_length]}')
+                    print(f'\t"{ith_node['identifier']}" @ {ith_node['location']}:    '
+                          f'{highlight(ith_node['line_of_code'], ith_node['location'], RED).lstrip()[:max_code_length]}{END_COLOR}')
             last_node_options: list[dict] = flows_get_last_node_options(flows=from_flows)
             print(f"Last node: {len(last_node_options)} options:")
             for last_node in last_node_options:
-                print(f'\t"{last_node['identifier']}" @ {last_node['location']}:    {last_node['line_of_code'].lstrip()[:max_code_length]}')
+                print(f'\t"{last_node['identifier']}" @ {last_node['location']}:    '
+                      f'{highlight(last_node['line_of_code'], last_node['location'], RED).lstrip()[:max_code_length]}{END_COLOR}')
         print("")
 
         if no_of_different_to_flows == 1:
@@ -152,11 +161,13 @@ class AnalysisRendererAttackerJSON:
                 ith_node_options: list[dict] = flows_get_ith_node_options(flows=to_flows, i=i)
                 print(f"Node #{i + 1}: {len(ith_node_options)} options:")
                 for ith_node in ith_node_options:
-                    print(f'\t"{ith_node['identifier']}" @ {ith_node['location']}:    {ith_node['line_of_code'].lstrip()[:max_code_length]}')
+                    print(f'\t"{ith_node['identifier']}" @ {ith_node['location']}:    '
+                          f'{highlight(ith_node['line_of_code'], ith_node['location'], GREEN).lstrip()[:max_code_length]}{END_COLOR}')
             last_node_options: list[dict] = flows_get_last_node_options(flows=to_flows)
             print(f"Last node: {len(last_node_options)} options:")
             for last_node in last_node_options:
-                print(f'\t"{last_node['identifier']}" @ {last_node['location']}:    {last_node['line_of_code'].lstrip()[:max_code_length]}')
+                print(f'\t"{last_node['identifier']}" @ {last_node['location']}:    '
+                      f'{highlight(last_node['line_of_code'], last_node['location'], GREEN).lstrip()[:max_code_length]}{END_COLOR}')
         print("")
 
         print("# Rendezvous: #")
@@ -164,7 +175,8 @@ class AnalysisRendererAttackerJSON:
             r = [r for r in rendezvous if r['location'] == r_location][0]
             r_type: str = r['type']
             r_type += " " * (len("AssignmentExpression") - len(r_type))
-            print(f"({idx+1}) {r_type} @ {r['location']}:\t{r['line_of_code'].lstrip()[:max_code_length]}")
+            print(f"({idx+1}) {r_type} @ {r['location']}:\t"
+                  f"{highlight(r['line_of_code'], r['location'], BLUE).lstrip()[:max_code_length]}{END_COLOR}")
         print("")
 
 
@@ -179,6 +191,16 @@ def flows_get_ith_node_options(flows: list[list], i: int) -> list[dict]:
 
 def flows_get_last_node_options(flows: list[list]) -> list[dict]:
     return flows_get_ith_node_options(flows=flows, i=-1)
+
+
+def highlight(text: str, location: str, color: str):
+    start, end = location.split(" - ")
+    start_line, start_col = map(int, start.split(":"))
+    end_line, end_col = map(int, end.split(":"))
+    if start_line != end_line:
+        return text
+    else:
+        return text[:start_col] + color + text[start_col:end_col] + END_COLOR + text[end_col:]
 
 
 def main():
