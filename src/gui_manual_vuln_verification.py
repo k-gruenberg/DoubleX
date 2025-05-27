@@ -1,4 +1,5 @@
 import argparse
+import pathlib
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import simpledialog
@@ -517,10 +518,10 @@ def main(unpacked_folder: str, analysis_outfile_name: str):
         def re_analyze():
             # First open save dialog, then open terminal:
             analysis_json_outfile_path: str = filedialog.asksaveasfilename(
-                initialdir="/",
+                initialdir=pathlib.Path.home(),
                 title="Select file",
                 filetypes=(("JSON file", "*.json"),),
-                initialfile="analysis_renderer_attacker.json",
+                initialfile=f"analysis_renderer_attacker_{selected_extension}.json",
                 defaultextension=".json",
                 confirmoverwrite=True,
             )
