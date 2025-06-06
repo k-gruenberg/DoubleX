@@ -139,9 +139,9 @@ class AnalysisRendererAttackerJSON:
             print(json.dumps(from_flows[0], indent=4))
         else:
             print("# From flows: #")
-            for i in range(min(from_flow_lengths)):
+            for i in range(max(from_flow_lengths)):
                 ith_node_options: list[dict] = flows_get_ith_node_options(flows=from_flows, i=i)
-                print(f"Node #{i+1}: {len(ith_node_options)} options:")
+                print(f"Node #{i+1}{' (if present)' if i >= min(from_flow_lengths) else ''}: {len(ith_node_options)} options:")
                 for ith_node in ith_node_options:
                     print(f'\t"{ith_node['identifier']}" @ {ith_node['location']}:    '
                           f'{highlight(ith_node['line_of_code'], ith_node['location'], RED).lstrip()[:max_code_length]}{END_COLOR}')
@@ -157,9 +157,9 @@ class AnalysisRendererAttackerJSON:
             print(json.dumps(to_flows[0], indent=4))
         else:
             print("# To flows: #")
-            for i in range(min(to_flow_lengths)):
+            for i in range(max(to_flow_lengths)):
                 ith_node_options: list[dict] = flows_get_ith_node_options(flows=to_flows, i=i)
-                print(f"Node #{i + 1}: {len(ith_node_options)} options:")
+                print(f"Node #{i+1}{' (if present)' if i >= min(to_flow_lengths) else ''}: {len(ith_node_options)} options:")
                 for ith_node in ith_node_options:
                     print(f'\t"{ith_node['identifier']}" @ {ith_node['location']}:    '
                           f'{highlight(ith_node['line_of_code'], ith_node['location'], GREEN).lstrip()[:max_code_length]}{END_COLOR}')
@@ -201,9 +201,10 @@ class AnalysisRendererAttackerJSON:
 def flows_get_ith_node_options(flows: list[list], i: int) -> list[dict]:
     node_options: list[dict] = list()
     for flow in flows:
-        ith_node = flow[i]
-        if not any(n["location"] == ith_node["location"] for n in node_options):  # (do not add duplicates)
-            node_options.append(ith_node)
+        if i < len(flow):
+            ith_node = flow[i]
+            if not any(n["location"] == ith_node["location"] for n in node_options):  # (do not add duplicates)
+                node_options.append(ith_node)
     return node_options
 
 
